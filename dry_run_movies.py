@@ -775,6 +775,7 @@ for i, movie in enumerate(selected, 1):
     rows.append({
         "title": title,
         "year": movie.get("year"),
+        "radarr_id": movie.get("id"),
         "tmdb_id": tmdb_id,
         "current": current,
         "recommended": recommendation,
