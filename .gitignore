@@ -1,0 +1,7 @@
+cache/
+*.csv
+__pycache__/
+*.pyc
+.env
+*.secret
+*.token
