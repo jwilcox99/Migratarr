@@ -2,6 +2,9 @@
 
 import csv
 import os
+import json
+import subprocess
+import urllib.request
 from pathlib import Path
 from collections import Counter
 
@@ -219,6 +222,7 @@ def choose_destination_root(
 
 def evaluate_move(
     media_type,
+    item_id,
     title,
     source_path,
     current,
@@ -228,6 +232,16 @@ def evaluate_move(
     confidence,
     decision_reason,
 ):
+    original_recommended = recommended
+
+    recommended, override_type, override_tag = apply_override(
+        media_type,
+        item_id,
+        current,
+        recommended,
+        ARR_OVERRIDES,
+    )
+
     source = resolve_host_source(
         media_type,
         source_path,
@@ -244,6 +258,15 @@ def evaluate_move(
 
     blockers = []
     warnings = []
+
+    if override_type == "CONFLICT":
+        blockers.append("CONFLICTING_MANUAL_OVERRIDES")
+
+    if override_type == "LOCK":
+        warnings.append("MANUAL_LOCK")
+
+    if override_type == "CATEGORY":
+        warnings.append("MANUAL_CATEGORY_OVERRIDE")
 
     if dest_root is None:
         blockers.append("NO_ELIGIBLE_DESTINATION")
@@ -339,7 +362,10 @@ def evaluate_move(
         "media_type": media_type,
         "title": title,
         "current": current,
+        "scored_recommendation": original_recommended,
         "recommended": recommended,
+        "override_type": override_type,
+        "override_tag": override_tag,
         "source_path": str(source),
         "target_path": str(target),
         "size_gb": gb(size),
@@ -365,6 +391,117 @@ def evaluate_move(
     }
 
 
+
+RADARR_URL = "http://localhost:7878"
+SONARR_URL = "http://localhost:8989"
+
+OVERRIDE_TAGS = {
+    "migratarr-common": "Common",
+    "migratarr-current": "Current",
+    "migratarr-library": "Library",
+    "migratarr-rare": "Rare",
+    "migratarr-archive": "Archive",
+}
+
+LOCK_TAG = "migratarr-lock"
+
+
+def docker_key(container):
+    return subprocess.check_output(
+        [
+            "docker", "exec", container, "sh", "-c",
+            r"""sed -n 's:.*<ApiKey>\(.*\)</ApiKey>.*:\1:p' /config/config.xml"""
+        ],
+        text=True
+    ).strip()
+
+
+def api_json(url, key):
+    req = urllib.request.Request(
+        url,
+        headers={"X-Api-Key": key}
+    )
+
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.load(r)
+
+
+def load_arr_overrides():
+    result = {
+        "Movie": {},
+        "TV": {},
+    }
+
+    systems = [
+        ("Movie", RADARR_URL, docker_key("radarr"), "movie"),
+        ("TV", SONARR_URL, docker_key("sonarr"), "series"),
+    ]
+
+    for media_type, base, key, endpoint in systems:
+        tags = api_json(f"{base}/api/v3/tag", key)
+
+        tag_map = {
+            t["id"]: t["label"].lower()
+            for t in tags
+        }
+
+        items = api_json(
+            f"{base}/api/v3/{endpoint}",
+            key
+        )
+
+        for item in items:
+            labels = {
+                tag_map[tag]
+                for tag in item.get("tags", [])
+                if tag in tag_map
+            }
+
+            relevant = {
+                x for x in labels
+                if x == LOCK_TAG or x in OVERRIDE_TAGS
+            }
+
+            if relevant:
+                result[media_type][item["id"]] = relevant
+
+    return result
+
+
+def apply_override(media_type, item_id, current, recommended, overrides):
+    tags = overrides.get(media_type, {}).get(item_id, set())
+
+    if not tags:
+        return recommended, "", ""
+
+    if LOCK_TAG in tags:
+        return current, "LOCK", "migratarr-lock"
+
+    category_tags = [
+        tag for tag in tags
+        if tag in OVERRIDE_TAGS
+    ]
+
+    if len(category_tags) > 1:
+        return (
+            recommended,
+            "CONFLICT",
+            ",".join(sorted(category_tags))
+        )
+
+    if len(category_tags) == 1:
+        tag = category_tags[0]
+        return (
+            OVERRIDE_TAGS[tag],
+            "CATEGORY",
+            tag
+        )
+
+    return recommended, "", ""
+
+
+ARR_OVERRIDES = load_arr_overrides()
+
 plans = []
 
 
@@ -386,9 +523,9 @@ for row in read_csv(MOVIE_CSV):
     if recommended not in DESTINATION_ROOTS["Movie"]:
         continue
 
-    plans.append(
-        evaluate_move(
+    plan = evaluate_move(
             media_type="Movie",
+            item_id=int(row["radarr_id"]) if row.get("radarr_id") else None,
             title=f'{row["title"]} ({row["year"]})',
             source_path=row["path"],
             current=current,
@@ -398,7 +535,9 @@ for row in read_csv(MOVIE_CSV):
             confidence=row["replacement_confidence"],
             decision_reason=row["decision_reason"],
         )
-    )
+
+    if plan["current"] != plan["recommended"]:
+        plans.append(plan)
 
 
 # ------------------------------------------------------------
@@ -419,9 +558,9 @@ for row in read_csv(TV_CSV):
     if recommended not in DESTINATION_ROOTS["TV"]:
         continue
 
-    plans.append(
-        evaluate_move(
+    plan = evaluate_move(
             media_type="TV",
+            item_id=int(row["sonarr_id"]) if row.get("sonarr_id") else None,
             title=row["title"],
             source_path=row["path"],
             current=current,
@@ -431,14 +570,19 @@ for row in read_csv(TV_CSV):
             confidence=row["replacement_confidence"],
             decision_reason=row["decision_reason"],
         )
-    )
+
+    if plan["current"] != plan["recommended"]:
+        plans.append(plan)
 
 
 FIELDS = [
     "media_type",
     "title",
     "current",
+    "scored_recommendation",
     "recommended",
+    "override_type",
+    "override_tag",
     "source_path",
     "target_path",
     "size_gb",
