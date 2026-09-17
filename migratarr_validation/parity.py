@@ -1,8 +1,8 @@
 """Read-only parity runner against the repository's original planner code.
 
-The original module is parsed, not imported. Only its constants, function
-definitions, candidate loops, and cumulative capacity block are executed.
-Docker calls, module-level output writes, and executor code are excluded.
+The original module is parsed, not imported. Comparison executes only its
+candidate loops and cumulative capacity block. Snapshot mode calls its
+read-only Arr tag loader. Planner CSV writes and executor code are excluded.
 """
 
 import ast
@@ -10,7 +10,9 @@ import csv
 import hashlib
 import json
 import os
+import subprocess
 import sys
+import urllib.request
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
@@ -20,7 +22,7 @@ from .engine import MoveRequest, ValidationEngine, ValidationPolicy
 
 PLANNER = Path(__file__).resolve().parents[1] / "build_move_plan.py"
 CONSTANTS = {"DESTINATION_ROOTS", "MIN_FREE_AFTER_GB", "PROJECTED_FREE",
-             "OVERRIDE_TAGS", "LOCK_TAG"}
+             "OVERRIDE_TAGS", "LOCK_TAG", "RADARR_URL", "SONARR_URL"}
 
 
 def _assigned_name(node):
@@ -38,7 +40,8 @@ def _execute(nodes, namespace):
 def load_legacy():
     """Load decision code without executing planner module side effects."""
     tree = ast.parse(PLANNER.read_text(encoding="utf-8"), filename=str(PLANNER))
-    namespace = {"Path": Path, "os": os, "csv": csv}
+    namespace = {"Path": Path, "os": os, "csv": csv, "json": json,
+                 "subprocess": subprocess, "urllib": urllib}
     nodes = [
         node for node in tree.body
         if isinstance(node, ast.FunctionDef) or _assigned_name(node) in CONSTANTS
@@ -162,17 +165,43 @@ def load_overrides(path):
     return result
 
 
+def snapshot_live_overrides(path):
+    """Save only current relevant Arr tags, using the original read-only loader."""
+    _, namespace = load_legacy()
+    overrides = namespace["load_arr_overrides"]()
+    serializable = {
+        media: {str(item_id): sorted(tags) for item_id, tags in items.items()}
+        for media, items in overrides.items()
+    }
+    with path.open("x", encoding="utf-8") as handle:
+        json.dump(serializable, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+
+
 def main(argv=None):
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--movie-csv", type=Path, required=True)
-    parser.add_argument("--tv-csv", type=Path, required=True)
-    parser.add_argument("--overrides-json", type=Path, required=True,
+    parser.add_argument("--movie-csv", type=Path)
+    parser.add_argument("--tv-csv", type=Path)
+    parser.add_argument("--overrides-json", type=Path,
                         help="Saved Arr tag snapshot; use an explicit empty JSON object if none")
+    parser.add_argument("--snapshot-overrides", type=Path,
+                        help="Read current Arr tags and create this snapshot file only")
     args = parser.parse_args(argv)
     if os.name != "posix":
         parser.error("Run on a POSIX host with the planner's /mnt/nas mounts")
+    if args.snapshot_overrides:
+        if args.movie_csv or args.tv_csv or args.overrides_json:
+            parser.error("--snapshot-overrides cannot be combined with comparison inputs")
+        try:
+            snapshot_live_overrides(args.snapshot_overrides)
+        except (OSError, KeyError, ValueError, subprocess.CalledProcessError) as exc:
+            parser.exit(2, f"Override snapshot could not complete: {exc}\n")
+        print(f"Saved override snapshot: {args.snapshot_overrides}")
+        return 0
+    if not (args.movie_csv and args.tv_csv and args.overrides_json):
+        parser.error("--movie-csv, --tv-csv, and --overrides-json are required for comparison")
     try:
         result = compare(args.movie_csv, args.tv_csv,
                          load_overrides(args.overrides_json))

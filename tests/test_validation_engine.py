@@ -9,10 +9,13 @@ import csv
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from migratarr_validation import MoveRequest, ValidationEngine, ValidationPolicy
 from migratarr_validation.engine import apply_override
-from migratarr_validation.parity import _csv_requests, load_legacy, load_overrides, run_legacy
+from migratarr_validation.parity import (
+    _csv_requests, load_legacy, load_overrides, run_legacy, snapshot_live_overrides,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -259,6 +262,17 @@ class PlannerCharacterization(unittest.TestCase):
         snapshot.write_text('{"Movie":{"7":"migratarr-lock"}}')
         with self.assertRaises(ValueError):
             load_overrides(snapshot)
+
+    def test_snapshot_writes_only_tags_and_never_overwrites(self):
+        snapshot = Path(self.tmp.name) / "overrides.json"
+        namespace = {"load_arr_overrides": lambda: {
+            "Movie": {7: {"migratarr-rare", "migratarr-lock"}}, "TV": {}}}
+        with patch("migratarr_validation.parity.load_legacy",
+                   return_value=(None, namespace)):
+            snapshot_live_overrides(snapshot)
+            self.assertEqual(load_overrides(snapshot), namespace["load_arr_overrides"]())
+            with self.assertRaises(FileExistsError):
+                snapshot_live_overrides(snapshot)
 
 
 if __name__ == "__main__":

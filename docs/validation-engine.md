@@ -2,8 +2,9 @@
 
 This branch adds `migratarr_validation/` and its tests. The existing planner,
 placement scripts, snapshot and approval chain, and executors are unchanged.
-The new package is **not wired into a live run**. It reads paths through
+The new package is **not wired into a live run**. The engine reads paths through
 caller-supplied functions and does not move files, call Arr APIs, or write CSVs.
+The separate snapshot command reads Arr tags and writes only its requested JSON file.
 
 ## Source and provenance
 
@@ -69,8 +70,17 @@ used by `load_arr_overrides`:
 {"Movie": {"123": ["migratarr-lock"]}, "TV": {"456": ["migratarr-rare"]}}
 ```
 
+To capture that snapshot on the server, run this first from the repository
+root. It calls the original planner's read-only Arr tag loader and creates a
+new JSON file; it refuses to overwrite an existing one:
+
+```text
+python -m migratarr_validation.parity \
+  --snapshot-overrides /path/to/new/overrides.json
+```
+
 Use `{"Movie": {}, "TV": {}}` only if the saved run had no relevant override
-tags. The tool does not retrieve live Arr data. It reports input SHA-256 hashes,
+tags. The comparison mode does not retrieve live Arr data. It reports input SHA-256 hashes,
 row counts, and field-level differences. Exit status `0` means parity, `1`
 means differences, and `2` means the comparison could not complete. Run against
 stable NAS state: the original and new evaluations read the same filesystem
