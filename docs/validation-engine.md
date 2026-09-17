@@ -182,6 +182,13 @@ That mode uses the configured tag names in read-only Radarr/Sonarr requests.
 The original planner will still use its fixed tag names, so parity differences
 from custom tags are expected and must be reviewed as policy changes.
 
+The operator reran the saved server inputs with both committed default policy
+files and reported 134 legacy rows, 134 configured-engine rows, zero
+differences, and exit status `0`. The reported rule-file SHA-256 was
+`827e79c2a874980a693a09ae8653b2d68874152c7a2ab52eb65cdffdba8c0839`,
+matching the committed file. The movie and TV input hashes matched the earlier
+server run. This verifies the default rule extraction for that saved run.
+
 ## Known boundaries from repository evidence
 
 - The original planner skips a move if an override changes its recommendation
