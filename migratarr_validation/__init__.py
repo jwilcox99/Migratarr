@@ -5,6 +5,8 @@ This package is not imported by the existing planner or executors.
 
 from .engine import MoveRequest, ValidationEngine, ValidationPolicy
 from .config import load_policy, parse_policy
+from .rules import RulePolicy, load_rule_policy, parse_rule_policy
 
 __all__ = ["MoveRequest", "ValidationEngine", "ValidationPolicy",
-           "load_policy", "parse_policy"]
+           "load_policy", "parse_policy", "RulePolicy", "load_rule_policy",
+           "parse_rule_policy"]

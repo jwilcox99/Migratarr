@@ -9,18 +9,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Mapping
 
+from .rules import RulePolicy
+
 
 GIB = 1024 ** 3
-CATEGORY_TAGS = {
-    "migratarr-common": "Common",
-    "migratarr-current": "Current",
-    "migratarr-library": "Library",
-    "migratarr-rare": "Rare",
-    "migratarr-archive": "Archive",
-}
-LOCK_TAG = "migratarr-lock"
-
-
 @dataclass(frozen=True)
 class ValidationPolicy:
     """Explicit replacements for planner globals; supply real NAS roots in callers."""
@@ -29,6 +21,7 @@ class ValidationPolicy:
     source_roots: tuple[Path, ...]
     min_free_after_bytes: int = 50 * GIB
     category_paths: Mapping[str, Mapping[str, Path]] | None = None
+    rules: RulePolicy = field(default_factory=RulePolicy)
 
 
 @dataclass(frozen=True)
@@ -55,19 +48,21 @@ def apply_override(
     current: str,
     recommended: str,
     overrides: Mapping[str, Mapping[int | None, set[str]]],
+    rules: RulePolicy | None = None,
 ) -> tuple[str, str, str]:
     """Ported from build_move_plan.py:471-500, including lock precedence."""
+    rules = rules or RulePolicy()
     tags = overrides.get(media_type, {}).get(item_id, set())
     if not tags:
         return recommended, "", ""
-    if LOCK_TAG in tags:
-        return current, "LOCK", LOCK_TAG
-    category_tags = [tag for tag in tags if tag in CATEGORY_TAGS]
+    if rules.lock_tag in tags:
+        return current, "LOCK", rules.lock_tag
+    category_tags = [tag for tag in tags if tag in rules.category_override_tags]
     if len(category_tags) > 1:
         return recommended, "CONFLICT", ",".join(sorted(category_tags))
     if len(category_tags) == 1:
         tag = category_tags[0]
-        return CATEGORY_TAGS[tag], "CATEGORY", tag
+        return rules.category_override_tags[tag], "CATEGORY", tag
     return recommended, "", ""
 
 
@@ -153,6 +148,7 @@ class ValidationEngine:
             request.current,
             request.recommended,
             self.overrides,
+            self.policy.rules,
         )
         source = self.resolve_source(request)
         size = self.size_bytes(source) if self.exists(source) else None
@@ -160,11 +156,11 @@ class ValidationEngine:
         blockers: list[str] = []
         warnings: list[str] = []
         if override_type == "CONFLICT":
-            blockers.append("CONFLICTING_MANUAL_OVERRIDES")
+            self.policy.rules.emit("CONFLICTING_MANUAL_OVERRIDES", blockers, warnings)
         if override_type == "LOCK":
-            warnings.append("MANUAL_LOCK")
+            self.policy.rules.emit("MANUAL_LOCK", blockers, warnings)
         if override_type == "CATEGORY":
-            warnings.append("MANUAL_CATEGORY_OVERRIDE")
+            self.policy.rules.emit("MANUAL_CATEGORY_OVERRIDE", blockers, warnings)
         if dest_root is None:
             blockers.append("NO_ELIGIBLE_DESTINATION")
             target = Path(
@@ -182,13 +178,14 @@ class ValidationEngine:
         if self.exists(target) and target.resolve() != source.resolve():
             blockers.append("DESTINATION_COLLISION")
         if request.confidence in {"low", ""}:
-            warnings.append("LOW_OR_UNKNOWN_REPLACEMENT_CONFIDENCE")
-        if recommended == "Rare":
-            warnings.append("RARE_PROMOTION_REVIEW")
-        if recommended == "Archive":
-            warnings.append("ARCHIVE_MOVE_REVIEW")
-        if request.current == "Rare" and recommended != "Rare":
-            warnings.append("RARE_DEMOTION_REVIEW")
+            self.policy.rules.emit("LOW_OR_UNKNOWN_REPLACEMENT_CONFIDENCE", blockers, warnings)
+        if recommended == self.policy.rules.rare_category:
+            self.policy.rules.emit("RARE_PROMOTION_REVIEW", blockers, warnings)
+        if recommended == self.policy.rules.archive_category:
+            self.policy.rules.emit("ARCHIVE_MOVE_REVIEW", blockers, warnings)
+        if (request.current == self.policy.rules.rare_category
+                and recommended != self.policy.rules.rare_category):
+            self.policy.rules.emit("RARE_DEMOTION_REVIEW", blockers, warnings)
         if size is not None and free is not None:
             if free - size < self.policy.min_free_after_bytes:
                 blockers.append("INSUFFICIENT_DESTINATION_SPACE")

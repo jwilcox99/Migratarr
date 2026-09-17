@@ -14,11 +14,13 @@ import subprocess
 import sys
 import urllib.request
 from contextlib import redirect_stdout
+from dataclasses import replace
 from io import StringIO
 from pathlib import Path
 
 from .config import load_policy
 from .engine import MoveRequest, ValidationEngine, ValidationPolicy
+from .rules import load_rule_policy
 
 
 PLANNER = Path(__file__).resolve().parents[1] / "build_move_plan.py"
@@ -103,7 +105,7 @@ def run_legacy(tree, namespace, movie_csv, tv_csv, overrides):
     return namespace["plans"]
 
 
-def compare(movie_csv, tv_csv, overrides, policy=None):
+def compare(movie_csv, tv_csv, overrides, policy=None, rules=None):
     """Compare complete plan rows using one set of saved inputs."""
     tree, namespace = load_legacy()
     legacy = run_legacy(tree, namespace, movie_csv, tv_csv, overrides)
@@ -113,6 +115,20 @@ def compare(movie_csv, tv_csv, overrides, policy=None):
             tuple(namespace["disk_roots"].values()),
             namespace["MIN_FREE_AFTER_GB"] * 1024**3,
         )
+    if rules is not None:
+        policy = replace(policy, rules=rules)
+        known_categories = {
+            category
+            for groups in (policy.category_paths or policy.destination_roots).values()
+            for category in groups
+        }
+        referenced = (set(rules.category_override_tags.values())
+                      | {rules.rare_category, rules.archive_category})
+        if referenced - known_categories:
+            raise ValueError(
+                "Rule policy references unknown categories: "
+                + ", ".join(sorted(referenced - known_categories))
+            )
     engine = ValidationEngine(
         policy,
         exists=lambda path: path.exists(),
@@ -168,10 +184,38 @@ def load_overrides(path):
     return result
 
 
-def snapshot_live_overrides(path):
-    """Save only current relevant Arr tags, using the original read-only loader."""
+def _load_custom_overrides(namespace, rules):
+    """Read Arr tags matching a custom rule policy without changing Arr."""
+    result = {"Movie": {}, "TV": {}}
+    systems = (
+        ("Movie", namespace["RADARR_URL"], "radarr", "movie"),
+        ("TV", namespace["SONARR_URL"], "sonarr", "series"),
+    )
+    for media, base, container, endpoint in systems:
+        key = namespace["docker_key"](container)
+        tags = namespace["api_json"](f"{base}/api/v3/tag", key)
+        tag_map = {tag["id"]: tag["label"].lower() for tag in tags}
+        items = namespace["api_json"](f"{base}/api/v3/{endpoint}", key)
+        for item in items:
+            labels = {
+                tag_map[tag_id]
+                for tag_id in item.get("tags", [])
+                if tag_id in tag_map
+            }
+            relevant = {
+                label for label in labels
+                if label == rules.lock_tag or label in rules.category_override_tags
+            }
+            if relevant:
+                result[media][item["id"]] = relevant
+    return result
+
+
+def snapshot_live_overrides(path, rules=None):
+    """Save only current relevant Arr tags using read-only API requests."""
     _, namespace = load_legacy()
-    overrides = namespace["load_arr_overrides"]()
+    overrides = (namespace["load_arr_overrides"]() if rules is None
+                 else _load_custom_overrides(namespace, rules))
     serializable = {
         media: {str(item_id): sorted(tags) for item_id, tags in items.items()}
         for media, items in overrides.items()
@@ -191,6 +235,8 @@ def main(argv=None):
                         help="Saved Arr tag snapshot; use an explicit empty JSON object if none")
     parser.add_argument("--config", type=Path,
                         help="Validate and compare a storage policy JSON against the original planner")
+    parser.add_argument("--rules-config", type=Path,
+                        help="Validate and compare explicit review and override rules")
     parser.add_argument("--snapshot-overrides", type=Path,
                         help="Read current Arr tags and create this snapshot file only")
     args = parser.parse_args(argv)
@@ -200,7 +246,10 @@ def main(argv=None):
         if args.movie_csv or args.tv_csv or args.overrides_json or args.config:
             parser.error("--snapshot-overrides cannot be combined with comparison inputs")
         try:
-            snapshot_live_overrides(args.snapshot_overrides)
+            snapshot_live_overrides(
+                args.snapshot_overrides,
+                load_rule_policy(args.rules_config) if args.rules_config else None,
+            )
         except (OSError, KeyError, ValueError, subprocess.CalledProcessError) as exc:
             parser.exit(2, f"Override snapshot could not complete: {exc}\n")
         print(f"Saved override snapshot: {args.snapshot_overrides}")
@@ -210,9 +259,14 @@ def main(argv=None):
     try:
         result = compare(args.movie_csv, args.tv_csv,
                          load_overrides(args.overrides_json),
-                         load_policy(args.config) if args.config else None)
+                         load_policy(args.config) if args.config else None,
+                         load_rule_policy(args.rules_config) if args.rules_config else None)
         if args.config:
             result["config_sha256"] = hashlib.sha256(args.config.read_bytes()).hexdigest()
+        if args.rules_config:
+            result["rules_config_sha256"] = hashlib.sha256(
+                args.rules_config.read_bytes()
+            ).hexdigest()
     except (OSError, KeyError, ValueError, TypeError, AttributeError) as exc:
         parser.exit(2, f"Parity check could not complete: {exc}\n")
     print(json.dumps(result, indent=2))

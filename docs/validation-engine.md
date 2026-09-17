@@ -142,6 +142,46 @@ reported configuration SHA-256 was
 which matches the committed file. This establishes parity for that saved run;
 it does not validate other storage layouts or enable live execution.
 
+## Explicit review and override rules
+
+`config/legacy-rules.json` represents the planner's existing manual override
+tags and review warnings. The default rule policy is equivalent to the
+original `apply_override` tag precedence and warning order. The package has a
+separate rule loader so the current storage configuration remains valid.
+
+| Rule behavior | Existing source | Configurable behavior |
+| --- | --- | --- |
+| Lock tag wins over category tags and resets recommendation to current | `apply_override` | Tag name can change; lock still wins and the candidate is skipped |
+| A single category tag changes the recommendation | `apply_override` | Tag-to-category mapping can change |
+| Multiple category tags conflict | `apply_override` + `evaluate_move` | `CONFLICTING_MANUAL_OVERRIDES` remains a mandatory blocker |
+| Manual lock and category override flags | `evaluate_move` | `WARN` or `IGNORE` for lock; `WARN`, `BLOCK`, or `IGNORE` for category override |
+| Low confidence, Rare promotion/demotion, Archive review | `evaluate_move` | `WARN`, `BLOCK`, or `IGNORE`; review category names can change |
+
+`IGNORE` suppresses only the named flag. It does not cancel a manual lock,
+change an override, bypass a filesystem or capacity blocker, or alter the
+executor's separate approval checks. The parser rejects unknown rule IDs,
+invalid actions or tags, and attempts to downgrade a conflicting manual
+override. The hard blockers for missing sources, destination collisions, and
+capacity remain in the engine and are not configurable in this phase.
+
+Compare the committed default rules to the original planner using the same
+saved inputs:
+
+```text
+python -m migratarr_validation.parity \
+  --movie-csv /path/to/saved/movie_dry_run.csv \
+  --tv-csv /path/to/saved/tv_dry_run.csv \
+  --overrides-json /path/to/saved/overrides.json \
+  --config config/legacy-storage.json \
+  --rules-config config/legacy-rules.json
+```
+
+For custom override tag names, capture a new snapshot with
+`--snapshot-overrides /path/to/new.json --rules-config /path/to/custom-rules.json`.
+That mode uses the configured tag names in read-only Radarr/Sonarr requests.
+The original planner will still use its fixed tag names, so parity differences
+from custom tags are expected and must be reviewed as policy changes.
+
 ## Known boundaries from repository evidence
 
 - The original planner skips a move if an override changes its recommendation
