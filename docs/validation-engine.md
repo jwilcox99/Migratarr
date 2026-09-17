@@ -134,6 +134,14 @@ any live integration. This phase configures storage layout and reserve only.
 The `Rare` and `Archive` review semantics, Migratarr override tag names, and
 execution approval rules are still fixed to the existing planner behavior.
 
+The operator reran parity on the server with `config/legacy-storage.json` and
+the same saved CSVs and override snapshot. The reported result was 134 legacy
+rows, 134 configured-engine rows, zero differences, and exit status `0`. The
+reported configuration SHA-256 was
+`c032edad73ccde937c73a09fd6b13498049c8e5459d1b7f087badc24901bd68b`,
+which matches the committed file. This establishes parity for that saved run;
+it does not validate other storage layouts or enable live execution.
+
 ## Known boundaries from repository evidence
 
 - The original planner skips a move if an override changes its recommendation
