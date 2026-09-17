@@ -43,6 +43,44 @@ Run the tests from the repository root with:
 python -m unittest discover -s tests -v
 ```
 
+## Read-only parity harness
+
+`migratarr_validation.parity` reads saved movie and TV dry-run CSVs, runs the
+original planner's candidate loops and final capacity block **in memory**, and
+compares each complete row against the standalone engine. It parses the
+original file and selects only those code sections. It does not import or run
+the module-level Docker calls or either `move_plan.csv` write. The report goes
+to standard output; no report file is created automatically.
+
+Run this on the Linux host with the same `/mnt/nas/media01` through `media04`
+mounts that `build_move_plan.py` expects:
+
+```text
+python -m migratarr_validation.parity \
+  --movie-csv /path/to/saved/movie_dry_run.csv \
+  --tv-csv /path/to/saved/tv_dry_run.csv \
+  --overrides-json /path/to/saved/overrides.json
+```
+
+The override snapshot uses Arr item IDs and the lowercase Migratarr tag names
+used by `load_arr_overrides`:
+
+```json
+{"Movie": {"123": ["migratarr-lock"]}, "TV": {"456": ["migratarr-rare"]}}
+```
+
+Use `{"Movie": {}, "TV": {}}` only if the saved run had no relevant override
+tags. The tool does not retrieve live Arr data. It reports input SHA-256 hashes,
+row counts, and field-level differences. Exit status `0` means parity, `1`
+means differences, and `2` means the comparison could not complete. Run against
+stable NAS state: the original and new evaluations read the same filesystem
+sequentially, so intervening changes to files or free space can create a
+transient difference.
+
+The repository does not contain saved dry-run CSVs or a tag snapshot. The
+harness has been tested with controlled fixtures, but a real-run result still
+requires those inputs and access to the matching NAS mounts.
+
 ## Known boundaries from repository evidence
 
 - The original planner skips a move if an override changes its recommendation
