@@ -17,6 +17,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 
+from .config import load_policy
 from .engine import MoveRequest, ValidationEngine, ValidationPolicy
 
 
@@ -102,23 +103,25 @@ def run_legacy(tree, namespace, movie_csv, tv_csv, overrides):
     return namespace["plans"]
 
 
-def compare(movie_csv, tv_csv, overrides):
+def compare(movie_csv, tv_csv, overrides, policy=None):
     """Compare complete plan rows using one set of saved inputs."""
     tree, namespace = load_legacy()
     legacy = run_legacy(tree, namespace, movie_csv, tv_csv, overrides)
-    engine = ValidationEngine(
-        ValidationPolicy(
+    if policy is None:
+        policy = ValidationPolicy(
             namespace["DESTINATION_ROOTS"],
             tuple(namespace["disk_roots"].values()),
             namespace["MIN_FREE_AFTER_GB"] * 1024**3,
-        ),
+        )
+    engine = ValidationEngine(
+        policy,
         exists=lambda path: path.exists(),
         size_bytes=namespace["dir_size_bytes"],
         free_bytes=namespace["free_bytes"],
         overrides=overrides,
     )
     current = engine.evaluate_candidates(
-        _csv_requests(movie_csv, tv_csv, namespace["DESTINATION_ROOTS"])
+        _csv_requests(movie_csv, tv_csv, policy.destination_roots)
     )
     engine.apply_cumulative_capacity(current)
     differences = []
@@ -186,13 +189,15 @@ def main(argv=None):
     parser.add_argument("--tv-csv", type=Path)
     parser.add_argument("--overrides-json", type=Path,
                         help="Saved Arr tag snapshot; use an explicit empty JSON object if none")
+    parser.add_argument("--config", type=Path,
+                        help="Validate and compare a storage policy JSON against the original planner")
     parser.add_argument("--snapshot-overrides", type=Path,
                         help="Read current Arr tags and create this snapshot file only")
     args = parser.parse_args(argv)
     if os.name != "posix":
         parser.error("Run on a POSIX host with the planner's /mnt/nas mounts")
     if args.snapshot_overrides:
-        if args.movie_csv or args.tv_csv or args.overrides_json:
+        if args.movie_csv or args.tv_csv or args.overrides_json or args.config:
             parser.error("--snapshot-overrides cannot be combined with comparison inputs")
         try:
             snapshot_live_overrides(args.snapshot_overrides)
@@ -204,7 +209,10 @@ def main(argv=None):
         parser.error("--movie-csv, --tv-csv, and --overrides-json are required for comparison")
     try:
         result = compare(args.movie_csv, args.tv_csv,
-                         load_overrides(args.overrides_json))
+                         load_overrides(args.overrides_json),
+                         load_policy(args.config) if args.config else None)
+        if args.config:
+            result["config_sha256"] = hashlib.sha256(args.config.read_bytes()).hexdigest()
     except (OSError, KeyError, ValueError, TypeError, AttributeError) as exc:
         parser.exit(2, f"Parity check could not complete: {exc}\n")
     print(json.dumps(result, indent=2))

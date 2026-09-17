@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "source_roots": [
+    "/mnt/nas/media01",
+    "/mnt/nas/media02",
+    "/mnt/nas/media03",
+    "/mnt/nas/media04"
+  ],
+  "category_paths": {
+    "Movie": {
+      "Common": "Movies/Common",
+      "Rare": "Movies/Rare",
+      "Library": "Movies/Library",
+      "Archive": "Movies/Archive"
+    },
+    "TV": {
+      "Current": "TV/Current",
+      "Rare": "TV/Rare",
+      "Library": "TV/Library",
+      "Archive": "TV/Archive"
+    }
+  },
+  "destination_disks": {
+    "Movie": {
+      "Common": ["media01"],
+      "Rare": ["media02"],
+      "Library": ["media03", "media04"],
+      "Archive": ["media04"]
+    },
+    "TV": {
+      "Current": ["media01"],
+      "Rare": ["media02"],
+      "Library": ["media03", "media04"],
+      "Archive": ["media04"]
+    }
+  },
+  "min_free_after_gb": 50
+}

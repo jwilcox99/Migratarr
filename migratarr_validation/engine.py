@@ -28,6 +28,7 @@ class ValidationPolicy:
     destination_roots: Mapping[str, Mapping[str, tuple[Path, ...]]]
     source_roots: tuple[Path, ...]
     min_free_after_bytes: int = 50 * GIB
+    category_paths: Mapping[str, Mapping[str, Path]] | None = None
 
 
 @dataclass(frozen=True)
@@ -89,9 +90,12 @@ class ValidationEngine:
     def resolve_source(self, request: MoveRequest) -> Path:
         """Ported candidate search and ambiguous/missing sentinels."""
         arr = Path(request.source_path)
-        category = "Movies" if request.media_type == "Movie" else "TV"
+        if self.policy.category_paths is None:
+            category = Path("Movies" if request.media_type == "Movie" else "TV") / request.current
+        else:
+            category = self.policy.category_paths[request.media_type][request.current]
         candidates = [
-            root / category / request.current / arr.name
+            root / category / arr.name
             for root in self.policy.source_roots
         ]
         found = [path for path in candidates if self.exists(path)]

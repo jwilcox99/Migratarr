@@ -91,6 +91,49 @@ The repository does not contain saved dry-run CSVs or a tag snapshot. The
 harness has been tested with controlled fixtures, but a real-run result still
 requires those inputs and access to the matching NAS mounts.
 
+On 2026-09-17, the operator ran the branch on the server and reported 134
+legacy rows, 134 engine rows, and zero differences. The reported input hashes
+were `8db5ac2bdff3d243510ddd3cad7347274089e9861d63be8a9c3a84e82553d15c`
+for movies and `a87e3c4e15d2b856b2ba32ce17dd5e622c573937f60616cbd176c35bc0ee5e3d`
+for TV. This records the observed baseline; the input files are not committed.
+
+## Configurable storage policy
+
+`config/legacy-storage.json` reconstructs the planner's current destination
+roots, source disks, category directories, and 50 GiB reserve. A test compares
+its derived roots and reserve directly with constants loaded from
+`build_move_plan.py`. This JSON file is a reference configuration, not an
+input to the existing planner.
+
+The version 1 fields are:
+
+| Field | Meaning |
+| --- | --- |
+| `source_roots` | Absolute POSIX disk mount paths; final directory names are unique disk IDs |
+| `category_paths` | Relative directory under each disk for each media type and logical category |
+| `destination_disks` | Ordered list of eligible disk IDs for each destination category |
+| `min_free_after_gb` | Whole-number GiB reserve after a proposed move |
+
+The loader rejects unknown fields or versions, duplicate or unknown disk IDs,
+overlapping source roots, duplicate category paths, absolute or escaping
+category paths, and malformed reserve values. It does not access the filesystem
+when loading configuration. To compare the reference file against the original
+planner with the same saved inputs, add `--config`:
+
+```text
+python -m migratarr_validation.parity \
+  --movie-csv /path/to/saved/movie_dry_run.csv \
+  --tv-csv /path/to/saved/tv_dry_run.csv \
+  --overrides-json /path/to/saved/overrides.json \
+  --config config/legacy-storage.json
+```
+
+The report includes the configuration SHA-256 hash. A modified configuration
+can intentionally produce differences; inspect those rows before considering
+any live integration. This phase configures storage layout and reserve only.
+The `Rare` and `Archive` review semantics, Migratarr override tag names, and
+execution approval rules are still fixed to the existing planner behavior.
+
 ## Known boundaries from repository evidence
 
 - The original planner skips a move if an override changes its recommendation
