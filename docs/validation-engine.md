@@ -235,6 +235,38 @@ differences, and exit status `0`. The reported rule-file SHA-256 was
 matching the committed file. The movie and TV input hashes matched the earlier
 server run. This verifies the default rule extraction for that saved run.
 
+The operator then captured fresh placement CSVs on September 18, 2026:
+167 movie rows (`8938765a35d0aaaddbbfd739c4c0325677d6769ccec7fd7b652d06378a3ab52f`)
+and 42 TV rows (`4d87e4e1a9553495694bf4435f0c8ad1fb0e5c3c10d4955a6afb785187053360`).
+With a new Arr override snapshot and the same committed default configuration,
+server parity reported 31 original plans, 31 engine plans, zero differences,
+and exit status `0`. This checks the ported decision logic against a current
+capture and filesystem sample. It does not establish that any plan is ready
+for execution.
+
+## Read-only status audit
+
+`migratarr_validation.audit` summarizes statuses, blockers, and warnings from
+the standalone engine for saved placement CSVs. It also lists blocked items by
+media type and CSV row, without emitting an executable move plan. Counts are
+per plan or per flag; one plan may have multiple blockers or warnings. It
+reuses the same evaluation path as the policy impact report and records hashes
+of every input. Run it on the server after a successful parity check:
+
+```text
+python3 -m migratarr_validation.audit \
+  --movie-csv "$CAPTURE_DIR/movie_dry_run.csv" \
+  --tv-csv "$CAPTURE_DIR/tv_dry_run.csv" \
+  --overrides-json "$CAPTURE_DIR/overrides.json" \
+  --config config/legacy-storage.json \
+  --rules-config config/legacy-rules.json \
+  > "$CAPTURE_DIR/audit.json"
+```
+
+The audit reads the current NAS state and saved CSVs. It does not freeze the
+filesystem, call Arr, write `move_plan.csv`, create a manifest, or move media.
+An audit result is an observation, not authorization to execute a move.
+
 ## Policy impact report
 
 `migratarr_validation.impact` compares two configurations on the **same saved
