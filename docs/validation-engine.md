@@ -44,6 +44,50 @@ Run the tests from the repository root with:
 python -m unittest discover -s tests -v
 ```
 
+## Isolated fresh placement capture
+
+`migratarr_validation.capture` is new orchestration code. It executes the
+unchanged `dry_run_movies.py` and `dry_run_tv.py` scoring logic in separate
+Python processes. After verifying the exact source hashes recorded in
+`capture.py`, it changes only their module-level `OUTPUT` and `CACHE_DIR`
+bindings in memory. Their original fixed paths are therefore redirected to
+a new directory. The command refuses an existing output directory and writes
+`capture.json` only after both CSVs have complete headers. That manifest
+records CSV row counts, CSV SHA-256 hashes, and script hashes. If a script
+changes, the command stops until its effects and path bindings are reviewed.
+
+The repository scripts use GET requests to local Radarr/Sonarr and Jellyfin
+and to TMDB, read API keys through Docker, and need `TMDB_TOKEN` in the
+environment. They may perform many requests and take time, particularly with
+an empty isolated cache. The command does not invoke `build_move_plan.py`,
+`snapshot_run.py`, the approval path, or an executor. It does not reuse or
+modify the live cache or overwrite the live dry-run CSVs. The original
+placement behavior is executed, not copied into the package.
+
+From the repository root on the Linux server, after setting the same
+`TMDB_TOKEN` used for ordinary placement runs:
+
+```text
+CAPTURE_DIR="$HOME/migratarr-fresh-$(date +%Y%m%d-%H%M%S)"
+python3 -m migratarr_validation.capture --output-dir "$CAPTURE_DIR"
+python3 -m migratarr_validation.parity \
+  --snapshot-overrides "$CAPTURE_DIR/overrides.json"
+python3 -m migratarr_validation.parity \
+  --movie-csv "$CAPTURE_DIR/movie_dry_run.csv" \
+  --tv-csv "$CAPTURE_DIR/tv_dry_run.csv" \
+  --overrides-json "$CAPTURE_DIR/overrides.json" \
+  --config config/legacy-storage.json \
+  --rules-config config/legacy-rules.json \
+  > "$CAPTURE_DIR/parity.json"
+```
+
+The final parity command exits `0` for no differences, `1` for differences,
+and `2` if it cannot complete. Review `capture.json` and `parity.json`
+before drawing conclusions. Running the separate override snapshot after
+placement capture narrows the gap between CSV and tag observations but does
+not make them atomic. A failed capture may leave partial files in its new
+directory; it never creates `capture.json` in that case.
+
 ## Read-only parity harness
 
 `migratarr_validation.parity` reads saved movie and TV dry-run CSVs, runs the
