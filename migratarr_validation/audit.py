@@ -32,6 +32,8 @@ def summarize(rows, plans):
                 "media_type": row.media_type,
                 "csv_row": row.csv_row,
                 "title": plan["title"],
+                "source_path": plan["source_path"],
+                "target_path": plan["target_path"],
                 "blockers": sorted(_flags(plan["blockers"])),
             })
     return {

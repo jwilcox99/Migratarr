@@ -251,7 +251,8 @@ the standalone engine for saved placement CSVs. It also lists blocked items by
 media type and CSV row, without emitting an executable move plan. Counts are
 per plan or per flag; one plan may have multiple blockers or warnings. It
 reuses the same evaluation path as the policy impact report and records hashes
-of every input. Run it on the server after a successful parity check:
+of every input. Blocked items include their resolved source and target paths
+for read-only inspection. Run it on the server after a successful parity check:
 
 ```text
 python3 -m migratarr_validation.audit \
@@ -266,6 +267,15 @@ python3 -m migratarr_validation.audit \
 The audit reads the current NAS state and saved CSVs. It does not freeze the
 filesystem, call Arr, write `move_plan.csv`, create a manifest, or move media.
 An audit result is an observation, not authorization to execute a move.
+
+On the fresh September 18 capture, the operator reported 31 plans: 30
+`READY_FOR_REVIEW` and one `BLOCKED`. The only blocker was
+`DESTINATION_COLLISION` for movie CSV row 163, *Things to Do in Denver When
+You're Dead (1995)*. There were four warning flags across the plans (one
+Archive review, one low or unknown replacement confidence, and two Rare
+promotion reviews). The audit's movie and TV hashes matched the fresh parity
+report. The destination collision must be inspected before any move decision;
+the audit does not establish why that path exists.
 
 ## Policy impact report
 
