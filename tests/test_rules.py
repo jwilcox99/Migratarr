@@ -8,10 +8,13 @@ from pathlib import Path
 from migratarr_validation import MoveRequest, RulePolicy, ValidationEngine, ValidationPolicy
 from migratarr_validation.engine import apply_override
 from migratarr_validation.parity import _load_custom_overrides, load_legacy
-from migratarr_validation.rules import LEGACY_ACTIONS, load_rule_policy, parse_rule_policy
+from migratarr_validation.rules import (
+    LEGACY_ACTIONS, load_rule_policy, parse_rule_policy, validate_rule_references,
+)
 
 
 RULE_FILE = Path(__file__).resolve().parents[1] / "config" / "legacy-rules.json"
+EXAMPLE_RULE_FILE = RULE_FILE.parent / "examples" / "archive-review-block.json"
 
 
 class RulePolicyTests(unittest.TestCase):
@@ -22,6 +25,19 @@ class RulePolicyTests(unittest.TestCase):
         self.assertEqual(rules.category_override_tags, legacy["OVERRIDE_TAGS"])
         self.assertEqual(rules.actions, LEGACY_ACTIONS)
         self.assertEqual(rules, RulePolicy())
+
+    def test_example_changes_only_archive_review_action(self):
+        baseline = load_rule_policy(RULE_FILE)
+        example = load_rule_policy(EXAMPLE_RULE_FILE)
+        self.assertEqual(example.lock_tag, baseline.lock_tag)
+        self.assertEqual(example.category_override_tags,
+                         baseline.category_override_tags)
+        self.assertEqual(example.rare_category, baseline.rare_category)
+        self.assertEqual(example.archive_category, baseline.archive_category)
+        self.assertEqual({key for key in baseline.actions
+                          if baseline.actions[key] != example.actions[key]},
+                         {"ARCHIVE_MOVE_REVIEW"})
+        self.assertEqual(example.actions["ARCHIVE_MOVE_REVIEW"], "BLOCK")
 
     def test_rejects_conflict_downgrade_and_malformed_rules(self):
         valid = json.loads(RULE_FILE.read_text())
@@ -117,6 +133,17 @@ class RulePolicyTests(unittest.TestCase):
         self.assertEqual(_load_custom_overrides(namespace, rules), {
             "Movie": {7: {"custom-vault"}}, "TV": {9: {"custom-lock"}},
         })
+
+    def test_override_target_needs_a_destination(self):
+        storage = ValidationPolicy(
+            {"Movie": {"Archive": (Path("/virtual/disk1/Archive"),)}},
+            (Path("/virtual/disk1"),),
+            category_paths={"Movie": {"Vault": Path("Movies/Vault"),
+                                      "Archive": Path("Movies/Archive")}},
+        )
+        rules = RulePolicy(category_override_tags={"custom-vault": "Vault"})
+        with self.assertRaises(ValueError):
+            validate_rule_references(rules, storage)
 
 
 if __name__ == "__main__":

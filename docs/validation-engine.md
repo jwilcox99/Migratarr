@@ -189,6 +189,49 @@ differences, and exit status `0`. The reported rule-file SHA-256 was
 matching the committed file. The movie and TV input hashes matched the earlier
 server run. This verifies the default rule extraction for that saved run.
 
+## Policy impact report
+
+`migratarr_validation.impact` compares two configurations on the **same saved
+placement CSVs**. It evaluates the standalone engine once with baseline
+storage/rules and once with candidate storage/rules, including the final
+cumulative capacity pass. The report matches items by media type and input
+CSV record number, so a removed plan cannot shift the identity of later rows.
+It reports added and removed plans, every changed plan field, added/removed
+blockers and warnings, destination changes, status changes, and SHA-256 hashes
+for all inputs. It writes JSON only to standard output.
+
+Create a candidate rules file outside the repository by copying
+`config/legacy-rules.json` and editing one action. Then run:
+
+```text
+python -m migratarr_validation.impact \
+  --movie-csv /path/to/saved/movie_dry_run.csv \
+  --tv-csv /path/to/saved/tv_dry_run.csv \
+  --overrides-json /path/to/saved/overrides.json \
+  --baseline-storage config/legacy-storage.json \
+  --baseline-rules config/legacy-rules.json \
+  --candidate-rules /path/to/candidate-rules.json
+```
+
+`config/examples/archive-review-block.json` is an illustrative candidate that
+changes only `ARCHIVE_MOVE_REVIEW` from `WARN` to `BLOCK`. Pass it as
+`--candidate-rules` to see which saved plans would be affected. This example
+does not change the live planner or recommend that policy for production.
+
+Use `--candidate-storage /path/to/candidate-storage.json` for storage changes;
+omitted candidate files inherit their baseline counterpart. If candidate rule
+tags differ from baseline tags, capture a matching candidate override snapshot
+with the parity command and pass `--candidate-overrides-json`. The impact
+command refuses to guess which tags apply. Exit status `0` means no plan
+changes, `1` means the report contains changes, and `2` means it could not
+complete. Status `1` is expected for an intentional policy change.
+
+The report caches filesystem existence, size, and free-space reads shared by
+both evaluations. It does not freeze the NAS; changes during the run can still
+affect the result. It does not call Arr, write `move_plan.csv`, create a
+manifest, approve anything, or move files. A zero-change report applies only
+to the saved inputs and sampled filesystem state, not future libraries.
+
 ## Known boundaries from repository evidence
 
 - The original planner skips a move if an override changes its recommendation
