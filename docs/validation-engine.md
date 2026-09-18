@@ -232,6 +232,17 @@ affect the result. It does not call Arr, write `move_plan.csv`, create a
 manifest, approve anything, or move files. A zero-change report applies only
 to the saved inputs and sampled filesystem state, not future libraries.
 
+The operator ran the illustrative Archive-block policy on the saved server
+inputs and reported 134 plans in both scenarios, 92 unchanged rows, and 42
+changed rows. Of those, 29 changed the Archive review flag from warning to
+blocker; two changed status from `READY_FOR_REVIEW` to `BLOCKED`. The other 13
+changed projected free-space values or later destination choices, including
+four disk switches, because blocked moves no longer reserve projected space.
+Many direct Archive rows already had `SOURCE_MISSING` and
+`DESTINATION_COLLISION` blockers in the baseline, so this report should not be
+read as a current executable move plan. The reported candidate rule hash was
+`6ed940c8025fd8ae6cc6d79bcaa3d71661cdf9c55224eea9b4bbc4a14660fa46`.
+
 ## Known boundaries from repository evidence
 
 - The original planner skips a move if an override changes its recommendation
