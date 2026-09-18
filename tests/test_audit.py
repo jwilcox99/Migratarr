@@ -12,7 +12,8 @@ class AuditTests(unittest.TestCase):
                 InputRow("TV", 2, {})]
         plans = {
             ("Movie", 2): {"status": "BLOCKED", "blockers": "SOURCE_MISSING;DESTINATION_COLLISION",
-                           "warnings": "ARCHIVE_MOVE_REVIEW", "title": "Film"},
+                           "warnings": "ARCHIVE_MOVE_REVIEW", "title": "Film",
+                           "source_path": "/source/Film", "target_path": "/target/Film"},
             ("TV", 2): {"status": "READY_FOR_REVIEW", "blockers": "",
                         "warnings": "LOW_CONFIDENCE", "title": "Series"},
         }
@@ -24,7 +25,8 @@ class AuditTests(unittest.TestCase):
         self.assertEqual(result["blocker_counts"],
                          {"DESTINATION_COLLISION": 1, "SOURCE_MISSING": 1})
         self.assertEqual(result["blocked_items"], [{"media_type": "Movie", "csv_row": 2,
-                                                   "title": "Film", "blockers":
+                                                   "title": "Film", "source_path": "/source/Film",
+                                                   "target_path": "/target/Film", "blockers":
                                                    ["DESTINATION_COLLISION", "SOURCE_MISSING"]}])
         self.assertEqual(plans, before)
 
