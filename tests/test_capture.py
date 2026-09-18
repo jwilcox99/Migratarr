@@ -10,6 +10,11 @@ from migratarr_validation import capture
 
 
 class CaptureTests(unittest.TestCase):
+    def test_committed_placement_scripts_pass_integrity_check(self):
+        for kind in capture.SCRIPTS:
+            with self.subTest(kind=kind):
+                capture.checked_tree(kind)
+
     def test_redirects_only_known_bindings(self):
         tree = ast.parse('from pathlib import Path\nCACHE_DIR = Path("/live/cache")\nOUTPUT = Path("/live/result.csv")\nOTHER = Path("/live/other")\n')
         with tempfile.TemporaryDirectory() as temp:

@@ -18,8 +18,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = {
-    "movie": ("dry_run_movies.py", "DE96A87C506856925FCA10DFEC4983FF4F09A5C1D372DB197ADB7D7179F5E70A"),
-    "tv": ("dry_run_tv.py", "4FDB971C861E2E61C0951C8CEA0257AEC20D3492EA6AB3788110D80B6037D94A"),
+    "movie": ("dry_run_movies.py", "4c6ccc9d1d63951b8c691cfe184827bf5a41de326910f898b82ac1a95da40945"),
+    "tv": ("dry_run_tv.py", "9fcb84e7a67980fa6bb2edae58b5ebeeecfffa14efe4a2755ddfa413189a2253"),
 }
 
 
@@ -30,10 +30,14 @@ def sha256(path):
 def checked_tree(kind):
     name, expected = SCRIPTS[kind]
     path = ROOT / name
-    actual = sha256(path)
-    if actual.upper() != expected:
+    source = path.read_bytes()
+    # Git stores LF; Windows checkouts may use CRLF. These are the only
+    # differing bytes permitted by this source-integrity check.
+    canonical = source.replace(b"\r\n", b"\n")
+    actual = hashlib.sha256(canonical).hexdigest()
+    if actual != expected:
         raise ValueError(f"{name} changed; review its writes and update capture.py before running")
-    return path, ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    return path, ast.parse(source.decode("utf-8"), filename=str(path))
 
 
 def redirect_destinations(tree, output, cache):

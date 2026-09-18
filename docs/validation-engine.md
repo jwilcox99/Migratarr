@@ -55,6 +55,8 @@ a new directory. The command refuses an existing output directory and writes
 `capture.json` only after both CSVs have complete headers. That manifest
 records CSV row counts, CSV SHA-256 hashes, and script hashes. If a script
 changes, the command stops until its effects and path bindings are reviewed.
+The integrity check allows only the line-ending difference between a Windows
+checkout and Git's committed LF content.
 
 The repository scripts use GET requests to local Radarr/Sonarr and Jellyfin
 and to TMDB, read API keys through Docker, and need `TMDB_TOKEN` in the
