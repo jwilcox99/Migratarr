@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "lock_tag": "migratarr-lock",
+  "category_override_tags": {
+    "migratarr-common": "Common",
+    "migratarr-current": "Current",
+    "migratarr-library": "Library",
+    "migratarr-rare": "Rare",
+    "migratarr-archive": "Archive"
+  },
+  "review_categories": {
+    "rare": "Rare",
+    "archive": "Archive"
+  },
+  "actions": {
+    "CONFLICTING_MANUAL_OVERRIDES": "BLOCK",
+    "MANUAL_LOCK": "WARN",
+    "MANUAL_CATEGORY_OVERRIDE": "WARN",
+    "LOW_OR_UNKNOWN_REPLACEMENT_CONFIDENCE": "WARN",
+    "RARE_PROMOTION_REVIEW": "WARN",
+    "ARCHIVE_MOVE_REVIEW": "BLOCK",
+    "RARE_DEMOTION_REVIEW": "WARN"
+  }
+}

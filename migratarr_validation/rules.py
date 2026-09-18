@@ -102,3 +102,30 @@ def parse_rule_policy(data):
 
 def load_rule_policy(path: Path) -> RulePolicy:
     return parse_rule_policy(json.loads(path.read_text(encoding="utf-8")))
+
+
+def validate_rule_references(rules: RulePolicy, storage_policy) -> None:
+    """Require every configured override/review category in storage policy."""
+    known = {
+        category
+        for groups in (storage_policy.category_paths
+                       or storage_policy.destination_roots).values()
+        for category in groups
+    }
+    destinations = {
+        category
+        for groups in storage_policy.destination_roots.values()
+        for category in groups
+    }
+    override_categories = set(rules.category_override_tags.values())
+    if override_categories - destinations:
+        raise ValueError(
+            "Override tags reference categories without destinations: "
+            + ", ".join(sorted(override_categories - destinations))
+        )
+    reviews = {rules.rare_category, rules.archive_category}
+    if reviews - known:
+        raise ValueError(
+            "Rule policy references unknown categories: "
+            + ", ".join(sorted(reviews - known))
+        )

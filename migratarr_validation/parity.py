@@ -20,7 +20,7 @@ from pathlib import Path
 
 from .config import load_policy
 from .engine import MoveRequest, ValidationEngine, ValidationPolicy
-from .rules import load_rule_policy
+from .rules import load_rule_policy, validate_rule_references
 
 
 PLANNER = Path(__file__).resolve().parents[1] / "build_move_plan.py"
@@ -117,18 +117,7 @@ def compare(movie_csv, tv_csv, overrides, policy=None, rules=None):
         )
     if rules is not None:
         policy = replace(policy, rules=rules)
-        known_categories = {
-            category
-            for groups in (policy.category_paths or policy.destination_roots).values()
-            for category in groups
-        }
-        referenced = (set(rules.category_override_tags.values())
-                      | {rules.rare_category, rules.archive_category})
-        if referenced - known_categories:
-            raise ValueError(
-                "Rule policy references unknown categories: "
-                + ", ".join(sorted(referenced - known_categories))
-            )
+        validate_rule_references(rules, policy)
     engine = ValidationEngine(
         policy,
         exists=lambda path: path.exists(),
