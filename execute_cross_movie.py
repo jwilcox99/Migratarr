@@ -165,7 +165,7 @@ def inventory(root):
     progress('Hash complete: %.2f GiB; elapsed %.0fs' % (checked / 2**30, time.monotonic() - started))
     return found
 
-def run_progress(command, label, input=None, timeout=1800):
+def run_progress(command, label, input=None, timeout=7200):
     started = time.monotonic()
     progress(label + ' started')
     with subprocess.Popen(command, stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
