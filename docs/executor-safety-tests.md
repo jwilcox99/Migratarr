@@ -35,6 +35,20 @@ python3 -m unittest discover -s tests -p test_executor_safety.py -v
   corrupt destination, source changes, revoked approval after copy or Arr update,
   and incorrect Arr path after update stop progress. Failure cases explicitly
   assert source retention and absence of downstream mutations.
+- Same-disk Movie and TV check-only flows do not rename or update Arr. Successful
+  simulations assert `RENAME_INTENT` before rename, destination verification
+  before the Arr update intent, and `SUCCESS` only after post-update checks.
+  Source changes and rename failures block the rename/update; a post-rename Arr
+  failure remains visibly incomplete for manual reconciliation. TV association
+  changes after rename block the Sonarr update.
+- Cross-disk NAS operation tests exercise the real validation path with inert
+  path/filesystem doubles. Delete refuses receipts with the wrong result,
+  operation, source identity or inventory. Check refuses an existing destination
+  and inadequate reserve space. Invalid operations, IDs and media paths refuse
+  before any mutation helper can run.
+- Both incident recovery loaders accept only their exact diagnosed journal shape,
+  execution ID, manifest/path binding and (for 0116) copy receipt. Wrong final
+  failures, later recovery events, invalid receipts and changed paths refuse.
 
 ## Isolation and limits
 
@@ -50,7 +64,9 @@ cross-disk execution flow. No SSH, Docker, HTTP, real media mounts, CLI entrypoi
 or NAS helper programs are executed.
 
 This is a focused regression checkpoint, not full executor coverage. It does not
-prove NAS-side `renameat2`, fsync/durability, process locking, real NFS visibility,
-remote delete receipts, or full same-disk Movie/TV execution sequencing. It does
-not generalize incident recovery. Those require additional targeted tests and/or
-controlled integration validation before the corresponding code is refactored.
+prove the operating system's NAS-side `renameat2`, fsync/durability, process
+locking, real NFS visibility, or successful remote delete implementation. The
+same-disk flows replace NFS visibility polling with a strict temporary-directory
+verifier; remote-operation tests stop at safety gates rather than deleting data.
+Recovery execution after its loader is not simulated. Controlled integration
+validation is still required before refactoring those boundaries.
