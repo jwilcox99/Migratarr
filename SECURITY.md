@@ -11,31 +11,6 @@ issue, using GitHub private vulnerability reporting. Include what you found,
 how to reproduce it, and — if it relates to a specific run — the relevant
 `execution_logs/<execution_id>.jsonl` entry with any secrets redacted.
 
-## Publishing hygiene (the repository is already public)
-
-This repository is public now, so the items below are current exposure,
-not a pre-publish checklist:
-
-- **NAS hostname/IP and SSH username are hardcoded** in
-  `execute_movie_nas.py`, `execute_tv_nas.py`, and `execute_cross_movie.py`
-  (`NasTransport`, the `migratarr@nas.example`-style connection target). The IP
-  is a private (RFC 1918) address so it isn't reachable from the internet,
-  but it and the username still identify real infrastructure — move this
-  to an environment variable or config file, not just for secrecy but
-  because a public fork can't use a hardcoded value anyway.
-- **Docker container names** (`radarr`, `sonarr`, `homepage`) are
-  assumed literally throughout — `homepage` specifically is where the
-  Jellyfin API key is read from (see below). Not sensitive, but worth the
-  same treatment as part of the same config pass.
-- Confirm `.gitignore` continues to exclude everything under `cache/`,
-  `runs/`, `manifests/`, `approvals/`, `execution_logs/`, and any
-  `.env`/`*.secret`/`*.token` file — these can contain real library paths,
-  titles, and run history. (Verified as of this review: all of the above
-  are listed in `.gitignore`.)
-- If you haven't already, search the git history — not just the current
-  tree — for the same categories of value. That has not been done as
-  part of this review, so treat it as open rather than assumed clean.
-
 ## How secrets are currently handled (keep doing this)
 
 - Radarr/Sonarr API keys are read at run time from each container's
