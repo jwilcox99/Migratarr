@@ -11,7 +11,7 @@ issue, using GitHub private vulnerability reporting. Include what you found,
 how to reproduce it, and — if it relates to a specific run — the relevant
 `execution_logs/<execution_id>.jsonl` entry with any secrets redacted.
 
-## How secrets are currently handled (keep doing this)
+## How secrets are currently handled
 
 - Radarr/Sonarr API keys are read at run time from each container's
   `/config/config.xml` over `docker exec`, using shell extraction or XML
