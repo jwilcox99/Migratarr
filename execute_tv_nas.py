@@ -1,10 +1,8 @@
 """One approved same-disk TV series rename. Python 3.9+, Linux host only."""
 import argparse
-import csv
 import ctypes
 import errno
 import hashlib
-import io
 import inspect
 import json
 import os
@@ -21,6 +19,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 from runtime_config import get_config
+from executor_manifest import digest, load_approved_plan
 RUNTIME = get_config()
 
 
@@ -33,58 +32,8 @@ def require(ok, message):
         raise Refused(message)
 
 
-def digest(data):
-    return hashlib.sha256(data).hexdigest()
-
-
 def load_plan(base, execution_id):
-    require(re.fullmatch(r'\d{8}T\d{6}Z-\d{4,}', execution_id), 'Invalid execution ID')
-    run = execution_id.rsplit('-', 1)[0]
-    folder = base / 'manifests' / run
-    sums = {}
-    for line in (folder / 'SHA256SUMS').read_text().splitlines():
-        if not line.strip():
-            continue
-        h, name = line.split(maxsplit=1)
-        name = name.lstrip('*')
-        require(name not in sums, 'Duplicate checksum entry')
-        sums[name] = h
-    blobs = {}
-    for name in ('execution_manifest.csv', 'manifest_metadata.json'):
-        blobs[name] = (folder / name).read_bytes()
-        require(digest(blobs[name]) == sums.get(name), 'Checksum mismatch: ' + name)
-    metadata = json.loads(blobs['manifest_metadata.json'])
-    require(metadata.get('manifest_version') == 1 and metadata.get('run_id') == run and metadata.get('snapshot_verified') is True,
-            'Manifest metadata does not identify a verified snapshot')
-    raw = blobs['execution_manifest.csv']
-    reader = csv.DictReader(io.StringIO(raw.decode('utf-8-sig')))
-    headers = reader.fieldnames or []
-    required = {'execution_id', 'media_type', 'transfer_type', 'status', 'blockers',
-                'executed', 'current', 'recommended', 'source_path', 'target_path',
-                'source_disk', 'target_disk'}
-    require(required <= set(headers) and len(headers) == len(set(headers)), 'Invalid manifest columns')
-    rows = list(reader)
-    require(all(None not in r and all(v is not None for v in r.values()) for r in rows),
-            'Malformed manifest row')
-    ids = [r['execution_id'] for r in rows]
-    require(len(ids) == len(set(ids)), 'Duplicate execution IDs')
-    selected = [r for r in rows if r['execution_id'] == execution_id]
-    require(len(selected) == 1, 'Execution ID absent from frozen manifest')
-    row = selected[0]
-    approvals = json.loads((base / 'approvals' / (run + '.json')).read_bytes())
-    require(isinstance(approvals.get('approved_execution_ids'), list)
-            and isinstance(approvals.get('history'), list), 'Invalid approval record')
-    require(approvals.get('run_id') == run, 'Approval run mismatch')
-    require(execution_id in approvals.get('approved_execution_ids', []), 'Row is unapproved')
-    history = [e for e in approvals.get('history', []) if e.get('execution_id') == execution_id]
-    require(history and history[-1].get('action') == 'APPROVE'
-            and history[-1].get('manifest_sha256') == digest(raw),
-            'Latest approval does not approve this exact manifest hash')
-    require(row.get('media_type') == 'TV', 'Only TV is supported')
-    require(row.get('transfer_type') == 'SAME_DISK_RENAME', 'Only SAME_DISK_RENAME is supported')
-    require(row.get('status') == 'READY_FOR_REVIEW' and not row.get('blockers'), 'Row is blocked')
-    require(row.get('executed') == 'NO', 'Manifest row already executed or invalid')
-    return row, digest(raw)
+    return load_approved_plan(base, execution_id, 'TV', 'SAME_DISK_RENAME', require)
 
 
 def paths(row):

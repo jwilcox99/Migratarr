@@ -150,6 +150,44 @@ class ManifestSafetyTests(OfflineTest):
                     with self.assertRaises(module.Refused):
                         module.load_plan(self.base, EXECUTION)
 
+    def test_invalid_metadata_columns_and_approval_shape_refused(self):
+        for name, module in self.modules.items():
+            for invalid in ('metadata', 'columns', 'approval'):
+                with self.subTest(executor=name, invalid=invalid):
+                    self.fixture(name)
+                    if invalid == 'metadata':
+                        (self.folder / 'manifest_metadata.json').write_text(json.dumps(
+                            dict(manifest_version=1, run_id=RUN, snapshot_verified=False)))
+                        self.write_checksums()
+                    elif invalid == 'columns':
+                        del self.row['target_disk']
+                        self.write_manifest([self.row])
+                        self.approval['history'][0]['manifest_sha256'] = self.manifest_hash
+                        self.write_approval()
+                    else:
+                        self.approval['history'] = 'not-a-list'
+                        self.write_approval()
+                    with self.assertRaises(module.Refused):
+                        module.load_plan(self.base, EXECUTION)
+
+    def test_executor_media_and_transfer_scope_remain_local(self):
+        for name, module in self.modules.items():
+            row = self.fixture(name)
+            wrong_media = 'TV' if row['media_type'] == 'Movie' else 'Movie'
+            wrong_transfer = ('CROSS_DISK_TRANSFER' if row['transfer_type'] == 'SAME_DISK_RENAME'
+                              else 'SAME_DISK_RENAME')
+            for field, value, message in (
+                    ('media_type', wrong_media, 'Only .* is supported'),
+                    ('transfer_type', wrong_transfer, 'Only .* is supported')):
+                with self.subTest(executor=name, field=field):
+                    self.fixture(name)
+                    self.row[field] = value
+                    self.write_manifest([self.row])
+                    self.approval['history'][0]['manifest_sha256'] = self.manifest_hash
+                    self.write_approval()
+                    with self.assertRaisesRegex(module.Refused, message):
+                        module.load_plan(self.base, EXECUTION)
+
 
 class JournalAndPathSafetyTests(OfflineTest):
     def test_uncertain_live_journals_refuse_even_after_check_only_tail(self):
