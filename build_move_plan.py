@@ -8,7 +8,10 @@ import urllib.request
 from pathlib import Path
 from collections import Counter
 
-BASE = Path("/opt/media-stack/migratarr")
+from runtime_config import get_config
+RUNTIME = get_config()
+
+BASE = RUNTIME.base_path
 
 MOVIE_CSV = BASE / "movie_dry_run.csv"
 TV_CSV = BASE / "tv_dry_run.csv"
@@ -17,32 +20,32 @@ OUTPUT = BASE / "move_plan.csv"
 DESTINATION_ROOTS = {
     "Movie": {
         "Common": [
-            Path("/mnt/nas/media01/Movies/Common"),
+            RUNTIME.local("media01") / "Movies/Common",
         ],
         "Rare": [
-            Path("/mnt/nas/media02/Movies/Rare"),
+            RUNTIME.local("media02") / "Movies/Rare",
         ],
         "Library": [
-            Path("/mnt/nas/media03/Movies/Library"),
-            Path("/mnt/nas/media04/Movies/Library"),
+            RUNTIME.local("media03") / "Movies/Library",
+            RUNTIME.local("media04") / "Movies/Library",
         ],
         "Archive": [
-            Path("/mnt/nas/media04/Movies/Archive"),
+            RUNTIME.local("media04") / "Movies/Archive",
         ],
     },
     "TV": {
         "Current": [
-            Path("/mnt/nas/media01/TV/Current"),
+            RUNTIME.local("media01") / "TV/Current",
         ],
         "Rare": [
-            Path("/mnt/nas/media02/TV/Rare"),
+            RUNTIME.local("media02") / "TV/Rare",
         ],
         "Library": [
-            Path("/mnt/nas/media03/TV/Library"),
-            Path("/mnt/nas/media04/TV/Library"),
+            RUNTIME.local("media03") / "TV/Library",
+            RUNTIME.local("media04") / "TV/Library",
         ],
         "Archive": [
-            Path("/mnt/nas/media04/TV/Archive"),
+            RUNTIME.local("media04") / "TV/Archive",
         ],
     },
 }
@@ -113,10 +116,10 @@ def resolve_host_source(media_type, arr_path, current):
     candidates = []
 
     for disk in [
-        Path("/mnt/nas/media01"),
-        Path("/mnt/nas/media02"),
-        Path("/mnt/nas/media03"),
-        Path("/mnt/nas/media04"),
+        RUNTIME.local("media01"),
+        RUNTIME.local("media02"),
+        RUNTIME.local("media03"),
+        RUNTIME.local("media04"),
     ]:
         candidate = disk / category_path / folder_name
 
@@ -153,7 +156,7 @@ def physical_disk(path):
 
     if (
         len(path.parts) > 3
-        and path.parts[:3] == ("/", "mnt", "nas")
+        and path.parts[:3] == RUNTIME.mount_root.parts
     ):
         return path.parts[3]
 
@@ -330,7 +333,7 @@ def evaluate_move(
         and target_disk
         and source_disk != target_disk
     ):
-        source_root = Path("/mnt/nas") / source_disk
+        source_root = RUNTIME.local(source_disk)
 
         if source_disk not in PROJECTED_FREE:
             src_free = free_bytes(source_root)
@@ -392,8 +395,8 @@ def evaluate_move(
 
 
 
-RADARR_URL = "http://localhost:7878"
-SONARR_URL = "http://localhost:8989"
+RADARR_URL = RUNTIME.urls["radarr"]
+SONARR_URL = RUNTIME.urls["sonarr"]
 
 OVERRIDE_TAGS = {
     "migratarr-common": "Common",
@@ -433,8 +436,8 @@ def load_arr_overrides():
     }
 
     systems = [
-        ("Movie", RADARR_URL, docker_key("radarr"), "movie"),
-        ("TV", SONARR_URL, docker_key("sonarr"), "series"),
+        ("Movie", RADARR_URL, docker_key(RUNTIME.containers["radarr"]), "movie"),
+        ("TV", SONARR_URL, docker_key(RUNTIME.containers["sonarr"]), "series"),
     ]
 
     for media_type, base, key, endpoint in systems:
@@ -652,10 +655,10 @@ for (media, src, dst), count in sorted(
 # ------------------------------------------------------------
 
 disk_roots = {
-    "media01": Path("/mnt/nas/media01"),
-    "media02": Path("/mnt/nas/media02"),
-    "media03": Path("/mnt/nas/media03"),
-    "media04": Path("/mnt/nas/media04"),
+    "media01": RUNTIME.local("media01"),
+    "media02": RUNTIME.local("media02"),
+    "media03": RUNTIME.local("media03"),
+    "media04": RUNTIME.local("media04"),
 }
 
 disk_free = {}

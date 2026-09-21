@@ -16,6 +16,9 @@ from datetime import datetime, timezone
 import urllib.request
 import xml.etree.ElementTree as ET
 
+from runtime_config import get_config
+RUNTIME = get_config()
+
 
 class Refused(RuntimeError):
     pass
@@ -87,7 +90,7 @@ def paths(row):
         raw = row[field]
         p = PurePosixPath(raw)
         require(str(p) == raw and '..' not in p.parts, 'Noncanonical path')
-        require(len(p.parts) == 7 and p.parts[:3] == ('/', 'mnt', 'nas')
+        require(len(p.parts) == 7 and p.parts[:3] == RUNTIME.mount_root.parts
                 and p.parts[3] in {'media01', 'media02', 'media03', 'media04'}
                 and p.parts[4] == 'Movies' and p.parts[5] == row[category]
                 and p.parts[5] in {'Common', 'Rare', 'Library', 'Archive'}
@@ -162,7 +165,7 @@ def sync_parents(src, dst):
 
 class Radarr:
     def __init__(self):
-        xml = subprocess.check_output(['docker', 'exec', 'radarr', 'cat', '/config/config.xml'], timeout=30)
+        xml = subprocess.check_output(['docker', 'exec', RUNTIME.containers['radarr'], 'cat', '/config/config.xml'], timeout=30)
         self.key = ET.fromstring(xml).findtext('ApiKey')
         require(self.key, 'Radarr API key missing')
         # Disable redirects so an API key cannot be forwarded to another server.
@@ -172,7 +175,7 @@ class Radarr:
         self.opener = urllib.request.build_opener(NoRedirect, urllib.request.ProxyHandler({}))
 
     def api(self, path, body=None):
-        req = urllib.request.Request('http://localhost:7878/api/v3/' + path,
+        req = urllib.request.Request(RUNTIME.urls["radarr"] + "/api/v3/" + path,
                                      data=None if body is None else json.dumps(body).encode(),
                                      headers={'X-Api-Key': self.key, 'Content-Type': 'application/json'},
                                      method='GET' if body is None else 'PUT')
@@ -181,14 +184,14 @@ class Radarr:
             return json.loads(data) if data else None
 
     def visible(self, path, kind='-f'):
-        r = subprocess.run(['docker', 'exec', 'radarr', 'test', kind, path], timeout=30,
+        r = subprocess.run(['docker', 'exec', RUNTIME.containers['radarr'], 'test', kind, path], timeout=30,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         require(r.returncode == 0, 'Radarr container cannot see required path: ' + path)
 
     def verify_file(self, path, expected_hash):
         self.visible(path)
         result = subprocess.check_output(
-            ['docker', 'exec', 'radarr', 'sha256sum', '--', path], timeout=1800, text=True)
+            ['docker', 'exec', RUNTIME.containers['radarr'], 'sha256sum', '--', path], timeout=1800, text=True)
         require(result.split()[0] == expected_hash, 'Radarr-visible file content mismatch')
 
 
@@ -266,7 +269,7 @@ def check_journal(journal):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('execution_id')
-    parser.add_argument('--base', type=Path, default=Path('/opt/media-stack/migratarr'))
+    parser.add_argument('--base', type=Path, default=RUNTIME.base_path)
     parser.add_argument('--execute', action='store_true', help='Perform the approved move; default is check only')
     args = parser.parse_args()
     require(sys.platform.startswith('linux'), 'Run on the Linux media host')

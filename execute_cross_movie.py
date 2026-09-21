@@ -40,6 +40,9 @@ import urllib.request
 
 import xml.etree.ElementTree as ET
 
+from runtime_config import get_config
+RUNTIME = get_config()
+
 class Refused(RuntimeError):
     pass
 
@@ -210,7 +213,7 @@ def sync_parents(src, dst):
 
 class Radarr:
     def __init__(self):
-        xml = subprocess.check_output(['docker', 'exec', 'radarr', 'cat', '/config/config.xml'], timeout=30)
+        xml = subprocess.check_output(['docker', 'exec', RUNTIME.containers['radarr'], 'cat', '/config/config.xml'], timeout=30)
         config = ET.fromstring(xml)
         self.key = config.findtext('ApiKey')
         self.url_base = (config.findtext('UrlBase') or '').rstrip('/')
@@ -222,7 +225,7 @@ class Radarr:
         self.opener = urllib.request.build_opener(NoRedirect, urllib.request.ProxyHandler({}))
 
     def api(self, path, body=None):
-        req = urllib.request.Request('http://localhost:7878' + self.url_base + '/api/v3/' + path,
+        req = urllib.request.Request(RUNTIME.urls["radarr"] + self.url_base + '/api/v3/' + path,
                                      data=None if body is None else json.dumps(body).encode(),
                                      headers={'X-Api-Key': self.key, 'Content-Type': 'application/json'},
                                      method='GET' if body is None else 'PUT')
@@ -231,20 +234,20 @@ class Radarr:
             return json.loads(data) if data else None
 
     def visible(self, path, kind='-f'):
-        r = subprocess.run(['docker', 'exec', 'radarr', 'test', kind, path], timeout=30,
+        r = subprocess.run(['docker', 'exec', RUNTIME.containers['radarr'], 'test', kind, path], timeout=30,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         require(r.returncode == 0, 'Radarr container cannot see required path: ' + path)
 
     def verify_file(self, path, expected_hash):
         self.visible(path)
-        result = run_progress(['docker', 'exec', 'radarr', 'sha256sum', '--', path],
+        result = run_progress(['docker', 'exec', RUNTIME.containers['radarr'], 'sha256sum', '--', path],
                               'Radarr file-content verification')
         require(result.split()[0] == expected_hash, 'Radarr-visible file content mismatch')
 
 class NasTransport:
     def __enter__(self):
         self.temp = tempfile.TemporaryDirectory(prefix='migratarr-ssh-')
-        self.options = ['-i', str(Path.home() / '.ssh' / 'migratarr_nas'),
+        self.options = ['-i', RUNTIME.ssh_key,
                         '-o', 'IdentitiesOnly=yes',
                         '-o', 'BatchMode=yes',
                         '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=15',
@@ -253,7 +256,7 @@ class NasTransport:
         try:
             # Prompt once through the terminal; no credentials are stored by Python.
             subprocess.run(['ssh', *self.options, '-M', '-N', '-f',
-                            '-o', 'ControlPersist=yes', 'migratarr@nas.example'], check=True, timeout=120)
+                            '-o', 'ControlPersist=yes', RUNTIME.ssh_target], check=True, timeout=120)
         except BaseException:
             self.temp.cleanup()
             raise
@@ -261,7 +264,7 @@ class NasTransport:
 
     def __exit__(self, *exc):
         try:
-            subprocess.run(['ssh', *self.options, '-O', 'exit', 'migratarr@nas.example'],
+            subprocess.run(['ssh', *self.options, '-O', 'exit', RUNTIME.ssh_target],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20)
         finally:
             self.temp.cleanup()
@@ -269,8 +272,8 @@ class NasTransport:
     def call(self, operation, src, dst, before, execution_id, receipt=None):
         payload = dict(operation=operation, source=remote_path(src), destination=remote_path(dst),
                        inventory=before, execution_id=execution_id, receipt=receipt)
-        result = run_progress(['ssh', *self.options, '-o', 'BatchMode=yes', 'migratarr@nas.example',
-                                 '/usr/bin/python3 -c ' + shlex.quote(remote_program())],
+        result = run_progress(['ssh', *self.options, '-o', 'BatchMode=yes', RUNTIME.ssh_target,
+                                 shlex.quote(RUNTIME.remote_python) + ' -c ' + shlex.quote(remote_program())],
                               'NAS ' + operation, input=json.dumps(payload))
         response = json.loads(result)
         require(response.get('result') == 'OK' and response.get('operation') == operation,
@@ -280,7 +283,7 @@ class NasTransport:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('execution_id')
-    parser.add_argument('--base', type=Path, default=Path('/opt/media-stack/migratarr'))
+    parser.add_argument('--base', type=Path, default=RUNTIME.base_path)
     parser.add_argument('--execute', action='store_true', help='Perform the approved move; default is check only')
     args = parser.parse_args()
     require(sys.platform.startswith('linux'), 'Run on the Linux media host')
@@ -319,8 +322,7 @@ def main():
     return 0
 
 
-DISKS = {'media01': '/volume4/media01', 'media02': '/volume1/media02',
-         'media03': '/volume2/media03', 'media04': '/volume3/media04'}
+DISKS = RUNTIME.remote_disks
 
 
 def paths(row):
@@ -330,7 +332,7 @@ def paths(row):
         raw = row[field]
         p = PurePosixPath(raw)
         require(str(p) == raw and '..' not in p.parts and len(p.parts) == 7
-                and p.parts[:3] == ('/', 'mnt', 'nas') and p.parts[3] in DISKS
+                and p.parts[:3] == RUNTIME.mount_root.parts and p.parts[3] in DISKS
                 and p.parts[3] == row[disk] and p.parts[4] == 'Movies'
                 and p.parts[5] == row[category]
                 and row[category] in {'Common', 'Rare', 'Library', 'Archive'}, 'Invalid manifest path')
@@ -344,7 +346,7 @@ def paths(row):
 
 def remote_path(path):
     p = PurePosixPath(str(path))
-    require(len(p.parts) == 7 and p.parts[:3] == ('/', 'mnt', 'nas')
+    require(len(p.parts) == 7 and p.parts[:3] == RUNTIME.mount_root.parts
             and p.parts[3] in DISKS and p.parts[4] == 'Movies' and '..' not in p.parts,
             'Invalid NAS mapping')
     return DISKS[p.parts[3]] + '/' + '/'.join(p.parts[4:])

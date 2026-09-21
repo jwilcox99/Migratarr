@@ -12,15 +12,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean
 
-SONARR_URL = "http://localhost:8989"
-JELLYFIN_URL = "http://localhost:8096"
+from runtime_config import get_config
+RUNTIME = get_config()
+
+SONARR_URL = RUNTIME.urls["sonarr"]
+JELLYFIN_URL = RUNTIME.urls["jellyfin"]
 
 SAMPLE_SIZE = 999999
 RANDOM_SEED = 420
 CACHE_DAYS = 7
 
-CACHE_DIR = Path("/opt/media-stack/migratarr/cache")
-OUTPUT = Path("/opt/media-stack/migratarr/tv_dry_run.csv")
+CACHE_DIR = (RUNTIME.base_path / "cache")
+OUTPUT = (RUNTIME.base_path / "tv_dry_run.csv")
 
 SUBSCRIBED = {
     "Hulu",
@@ -38,12 +41,12 @@ def docker_output(container, command):
 
 
 SONARR_KEY = docker_output(
-    "sonarr",
+    RUNTIME.containers["sonarr"],
     r"""sed -n 's:.*<ApiKey>\(.*\)</ApiKey>.*:\1:p' /config/config.xml"""
 )
 
 JELLYFIN_KEY = docker_output(
-    "homepage",
+    RUNTIME.containers["homepage"],
     "cat /run/secrets/jellyfin_api_key"
 )
 

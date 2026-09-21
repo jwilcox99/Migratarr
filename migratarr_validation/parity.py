@@ -40,10 +40,14 @@ def _execute(nodes, namespace):
     exec(code, namespace)
 
 
-def load_legacy():
+def load_legacy(runtime=None):
     """Load decision code without executing planner module side effects."""
     tree = ast.parse(PLANNER.read_text(encoding="utf-8"), filename=str(PLANNER))
-    namespace = {"Path": Path, "os": os, "csv": csv, "json": json,
+    from runtime_config import load_config
+    # Offline parity remains pinned to the documented Phase One deployment.
+    # Live callers explicitly supply their deployed configuration.
+    runtime = runtime or load_config(PLANNER.parent / 'config' / 'runtime.example.json', environ={})
+    namespace = {"RUNTIME": runtime, "Path": Path, "os": os, "csv": csv, "json": json,
                  "subprocess": subprocess, "urllib": urllib}
     nodes = [
         node for node in tree.body
@@ -177,8 +181,8 @@ def _load_custom_overrides(namespace, rules):
     """Read Arr tags matching a custom rule policy without changing Arr."""
     result = {"Movie": {}, "TV": {}}
     systems = (
-        ("Movie", namespace["RADARR_URL"], "radarr", "movie"),
-        ("TV", namespace["SONARR_URL"], "sonarr", "series"),
+        ("Movie", namespace["RADARR_URL"], namespace["RUNTIME"].containers["radarr"], "movie"),
+        ("TV", namespace["SONARR_URL"], namespace["RUNTIME"].containers["sonarr"], "series"),
     )
     for media, base, container, endpoint in systems:
         key = namespace["docker_key"](container)
@@ -202,7 +206,8 @@ def _load_custom_overrides(namespace, rules):
 
 def snapshot_live_overrides(path, rules=None):
     """Save only current relevant Arr tags using read-only API requests."""
-    _, namespace = load_legacy()
+    from runtime_config import get_config
+    _, namespace = load_legacy(get_config())
     overrides = (namespace["load_arr_overrides"]() if rules is None
                  else _load_custom_overrides(namespace, rules))
     serializable = {

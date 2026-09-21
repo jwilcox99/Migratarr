@@ -4,12 +4,16 @@ import argparse
 import csv
 import io
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
 import sys
 
 import execute_cross_movie as m
+
+from runtime_config import get_config, load_config
+RUNTIME = get_config()
 
 
 def pending_movies(base, run):
@@ -75,7 +79,11 @@ def run_batch(base, run, execute, runner=subprocess.run):
             [sys.executable, str(base / 'execute_cross_movie.py'), execution_id, '--base', str(base), '--execute'],
         ]
         for command in commands:
-            result = runner(command, cwd=base)
+            m.require(load_config(RUNTIME.source_path).as_dict() == RUNTIME.as_dict(),
+                      'Runtime configuration changed during batch')
+            env = dict(os.environ, MIGRATARR_CONFIG=str(RUNTIME.source_path),
+                       MIGRATARR_BASE_PATH=base.as_posix())
+            result = runner(command, cwd=base, env=env)
             m.require(result.returncode == 0, 'Command failed for ' + execution_id + '; batch stopped')
         events = [json.loads(line) for line in
                   (base / 'execution_logs' / (execution_id + '.jsonl')).read_text().splitlines()]
@@ -90,8 +98,8 @@ def main():
     parser.add_argument('--run', required=True)
     parser.add_argument('--execute', action='store_true', help='Approve and move all pending eligible movies')
     args = parser.parse_args()
-    # Existing approval tool uses this installation path, so do not offer a misleading --base.
-    return run_batch(Path('/opt/media-stack/migratarr'), args.run, args.execute)
+    # Approval and both executor subprocesses inherit the same config environment.
+    return run_batch(RUNTIME.base_path, args.run, args.execute)
 
 
 if __name__ == '__main__':

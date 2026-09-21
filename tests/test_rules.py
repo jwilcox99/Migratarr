@@ -126,6 +126,7 @@ class RulePolicyTests(unittest.TestCase):
             "http://sonarr/api/v3/series": [{"id": 9, "tags": [4]}],
         }
         namespace = {
+            "RUNTIME": load_legacy()[1]["RUNTIME"],
             "RADARR_URL": "http://radarr", "SONARR_URL": "http://sonarr",
             "docker_key": lambda _: "test-key",
             "api_json": lambda url, _: responses[url],
