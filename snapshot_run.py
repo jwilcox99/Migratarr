@@ -8,7 +8,10 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-BASE = Path("/opt/media-stack/migratarr")
+from runtime_config import get_config
+RUNTIME = get_config()
+
+BASE = RUNTIME.base_path
 RUNS = BASE / "runs"
 
 FILES = [
@@ -18,6 +21,7 @@ FILES = [
 ]
 
 CODE_FILES = [
+    "runtime_config.py",
     "dry_run_movies.py",
     "dry_run_tv.py",
     "build_move_plan.py",
@@ -116,6 +120,11 @@ for filename in CODE_FILES:
     shutil.copy2(src, dst)
 
     checksums[f"code/{filename}"] = sha256(dst)
+
+# Include the effective non-secret host settings, including environment overrides.
+runtime_snapshot = code_dir / "runtime.json"
+runtime_snapshot.write_text(json.dumps(RUNTIME.as_dict(), indent=2) + "\n", encoding="utf-8")
+checksums["code/runtime.json"] = sha256(runtime_snapshot)
 
 
 # ------------------------------------------------------------

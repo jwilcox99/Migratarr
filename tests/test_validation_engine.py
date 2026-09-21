@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from runtime_config import load_config
 
 from migratarr_validation import MoveRequest, ValidationEngine, ValidationPolicy
 from migratarr_validation.engine import apply_override
@@ -32,7 +33,8 @@ def isolated_legacy():
         node for node in tree.body
         if isinstance(node, ast.FunctionDef) and node.name in LEGACY_FUNCTIONS
     ]
-    namespace = {"Path": Path, "os": __import__("os")}
+    namespace = {"Path": Path, "os": __import__("os"),
+                 "RUNTIME": load_config(ROOT / "config/runtime.example.json", environ={})}
     exec(compile(ast.Module(body=definitions, type_ignores=[]), str(PLANNER), "exec"), namespace)
     namespace.update(
         MIN_FREE_AFTER_GB=50,
@@ -268,7 +270,7 @@ class PlannerCharacterization(unittest.TestCase):
         namespace = {"load_arr_overrides": lambda: {
             "Movie": {7: {"migratarr-rare", "migratarr-lock"}}, "TV": {}}}
         with patch("migratarr_validation.parity.load_legacy",
-                   return_value=(None, namespace)):
+                   return_value=(None, namespace)), patch("runtime_config.get_config", return_value=None):
             snapshot_live_overrides(snapshot)
             self.assertEqual(load_overrides(snapshot), namespace["load_arr_overrides"]())
             with self.assertRaises(FileExistsError):

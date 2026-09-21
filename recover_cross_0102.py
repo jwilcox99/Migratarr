@@ -11,6 +11,9 @@ import shlex
 
 import execute_cross_movie as m
 
+from runtime_config import get_config
+RUNTIME = get_config()
+
 EXECUTION_ID = '20260915T192959Z-0102'
 OPERATION_TIMEOUT = 7200
 
@@ -121,7 +124,7 @@ def recover(base, live, radarr, transport, log):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--base', type=Path, default=Path('/opt/media-stack/migratarr'))
+    parser.add_argument('--base', type=Path, default=RUNTIME.base_path)
     parser.add_argument('--execute', action='store_true')
     args = parser.parse_args()
     m.require(sys.platform.startswith('linux'), 'Run on the media host')
@@ -199,8 +202,8 @@ class RecoveryTransport(m.NasTransport):
         payload = dict(operation=operation, source=m.remote_path(src), destination=m.remote_path(dst),
                        inventory=before, execution_id=execution_id, receipt=receipt)
         program = receipt_program() if operation == 'receipt' else m.remote_program()
-        output = m.run_progress(['ssh', *self.options, '-o', 'BatchMode=yes', 'migratarr@nas.example',
-                                 '/usr/bin/python3 -c ' + shlex.quote(program)],
+        output = m.run_progress(['ssh', *self.options, '-o', 'BatchMode=yes', RUNTIME.ssh_target,
+                                 shlex.quote(RUNTIME.remote_python) + ' -c ' + shlex.quote(program)],
                                 'NAS recovery ' + operation, input=json.dumps(payload),
                                 timeout=OPERATION_TIMEOUT)
         response = json.loads(output)
@@ -213,7 +216,7 @@ class RecoveryTransport(m.NasTransport):
 class RecoveryRadarr(m.Radarr):
     def verify_file(self, path, expected_hash):
         self.visible(path)
-        output = m.run_progress(['docker', 'exec', 'radarr', 'sha256sum', '--', path],
+        output = m.run_progress(['docker', 'exec', RUNTIME.containers['radarr'], 'sha256sum', '--', path],
                                 'Radarr recovery content verification', timeout=OPERATION_TIMEOUT)
         m.require(output.split()[0] == expected_hash, 'Radarr-visible content mismatch')
 

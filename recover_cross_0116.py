@@ -9,6 +9,9 @@ import sys
 
 import execute_cross_movie as m
 
+from runtime_config import get_config
+RUNTIME = get_config()
+
 EXECUTION_ID = '20260915T192959Z-0116'
 
 
@@ -112,7 +115,7 @@ def recover(base, live, radarr, transport, log):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--base', type=Path, default=Path('/opt/media-stack/migratarr'))
+    parser.add_argument('--base', type=Path, default=RUNTIME.base_path)
     parser.add_argument('--execute', action='store_true')
     args = parser.parse_args()
     m.require(sys.platform.startswith('linux'), 'Run on the media host')

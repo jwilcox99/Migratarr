@@ -81,12 +81,8 @@ and `docs/phase-one-closeout.md`'s Phase Two handoff. In particular:
   has to be manually ported across near-identical files.
 - Promoting `migratarr_validation/` from a parity-checked, read-only
   layer into the actual pre-execution gate.
-- A CI workflow that runs `tests/` on every PR — nothing runs it
-  automatically today.
-- Moving the remaining hardcoded constants (see the README's
-  [Configuration](README.md#configuration) table) into the same kind of
-  versioned config `config/legacy-storage.json` / `config/legacy-rules.json`
-  started (still explicitly scoped "legacy," not wired into a live run).
+- Expanding runtime layout support beyond the conservative path-shape contracts
+  documented in [runtime configuration](docs/runtime-configuration.md).
 
 ## Reporting bugs
 

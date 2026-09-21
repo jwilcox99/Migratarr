@@ -20,6 +20,9 @@ from datetime import datetime, timezone
 import urllib.request
 import xml.etree.ElementTree as ET
 
+from runtime_config import get_config
+RUNTIME = get_config()
+
 
 class Refused(RuntimeError):
     pass
@@ -91,7 +94,7 @@ def paths(row):
         raw = row[field]
         p = PurePosixPath(raw)
         require(str(p) == raw and '..' not in p.parts, 'Noncanonical path')
-        require(len(p.parts) == 7 and p.parts[:3] == ('/', 'mnt', 'nas')
+        require(len(p.parts) == 7 and p.parts[:3] == RUNTIME.mount_root.parts
                 and p.parts[3] in {'media01', 'media02', 'media03', 'media04'}
                 and p.parts[4] == 'Movies' and p.parts[5] == row[category]
                 and p.parts[5] in {'Common', 'Rare', 'Library', 'Archive'}
@@ -236,7 +239,7 @@ def sync_parents(src, dst):
 
 class Radarr:
     def __init__(self):
-        xml = subprocess.check_output(['docker', 'exec', 'radarr', 'cat', '/config/config.xml'], timeout=30)
+        xml = subprocess.check_output(['docker', 'exec', RUNTIME.containers['radarr'], 'cat', '/config/config.xml'], timeout=30)
         self.key = ET.fromstring(xml).findtext('ApiKey')
         require(self.key, 'Radarr API key missing')
         # Disable redirects so an API key cannot be forwarded to another server.
@@ -246,7 +249,7 @@ class Radarr:
         self.opener = urllib.request.build_opener(NoRedirect, urllib.request.ProxyHandler({}))
 
     def api(self, path, body=None):
-        req = urllib.request.Request('http://localhost:7878/api/v3/' + path,
+        req = urllib.request.Request(RUNTIME.urls["radarr"] + "/api/v3/" + path,
                                      data=None if body is None else json.dumps(body).encode(),
                                      headers={'X-Api-Key': self.key, 'Content-Type': 'application/json'},
                                      method='GET' if body is None else 'PUT')
@@ -255,14 +258,14 @@ class Radarr:
             return json.loads(data) if data else None
 
     def visible(self, path, kind='-f'):
-        r = subprocess.run(['docker', 'exec', 'radarr', 'test', kind, path], timeout=30,
+        r = subprocess.run(['docker', 'exec', RUNTIME.containers['radarr'], 'test', kind, path], timeout=30,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         require(r.returncode == 0, 'Radarr container cannot see required path: ' + path)
 
     def verify_file(self, path, expected_hash):
         self.visible(path)
         result = run_progress(
-            ['docker', 'exec', 'radarr', 'sha256sum', '--', path], 'Radarr file-content verification')
+            ['docker', 'exec', RUNTIME.containers['radarr'], 'sha256sum', '--', path], 'Radarr file-content verification')
         require(result.split()[0] == expected_hash, 'Radarr-visible file content mismatch')
 
 
@@ -410,10 +413,10 @@ def check_journal(journal, resume=False):
 
 def remote_path(path):
     p = PurePosixPath(str(path))
-    require(p.parts[:4] == ('/', 'mnt', 'nas', 'media04') and len(p.parts) == 7
+    require(p.parts[:4] == (RUNTIME.mount_root / 'media04').parts and len(p.parts) == 7
             and p.parts[4] == 'Movies' and '..' not in p.parts,
             'NAS transport is configured only for media04 Movies')
-    return '/volume3/media04/' + '/'.join(p.parts[4:])
+    return RUNTIME.remote_disks['media04'] + '/' + '/'.join(p.parts[4:])
 
 
 def remote_program():
@@ -423,7 +426,7 @@ def remote_program():
     functions = [Refused, require, progress, file_metadata, inventory_metadata,
                  canonical_existing, filesystem_ready, inventory,
                  rename_noreplace, sync_parents]
-    return imports + '\n\n'.join(inspect.getsource(f) for f in functions) + '''
+    return imports + 'REMOTE_ROOT = ' + repr(RUNTIME.remote_disks['media04']) + '\n' + '\n\n'.join(inspect.getsource(f) for f in functions) + '''
 def content_only(items):
     return {k: v if len(v) == 1 else v[:2] for k, v in items.items()}
 
@@ -431,7 +434,7 @@ data = json.load(sys.stdin)
 require(data['operation'] in {'check', 'rename'}, 'Unknown operation')
 src, dst = Path(data['source']), Path(data['destination'])
 for p in (src, dst):
-    require(len(p.parts) == 6 and p.parts[:4] == ('/', 'volume3', 'media04', 'Movies')
+    require(len(p.parts) == 6 and p.parts[:4] == (Path(REMOTE_ROOT) / 'Movies').parts
             and p.parts[4] in {'Common', 'Rare', 'Library', 'Archive'}
             and '..' not in p.parts, 'Invalid NAS movie path')
 require(src != dst and src.name == dst.name, 'Invalid rename pair')
@@ -461,7 +464,7 @@ with os.fdopen(lockfd, 'a') as lock:
 class NasTransport:
     def __enter__(self):
         self.temp = tempfile.TemporaryDirectory(prefix='migratarr-ssh-')
-        self.options = ['-i', str(Path.home() / '.ssh' / 'migratarr_nas'),
+        self.options = ['-i', RUNTIME.ssh_key,
                         '-o', 'IdentitiesOnly=yes',
                         '-o', 'BatchMode=yes',
                         '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=15',
@@ -470,7 +473,7 @@ class NasTransport:
         try:
             # Dedicated key only; never wait for a terminal password prompt.
             subprocess.run(['ssh', *self.options, '-M', '-N', '-f',
-                            '-o', 'ControlPersist=yes', 'migratarr@nas.example'], check=True, timeout=120)
+                            '-o', 'ControlPersist=yes', RUNTIME.ssh_target], check=True, timeout=120)
         except BaseException:
             self.temp.cleanup()
             raise
@@ -478,7 +481,7 @@ class NasTransport:
 
     def __exit__(self, *exc):
         try:
-            subprocess.run(['ssh', *self.options, '-O', 'exit', 'migratarr@nas.example'],
+            subprocess.run(['ssh', *self.options, '-O', 'exit', RUNTIME.ssh_target],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20)
         finally:
             self.temp.cleanup()
@@ -486,8 +489,8 @@ class NasTransport:
     def call(self, operation, src, dst, before):
         payload = dict(operation=operation, source=remote_path(src), destination=remote_path(dst),
                        inventory=before)
-        result = run_progress(['ssh', *self.options, '-o', 'BatchMode=yes', 'migratarr@nas.example',
-                                 '/usr/bin/python3 -c ' + shlex.quote(remote_program())],
+        result = run_progress(['ssh', *self.options, '-o', 'BatchMode=yes', RUNTIME.ssh_target,
+                                 shlex.quote(RUNTIME.remote_python) + ' -c ' + shlex.quote(remote_program())],
                               'NAS ' + operation, input=json.dumps(payload))
         require(json.loads(result) == dict(result='OK', operation=operation),
                 'Unexpected NAS response; reconcile before retrying')
@@ -496,7 +499,7 @@ class NasTransport:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('execution_id')
-    parser.add_argument('--base', type=Path, default=Path('/opt/media-stack/migratarr'))
+    parser.add_argument('--base', type=Path, default=RUNTIME.base_path)
     parser.add_argument('--execute', action='store_true', help='Perform the approved move; default is check only')
     parser.add_argument('--resume-nfs-refusal', action='store_true',
                         help='Reconcile the single diagnosed NFS EINVAL attempt; retain its journal')

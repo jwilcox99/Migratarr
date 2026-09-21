@@ -18,8 +18,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = {
-    "movie": ("dry_run_movies.py", "4c6ccc9d1d63951b8c691cfe184827bf5a41de326910f898b82ac1a95da40945"),
-    "tv": ("dry_run_tv.py", "9fcb84e7a67980fa6bb2edae58b5ebeeecfffa14efe4a2755ddfa413189a2253"),
+    "movie": ("dry_run_movies.py", "257383f1e380239b414eeea7aa8f3bd910141986db6a0baa661257716d3e6bb7"),
+    "tv": ("dry_run_tv.py", "422ba0e1db5bf34b1cf0778b433da26f570ae7712eb81ac028957d6ba9ab7b50"),
 }
 
 
@@ -50,9 +50,20 @@ def redirect_destinations(tree, output, cache):
         target = node.targets[0]
         if not isinstance(target, ast.Name) or target.id not in replacements:
             continue
-        if target.id in found or not isinstance(node.value, ast.Call) or not isinstance(node.value.func, ast.Name) or node.value.func.id != "Path" or len(node.value.args) != 1 or node.value.keywords or not isinstance(node.value.args[0], ast.Constant) or not isinstance(node.value.args[0].value, str):
+        literal_path = (isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
+                        and node.value.func.id == "Path" and len(node.value.args) == 1
+                        and not node.value.keywords and isinstance(node.value.args[0], ast.Constant)
+                        and isinstance(node.value.args[0].value, str))
+        runtime_path = (isinstance(node.value, ast.BinOp) and isinstance(node.value.op, ast.Div)
+                        and isinstance(node.value.left, ast.Attribute)
+                        and isinstance(node.value.left.value, ast.Name)
+                        and node.value.left.value.id == "RUNTIME" and node.value.left.attr == "base_path"
+                        and isinstance(node.value.right, ast.Constant)
+                        and node.value.right.value in {"cache", "movie_dry_run.csv", "tv_dry_run.csv"})
+        if target.id in found or not (literal_path or runtime_path):
             raise ValueError(f"Unexpected {target.id} assignment in placement script")
-        node.value.args[0].value = str(replacements[target.id])
+        node.value = ast.Call(func=ast.Name(id="Path", ctx=ast.Load()),
+                              args=[ast.Constant(str(replacements[target.id]))], keywords=[])
         found.add(target.id)
     if found != replacements.keys():
         raise ValueError(f"Missing placement path assignments: {sorted(replacements.keys() - found)}")

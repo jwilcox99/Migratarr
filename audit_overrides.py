@@ -4,8 +4,11 @@ import json
 import subprocess
 import urllib.request
 
-RADARR_URL = "http://localhost:7878"
-SONARR_URL = "http://localhost:8989"
+from runtime_config import get_config
+RUNTIME = get_config()
+
+RADARR_URL = RUNTIME.urls["radarr"]
+SONARR_URL = RUNTIME.urls["sonarr"]
 
 PREFIX = "migratarr-"
 
@@ -85,8 +88,8 @@ def audit(name, url, key, endpoint):
         print("None")
 
 
-radarr_key = docker_key("radarr")
-sonarr_key = docker_key("sonarr")
+radarr_key = docker_key(RUNTIME.containers["radarr"])
+sonarr_key = docker_key(RUNTIME.containers["sonarr"])
 
 audit(
     "RADARR",

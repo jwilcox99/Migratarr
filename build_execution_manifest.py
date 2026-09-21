@@ -8,7 +8,10 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-BASE = Path("/opt/media-stack/migratarr")
+from runtime_config import get_config
+RUNTIME = get_config()
+
+BASE = RUNTIME.base_path
 RUNS = BASE / "runs"
 MANIFESTS = BASE / "manifests"
 

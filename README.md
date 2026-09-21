@@ -86,26 +86,22 @@ reproducing past decisions. They are not part of the pipeline you run.
 
 ## Configuration
 
-The live pipeline still uses Python constants for storage layout,
-service URLs, and container names. The standalone validation tools have
-JSON configuration, but it does not configure live execution.
-Before running this against your own stack, change:
+Runtime scripts use a required, validated `config/runtime.json` file. Start with:
 
-| Constant | Where | What it is |
-|---|---|---|
-| `BASE` | `snapshot_run.py`, `build_move_plan.py`, `build_execution_manifest.py`, `approve_execution.py` | Working directory for CSVs, `runs/`, `manifests/`, `approvals/`, `execution_logs/` |
-| `DESTINATION_ROOTS` | `build_move_plan.py` | Which disk(s) each media type/tier is allowed to live on |
-| `MIN_FREE_AFTER_GB` | `build_move_plan.py` | Minimum free space to preserve on any disk after a move |
-| `RADARR_URL` / `SONARR_URL` / `JELLYFIN_URL` | multiple scripts | Base URLs for each service |
-| `SUBSCRIBED` / `USER_FREE_ACCESS` | `dry_run_movies.py`, `dry_run_tv.py` | Which streaming services count as "already accessible" when scoring |
-| `docker exec radarr` / `sonarr` | `execute_movie_nas.py`, `execute_tv_nas.py`, `audit_overrides.py` | Container names Migratarr expects |
-| NAS host and SSH key path | `execute_movie_nas.py`, `execute_tv_nas.py` (`NasTransport`) | Remote host/user and `~/.ssh/<key>` used for NAS-side moves |
-| `remote_path()` disk mapping | `execute_movie_nas.py`, `execute_tv_nas.py` | Only one disk is currently wired for live remote execution |
+```sh
+cp config/runtime.example.json config/runtime.json
+python3 -c 'from runtime_config import get_config; get_config(); print("Runtime config valid")'
+```
 
-A configurable, validated version of the storage/override-policy half of
-this (`config/legacy-storage.json`, `config/legacy-rules.json`) is on
-`main`, but it's explicitly scoped "legacy" and not wired into a live
-run yet — see [Project status](#project-status).
+Review the example's media host/NAS values before use. See
+[Runtime configuration](docs/runtime-configuration.md) for all fields, environment
+overrides, retained layout restrictions, validation errors and migration steps.
+No credentials belong in the config. The deployment file is ignored by Git.
+
+`config/legacy-storage.json` and `legacy-rules.json` remain separate read-only
+validation policy. Scoring, category placement policy and executor semantics are
+unchanged. Safe unit tests run in GitHub Actions and locally with
+`python3 -m unittest discover -s tests -v`.
 
 ## Usage
 
@@ -217,9 +213,8 @@ pre-execution gate.
   `docs/phase-one-closeout.md` states this explicitly.
 - `migratarr_validation/` is read-only and not yet the live gate for
   planning or execution.
-- Single-host, single-NAS assumptions baked into constants rather than
-  configuration (see [Configuration](#configuration)); `config/legacy-*`
-  is a first step, not a finished replacement.
+- Runtime configuration supports one host/NAS with the existing four disk IDs
+  and fixed layout depth; it does not generalize executor topology.
 - User-facing preferences (subscriptions, scoring weights, tier
   thresholds) are Python constants, not something a user sets.
 

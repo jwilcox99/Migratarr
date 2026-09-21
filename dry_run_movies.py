@@ -12,18 +12,21 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
+from runtime_config import get_config
+RUNTIME = get_config()
+
 # ============================================================
 # CONFIG
 # ============================================================
 
-RADARR_URL = "http://localhost:7878"
-JELLYFIN_URL = "http://localhost:8096"
+RADARR_URL = RUNTIME.urls["radarr"]
+JELLYFIN_URL = RUNTIME.urls["jellyfin"]
 
 SAMPLE_SIZE = 999999
 RANDOM_SEED = 420
 
-CACHE_DIR = Path("/opt/media-stack/migratarr/cache")
-OUTPUT = Path("/opt/media-stack/migratarr/movie_dry_run.csv")
+CACHE_DIR = (RUNTIME.base_path / "cache")
+OUTPUT = (RUNTIME.base_path / "movie_dry_run.csv")
 
 CACHE_DAYS = 7
 
@@ -51,7 +54,7 @@ def docker_output(container, command):
 
 def get_radarr_key():
     return docker_output(
-        "radarr",
+        RUNTIME.containers["radarr"],
         r"""sed -n 's:.*<ApiKey>\(.*\)</ApiKey>.*:\1:p' /config/config.xml"""
     )
 
@@ -64,7 +67,7 @@ def get_jellyfin_key():
 
     for path in paths:
         try:
-            value = docker_output("homepage", f"cat {path}")
+            value = docker_output(RUNTIME.containers["homepage"], f"cat {path}")
             if value:
                 return value
         except Exception:
