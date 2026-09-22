@@ -20,6 +20,7 @@ import xml.etree.ElementTree as ET
 from runtime_config import get_config
 from executor_manifest import digest, load_approved_plan
 from executor_nfs import verify_after_rename
+from executor_command import run_command
 RUNTIME = get_config()
 
 
@@ -136,28 +137,7 @@ def inventory(root):
 
 
 def run_progress(command, label, input=None, timeout=1800):
-    started = time.monotonic()
-    progress(label + ' started')
-    with subprocess.Popen(command, stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
-                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as process:
-        try:
-            while True:
-                remaining = timeout - (time.monotonic() - started)
-                if remaining <= 0:
-                    raise subprocess.TimeoutExpired(command, timeout)
-                try:
-                    stdout, stderr = process.communicate(input=input, timeout=min(15, remaining))
-                    break
-                except subprocess.TimeoutExpired:
-                    input = None
-                    progress('%s still running; elapsed %.0fs' % (label, time.monotonic() - started))
-        except BaseException:
-            process.kill()
-            process.communicate()
-            raise
-        require(process.returncode == 0, label + ' failed or is uncertain: ' + stderr.strip())
-    progress('%s complete; elapsed %.0fs' % (label, time.monotonic() - started))
-    return stdout
+    return run_command(command, label, input, timeout, require=require, progress=progress)
 
 
 def rename_noreplace(src, dst):
