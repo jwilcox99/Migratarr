@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "defaults": {
+    "minimum_free_space_gb": 50
+  },
+  "targets": [
+    {
+      "id": "media01",
+      "name": "NAS disk 1",
+      "path": "/mnt/nas/media01",
+      "remote_path": "/volume4/media01",
+      "enabled": true,
+      "media_types": [
+        "Movie",
+        "TV"
+      ],
+      "minimum_free_space_gb": 50,
+      "storage_class": null,
+      "priority": 100,
+      "tags": []
+    },
+    {
+      "id": "media02",
+      "name": "NAS disk 2",
+      "path": "/mnt/nas/media02",
+      "remote_path": "/volume1/media02",
+      "enabled": true,
+      "media_types": [
+        "Movie",
+        "TV"
+      ],
+      "minimum_free_space_gb": 50,
+      "storage_class": null,
+      "priority": 100,
+      "tags": []
+    },
+    {
+      "id": "media03",
+      "name": "NAS disk 3",
+      "path": "/mnt/nas/media03",
+      "remote_path": "/volume2/media03",
+      "enabled": true,
+      "media_types": [
+        "Movie",
+        "TV"
+      ],
+      "minimum_free_space_gb": 50,
+      "storage_class": null,
+      "priority": 100,
+      "tags": []
+    },
+    {
+      "id": "media04",
+      "name": "NAS disk 4",
+      "path": "/mnt/nas/media04",
+      "remote_path": "/volume3/media04",
+      "enabled": true,
+      "media_types": [
+        "Movie",
+        "TV"
+      ],
+      "minimum_free_space_gb": 50,
+      "storage_class": null,
+      "priority": 100,
+      "tags": []
+    }
+  ],
+  "category_paths": {
+    "Movie": {
+      "Common": "Movies/Common",
+      "Rare": "Movies/Rare",
+      "Library": "Movies/Library",
+      "Archive": "Movies/Archive"
+    },
+    "TV": {
+      "Current": "TV/Current",
+      "Rare": "TV/Rare",
+      "Library": "TV/Library",
+      "Archive": "TV/Archive"
+    }
+  },
+  "placement": {
+    "Movie": {
+      "Common": [
+        "media01"
+      ],
+      "Rare": [
+        "media02"
+      ],
+      "Library": [
+        "media03",
+        "media04"
+      ],
+      "Archive": [
+        "media04"
+      ]
+    },
+    "TV": {
+      "Current": [
+        "media01"
+      ],
+      "Rare": [
+        "media02"
+      ],
+      "Library": [
+        "media03",
+        "media04"
+      ],
+      "Archive": [
+        "media04"
+      ]
+    }
+  }
+}
