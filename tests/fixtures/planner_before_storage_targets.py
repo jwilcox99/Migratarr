@@ -8,7 +8,6 @@ import urllib.request
 from pathlib import Path
 from collections import Counter
 
-from storage_targets import load_targets
 from runtime_config import get_config
 RUNTIME = get_config()
 
@@ -18,18 +17,41 @@ MOVIE_CSV = BASE / "movie_dry_run.csv"
 TV_CSV = BASE / "tv_dry_run.csv"
 OUTPUT = BASE / "move_plan.csv"
 
-# Explicit deployment configuration; never silently fall back to the example.
-TARGETS = load_targets(os.environ.get("MIGRATARR_STORAGE_TARGETS") or BASE / "config/storage-targets.json")
-TARGET_BY_ID = {target.id: target for target in TARGETS.targets}
 DESTINATION_ROOTS = {
-    media: {category: tuple(Path(str(root)) for root in roots)
-            for category, roots in categories.items()}
-    for media, categories in TARGETS.destination_roots.items()
+    "Movie": {
+        "Common": [
+            RUNTIME.local("media01") / "Movies/Common",
+        ],
+        "Rare": [
+            RUNTIME.local("media02") / "Movies/Rare",
+        ],
+        "Library": [
+            RUNTIME.local("media03") / "Movies/Library",
+            RUNTIME.local("media04") / "Movies/Library",
+        ],
+        "Archive": [
+            RUNTIME.local("media04") / "Movies/Archive",
+        ],
+    },
+    "TV": {
+        "Current": [
+            RUNTIME.local("media01") / "TV/Current",
+        ],
+        "Rare": [
+            RUNTIME.local("media02") / "TV/Rare",
+        ],
+        "Library": [
+            RUNTIME.local("media03") / "TV/Library",
+            RUNTIME.local("media04") / "TV/Library",
+        ],
+        "Archive": [
+            RUNTIME.local("media04") / "TV/Archive",
+        ],
+    },
 }
 
-
-def minimum_free_bytes(disk):
-    return TARGET_BY_ID[disk].minimum_free_space_gb * 1024 ** 3
+# Require this much free space to remain after any proposed move.
+MIN_FREE_AFTER_GB = 50
 
 
 def read_csv(path):
@@ -86,10 +108,19 @@ def resolve_host_source(media_type, arr_path, current):
     arr = Path(arr_path)
     folder_name = arr.name
 
-    category_path = Path(str(TARGETS.category_paths[media_type][current]))
+    if media_type == "Movie":
+        category_path = Path("Movies") / current
+    else:
+        category_path = Path("TV") / current
+
     candidates = []
-    for target in TARGETS.targets:
-        disk = Path(str(target.path))
+
+    for disk in [
+        RUNTIME.local("media01"),
+        RUNTIME.local("media02"),
+        RUNTIME.local("media03"),
+        RUNTIME.local("media04"),
+    ]:
         candidate = disk / category_path / folder_name
 
         if candidate.exists():
@@ -118,9 +149,18 @@ PROJECTED_FREE = {}
 
 
 def physical_disk(path):
-    """Resolve stable target identity by path prefix, never path depth."""
-    target = TARGETS.physical_target(Path(path).as_posix())
-    return target.id if target else ""
+    """
+    Return media01/media02/media03/media04 for a NAS path.
+    """
+    path = Path(path)
+
+    if (
+        len(path.parts) > 3
+        and path.parts[:3] == RUNTIME.mount_root.parts
+    ):
+        return path.parts[3]
+
+    return ""
 
 
 def projected_free_for(root):
@@ -265,7 +305,7 @@ def evaluate_move(
         warnings.append("RARE_DEMOTION_REVIEW")
 
     if size is not None and free is not None:
-        min_remaining = minimum_free_bytes(physical_disk(dest_root))
+        min_remaining = MIN_FREE_AFTER_GB * 1024 ** 3
 
         if free - size < min_remaining:
             blockers.append("INSUFFICIENT_DESTINATION_SPACE")
@@ -293,7 +333,7 @@ def evaluate_move(
         and target_disk
         and source_disk != target_disk
     ):
-        source_root = Path(str(TARGET_BY_ID[source_disk].path))
+        source_root = RUNTIME.local(source_disk)
 
         if source_disk not in PROJECTED_FREE:
             src_free = free_bytes(source_root)
@@ -307,7 +347,7 @@ def evaluate_move(
             if dst_free is not None:
                 PROJECTED_FREE[target_disk] = dst_free
 
-        reserve = minimum_free_bytes(target_disk)
+        reserve = MIN_FREE_AFTER_GB * (1024 ** 3)
 
         projected_target = (
             PROJECTED_FREE.get(target_disk, 0) - size
@@ -614,7 +654,12 @@ for (media, src, dst), count in sorted(
 # CUMULATIVE DISK CAPACITY CHECK
 # ------------------------------------------------------------
 
-disk_roots = {t.id: Path(str(t.path)) for t in TARGETS.targets}
+disk_roots = {
+    "media01": RUNTIME.local("media01"),
+    "media02": RUNTIME.local("media02"),
+    "media03": RUNTIME.local("media03"),
+    "media04": RUNTIME.local("media04"),
+}
 
 disk_free = {}
 disk_incoming = {disk: 0 for disk in disk_roots}
@@ -649,7 +694,7 @@ for disk in disk_roots:
     outgoing = disk_outgoing[disk]
 
     projected = free + outgoing - incoming
-    reserve = minimum_free_bytes(disk)
+    reserve = MIN_FREE_AFTER_GB * (1024 ** 3)
 
     print(
         f"{disk}: "

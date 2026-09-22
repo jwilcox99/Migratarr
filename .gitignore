@@ -17,3 +17,4 @@ migratarr_v1_review.txt
 
 # Deployment-specific runtime configuration
 config/runtime.json
+config/storage-targets.json

@@ -11,6 +11,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from runtime_config import load_config
+from storage_targets import load_targets
 
 from migratarr_validation import MoveRequest, ValidationEngine, ValidationPolicy
 from migratarr_validation.engine import apply_override
@@ -37,6 +38,8 @@ def isolated_legacy():
                  "RUNTIME": load_config(ROOT / "config/runtime.example.json", environ={})}
     exec(compile(ast.Module(body=definitions, type_ignores=[]), str(PLANNER), "exec"), namespace)
     namespace.update(
+        TARGET_BY_ID={t.id: t for t in load_targets(ROOT / 'config/storage-targets.example.json').targets},
+        minimum_free_bytes=lambda disk: 50 * 1024**3,
         MIN_FREE_AFTER_GB=50,
         OVERRIDE_TAGS={
             "migratarr-common": "Common", "migratarr-current": "Current",
