@@ -1,7 +1,6 @@
 """One approved same-disk movie rename. Python 3.9+, Linux host only."""
 import argparse
 import ctypes
-import errno
 import hashlib
 import inspect
 import json
@@ -20,6 +19,7 @@ import xml.etree.ElementTree as ET
 
 from runtime_config import get_config
 from executor_manifest import digest, load_approved_plan
+from executor_nfs import verify_after_rename
 RUNTIME = get_config()
 
 
@@ -219,42 +219,10 @@ class Radarr:
 
 
 def verify_nfs_after_rename(src, dst, expected, log, timeout=60, interval=2, metadata_only=False):
-    """Retry stale visibility only. Never repeat the rename or Radarr update.
-
-    The deadline bounds retry scheduling, not the duration of filesystem I/O.
-    A readable but different inventory is an immediate failure.
-    """
-    deadline = time.monotonic() + timeout
-    attempts = 0
-    while True:
-        attempts += 1
-        try:
-            try:
-                src.lstat()
-                source_present = True
-            except FileNotFoundError:
-                source_present = False
-            if source_present:
-                reason = 'Source path is still visible through NFS'
-            else:
-                canonical_existing(dst)
-                require(dst.is_dir(), 'NFS destination is not a directory')
-                actual = file_metadata(dst) if metadata_only else inventory(dst)
-                wanted = inventory_metadata(expected) if metadata_only else expected
-                require(actual == wanted, 'NFS destination inventory mismatch')
-                if attempts > 1:
-                    log('NFS_VISIBILITY_READY', attempts=attempts)
-                return
-        except OSError as exc:
-            if exc.errno not in {errno.ENOENT, errno.ESTALE}:
-                raise
-            reason = 'NFS destination missing or stale: ' + str(exc)
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise Refused('NFS visibility verification timed out: ' + reason)
-        if attempts == 1:
-            log('NFS_VISIBILITY_WAIT', reason=reason, retry_window_seconds=timeout)
-        time.sleep(min(interval, remaining))
+    return verify_after_rename(
+        src, dst, expected, log, require=require, canonical_existing=canonical_existing,
+        file_metadata=file_metadata, inventory=inventory, inventory_metadata=inventory_metadata,
+        timeout=timeout, interval=interval, metadata_only=metadata_only)
 
 
 def execute(base, execution_id, live, radarr, log, transport=None, recovery=None):
