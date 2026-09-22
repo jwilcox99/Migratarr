@@ -46,7 +46,7 @@ def paths(row):
         p = PurePosixPath(raw)
         require(str(p) == raw and '..' not in p.parts, 'Noncanonical path')
         require(len(p.parts) == 7 and p.parts[:3] == RUNTIME.mount_root.parts
-                and p.parts[3] in {'media01', 'media02', 'media03', 'media04'}
+                and p.parts[3] in RUNTIME.remote_disks
                 and p.parts[4] == 'TV' and p.parts[5] == row[category]
                 and p.parts[5] in {'Current', 'Rare', 'Library', 'Archive'}
                 and p.parts[3] == row[disk_field], 'Path/category/disk mismatch')
@@ -319,20 +319,20 @@ def check_journal(journal):
 
 def remote_path(path):
     p = PurePosixPath(str(path))
-    require(p.parts[:4] == (RUNTIME.mount_root / 'media04').parts and len(p.parts) == 7
-            and p.parts[4] == 'TV' and '..' not in p.parts,
-            'NAS transport is configured only for media04 TV')
-    return RUNTIME.remote_disks['media04'] + '/' + '/'.join(p.parts[4:])
+    require(len(p.parts) == 7 and p.parts[:3] == RUNTIME.mount_root.parts
+            and p.parts[3] in RUNTIME.remote_disks and p.parts[4] == 'TV' and '..' not in p.parts,
+            'Invalid NAS mapping')
+    return RUNTIME.remote_disks[p.parts[3]] + '/' + '/'.join(p.parts[4:])
 
 
-def remote_program():
+def remote_program(disk):
     # Send fixed Python code as a shell-quoted command; paths and inventories travel
     # separately as JSON on stdin, never as interpolated shell syntax.
     imports = 'import ctypes, hashlib, json, os, stat, sys, fcntl, time\nfrom pathlib import Path\nfrom datetime import datetime\n'
     functions = [scan_metadata, metadata_from_inventory, Refused, require, progress, file_metadata, inventory_metadata,
                  canonical_existing, filesystem_ready, inventory,
                  rename_noreplace, sync_parents]
-    return imports + 'REMOTE_ROOT = ' + repr(RUNTIME.remote_disks['media04']) + '\n' + '\n\n'.join(inspect.getsource(f) for f in functions) + '''
+    return imports + 'REMOTE_ROOT = ' + repr(RUNTIME.remote_disks[disk]) + '\n' + '\n\n'.join(inspect.getsource(f) for f in functions) + '''
 def content_only(items):
     return {k: v if len(v) == 1 else v[:2] for k, v in items.items()}
 
@@ -392,10 +392,12 @@ class NasTransport:
             self.temp.cleanup()
 
     def call(self, operation, src, dst, before):
+        disk = PurePosixPath(str(src)).parts[3]
+        require(PurePosixPath(str(dst)).parts[3] == disk, 'Source and destination disks differ')
         payload = dict(operation=operation, source=remote_path(src), destination=remote_path(dst),
                        inventory=before)
         result = run_progress(['ssh', *self.options, '-o', 'BatchMode=yes', RUNTIME.ssh_target,
-                                 shlex.quote(RUNTIME.remote_python) + ' -c ' + shlex.quote(remote_program())],
+                                 shlex.quote(RUNTIME.remote_python) + ' -c ' + shlex.quote(remote_program(disk))],
                               'NAS ' + operation, input=json.dumps(payload))
         require(json.loads(result) == dict(result='OK', operation=operation),
                 'Unexpected NAS response; reconcile before retrying')

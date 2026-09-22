@@ -40,7 +40,7 @@ def paths(row):
         p = PurePosixPath(raw)
         require(str(p) == raw and '..' not in p.parts, 'Noncanonical path')
         require(len(p.parts) == 7 and p.parts[:3] == RUNTIME.mount_root.parts
-                and p.parts[3] in {'media01', 'media02', 'media03', 'media04'}
+                and p.parts[3] in RUNTIME.storage
                 and p.parts[4] == 'Movies' and p.parts[5] == row[category]
                 and p.parts[5] in {'Common', 'Rare', 'Library', 'Archive'}
                 and p.parts[3] == row[disk_field], 'Path/category/disk mismatch')

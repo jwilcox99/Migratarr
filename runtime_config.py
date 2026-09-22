@@ -70,9 +70,12 @@ class RuntimeConfig:
                 and '..' not in expanded.parts, 'nas.ssh_key must be an absolute path after expansion')
         self.ssh_key = str(expanded)
         self.remote_python = path(nas['python'], 'nas.python')
-        fields(data['storage'], ('media01', 'media02', 'media03', 'media04'), 'storage')
+        require(isinstance(data['storage'], dict) and data['storage'], 'storage must be a nonempty object')
         self.storage = {}
         for disk, entry in data['storage'].items():
+            # Disk count is not a Phase One contract; shape and identity below still are.
+            require(re.fullmatch(r'[a-z][a-z0-9_-]{0,31}', disk) is not None,
+                    'invalid storage disk id: ' + str(disk))
             fields(entry, ('local_path', 'remote_path'), 'storage.' + disk)
             self.storage[disk] = {k: path(v, disk + '.' + k) for k, v in entry.items()}
             local = PurePosixPath(self.storage[disk]['local_path'])
@@ -83,7 +86,8 @@ class RuntimeConfig:
             require(len(remote.parts) == 3, disk + ' remote_path must have two components')
         parents = {str(PurePosixPath(v['local_path']).parent) for v in self.storage.values()}
         require(len(parents) == 1, 'local disk roots must share a parent')
-        require(len(set(self.remote_disks.values())) == 4, 'remote disk roots must be distinct')
+        require(len(set(self.remote_disks.values())) == len(self.remote_disks),
+                'remote disk roots must be distinct')
         self.mount_root = PurePosixPath(parents.pop())
 
     @property
