@@ -68,6 +68,28 @@ class PlannerTargetsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Missing frozen observation'):
             self.compare(facts)
 
+    def test_capture_replays_without_repeating_probes(self):
+        probes = []
+        def loader(*args, **kwargs):
+            tree, namespace = load_legacy(*args, **kwargs)
+            def probe(kind, path):
+                probes.append((kind, str(path)))
+                return self.facts[kind][str(path)]
+            namespace['dir_size_bytes'] = lambda p: probe('size', p)
+            namespace['free_bytes'] = lambda p: probe('free', p)
+            return tree, namespace
+        baseline = ROOT / 'tests/fixtures/planner_before_storage_targets.py'
+        with patch('migratarr_validation.planner_parity.load_legacy', loader), \
+                patch.object(Path, 'exists', lambda p: self.facts['exists'][str(p)]):
+            captured, facts = compare_planners(baseline, self.movie, self.tv, {},
+                                               self.runtime, self.targets)
+        self.assertEqual(len(probes), len(set(probes)))
+        with patch('os.walk', side_effect=AssertionError('replay touched filesystem')):
+            replayed = self.compare(facts)
+        self.assertTrue(captured['byte_identical'])
+        self.assertEqual(captured['facts_sha256'], replayed['facts_sha256'])
+        self.assertEqual(captured['candidate_csv_sha256'], replayed['candidate_csv_sha256'])
+
     def test_changed_reserve_is_detected_in_bytes(self):
         data = json.loads((ROOT / 'config/storage-targets.example.json').read_text())
         data['targets'][2]['minimum_free_space_gb'] = 600
