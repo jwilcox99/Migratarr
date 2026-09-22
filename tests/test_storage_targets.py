@@ -5,7 +5,8 @@ import tempfile
 import unittest
 
 from migratarr_validation.config import parse_policy
-from storage_targets import load_targets, parse_targets, TargetState
+from runtime_config import load_config
+from storage_targets import check_runtime_consistency, load_targets, parse_targets, TargetState
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -122,6 +123,40 @@ class StorageTargetTests(unittest.TestCase):
                 path.write_text(raw)
                 with self.assertRaisesRegex(ValueError, 'duplicate JSON field'):
                     load_targets(path)
+
+    def test_runtime_consistency_accepts_matching_deployment(self):
+        runtime = load_config(ROOT / 'config/runtime.example.json', environ={})
+        check_runtime_consistency(runtime, parse_targets(self.data))
+
+    def test_runtime_consistency_rejects_drifted_local_path(self):
+        runtime = load_config(ROOT / 'config/runtime.example.json', environ={})
+        # Move every target to a new shared parent, keeping id == path.name so
+        # storage_targets' own phase1-fixed-depth/shared-parent checks still pass.
+        for target in self.data['targets']:
+            target['path'] = '/mnt/nas2/' + target['id']
+        with self.assertRaisesRegex(ValueError, 'local_path disagrees'):
+            check_runtime_consistency(runtime, parse_targets(self.data))
+
+    def test_runtime_consistency_rejects_disk_missing_from_targets(self):
+        runtime = load_config(ROOT / 'config/runtime.example.json', environ={})
+        del self.data['targets'][3]
+        for media in ('Movie', 'TV'):
+            self.data['placement'][media]['Library'] = ['media03']
+            self.data['placement'][media]['Archive'] = ['media03']
+        with self.assertRaisesRegex(ValueError, 'missing from storage targets'):
+            check_runtime_consistency(runtime, parse_targets(self.data))
+
+    def test_runtime_consistency_rejects_mismatched_remote_path(self):
+        runtime = load_config(ROOT / 'config/runtime.example.json', environ={})
+        self.data['targets'][0]['remote_path'] = '/volume9/media01'
+        with self.assertRaisesRegex(ValueError, 'remote_path disagrees'):
+            check_runtime_consistency(runtime, parse_targets(self.data))
+
+    def test_runtime_consistency_rejects_plan_only_target_for_runtime_disk(self):
+        runtime = load_config(ROOT / 'config/runtime.example.json', environ={})
+        del self.data['targets'][0]['remote_path']
+        with self.assertRaisesRegex(ValueError, 'remote_path disagrees'):
+            check_runtime_consistency(runtime, parse_targets(self.data))
 
     def test_observed_state(self):
         self.assertEqual(TargetState('media01', 100, 50).free_space, 50)
