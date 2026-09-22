@@ -21,6 +21,7 @@ from runtime_config import get_config
 from executor_manifest import digest, load_approved_plan
 from executor_nfs import verify_after_rename
 from executor_command import run_command
+from executor_inventory import scan_metadata, metadata_from_inventory
 RUNTIME = get_config()
 
 
@@ -75,26 +76,11 @@ def progress(message):
 
 
 def file_metadata(root):
-    """Fast local identity check between content verifications; no file reads."""
-    device = root.stat().st_dev
-    found = {}
-    def visit(folder):
-        for p in sorted(folder.iterdir()):
-            s = p.lstat()
-            require(s.st_dev == device and not stat.S_ISLNK(s.st_mode), 'Link or nested device found')
-            key = p.relative_to(root).as_posix()
-            if stat.S_ISDIR(s.st_mode):
-                found[key] = ['directory']
-                visit(p)
-            else:
-                require(stat.S_ISREG(s.st_mode), 'Nonregular file found')
-                found[key] = [s.st_size, s.st_ino, s.st_mtime_ns]
-    visit(root)
-    return found
+    return scan_metadata(root, require)
 
 
 def inventory_metadata(items):
-    return {k: v if len(v) == 1 else [v[0], v[2], v[3]] for k, v in items.items()}
+    return metadata_from_inventory(items)
 
 
 def inventory(root):
@@ -319,7 +305,7 @@ def remote_program():
     # Send fixed Python code as a shell-quoted command; paths and inventories travel
     # separately as JSON on stdin, never as interpolated shell syntax.
     imports = 'import ctypes, hashlib, json, os, stat, sys, fcntl, time\nfrom pathlib import Path\nfrom datetime import datetime\n'
-    functions = [Refused, require, progress, file_metadata, inventory_metadata,
+    functions = [scan_metadata, metadata_from_inventory, Refused, require, progress, file_metadata, inventory_metadata,
                  canonical_existing, filesystem_ready, inventory,
                  rename_noreplace, sync_parents]
     return imports + 'REMOTE_ROOT = ' + repr(RUNTIME.remote_disks['media04']) + '\n' + '\n\n'.join(inspect.getsource(f) for f in functions) + '''
