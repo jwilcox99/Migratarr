@@ -39,6 +39,7 @@ import xml.etree.ElementTree as ET
 from runtime_config import get_config
 from executor_manifest import digest, load_approved_plan
 from executor_command import run_command
+from executor_inventory import scan_metadata, metadata_from_inventory
 RUNTIME = get_config()
 
 class Refused(RuntimeError):
@@ -58,24 +59,11 @@ def progress(message):
     print('[%s] %s' % (datetime.now().strftime('%H:%M:%S'), message), file=sys.stderr, flush=True)
 
 def file_metadata(root):
-    device = root.stat().st_dev
-    found = {}
-    def visit(folder):
-        for p in sorted(folder.iterdir()):
-            s = p.lstat()
-            require(s.st_dev == device and not stat.S_ISLNK(s.st_mode), 'Link or nested device found')
-            key = p.relative_to(root).as_posix()
-            if stat.S_ISDIR(s.st_mode):
-                found[key] = ['directory']
-                visit(p)
-            else:
-                require(stat.S_ISREG(s.st_mode), 'Nonregular file found')
-                found[key] = [s.st_size, s.st_ino, s.st_mtime_ns]
-    visit(root)
-    return found
+    return scan_metadata(root, require)
+
 
 def inventory_metadata(items):
-    return {k: v if len(v) == 1 else [v[0], v[2], v[3]] for k, v in items.items()}
+    return metadata_from_inventory(items)
 
 def inventory(root):
     """Hash every regular file; reject links, devices, and nested mount points."""
@@ -509,7 +497,7 @@ def nas_operation(data):
 def remote_program():
     imports = ('import ctypes, hashlib, json, os, stat, sys, fcntl, time, shutil, re\n'
                'from pathlib import Path, PurePosixPath\nfrom datetime import datetime\n')
-    functions = [Refused, require, progress, canonical_existing, file_metadata, inventory_metadata,
+    functions = [scan_metadata, metadata_from_inventory, Refused, require, progress, canonical_existing, file_metadata, inventory_metadata,
                  inventory, rename_noreplace, sync_parents, content_only, copy_tree,
                  remove_verified_tree, nas_operation]
     code = imports + 'DISKS = ' + repr(DISKS) + '\n\n'
