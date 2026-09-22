@@ -166,3 +166,22 @@ def _unique(pairs):
 def load_targets(filename):
     """Explicit opt-in file load; no implicit production migration or fallback."""
     return parse_targets(json.loads(Path(filename).read_text(encoding='utf-8'), object_pairs_hook=_unique))
+
+
+def check_runtime_consistency(runtime, targets):
+    """Fail loud if runtime.json's storage block disagrees with storage-targets.json.
+
+    The two files are still independently maintained; Phase One executors read
+    disk roots from runtime_config.py, not this module, and this does not make
+    either file derive from the other. It only turns silent drift between them
+    into an explicit refusal, the same equivalence tests already pin between
+    the two example configs.
+    """
+    by_id = {t.id: t for t in targets.targets}
+    for disk, entry in runtime.storage.items():
+        _require(disk in by_id, 'runtime storage disk missing from storage targets: ' + disk)
+        target = by_id[disk]
+        _require(str(target.path) == entry['local_path'],
+                 disk + ' local_path disagrees between runtime and storage targets')
+        _require(target.remote_path is not None and str(target.remote_path) == entry['remote_path'],
+                 disk + ' remote_path disagrees between runtime and storage targets')

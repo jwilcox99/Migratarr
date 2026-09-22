@@ -73,40 +73,52 @@ snapshotting. `snapshot_run.py` includes the target config and loader in its
 checksummed code snapshot. Executors are not generalized by this change;
 fifth-target plans must not be approved for execution yet.
 
-Current gate: `build_execution_manifest.py`'s operator-facing cross-disk flow
-report now enumerates `TARGETS.targets` instead of a hardcoded four-disk list,
-so a fifth target's flow is visible in the report instead of silently omitted.
-This does not touch `execution_manifest.csv` or `manifest_metadata.json`
-content, the manifest CSV schema, or execution semantics; those are unchanged
-and still gated on gate 4 below before a fifth target may be executed.
+Gate 2 (complete): `build_execution_manifest.py`'s operator-facing cross-disk
+flow report enumerates `TARGETS.targets` instead of a hardcoded four-disk
+list, so a fifth target's flow is visible in the report instead of silently
+omitted. This did not touch `execution_manifest.csv` or `manifest_metadata.json`
+content, the manifest CSV schema, or execution semantics; those are still
+gated on gate 4 below before a fifth target may be executed.
+`migratarr_validation.manifest_parity` proved this with a real-data byte-parity
+run against a frozen run snapshot, the same way gate 1 used
+`migratarr_validation.planner_parity`.
 
-`python -m migratarr_validation.manifest_parity` runs the manifest builder at
-its pre-target-id revision and the current candidate against copies of the
-same frozen run snapshot, each under an isolated scratch base path, and
-confirms `execution_manifest.csv` and `manifest_metadata.json` are
-byte-identical (aside from the manifest's own wall-clock `created_utc` stamp
-and its scratch-path-derived `source_snapshot` field, neither of which either
-run can hold fixed). No Arr calls; the manifest builder only reads a frozen
-snapshot and writes under the scratch base path, never the real deployment's
-`runs/` or `manifests/` directories.
+Current gate: `runtime.json`'s `storage.media0N` block and
+`storage-targets.json`'s corresponding four targets are still two
+independently-maintained files describing the same physical roots; nothing
+previously caught them drifting apart at runtime, only a CI test comparing
+the two *example* files (`tests/test_storage_targets.py`). This does not make
+either file derive from the other, and it does not touch `runtime_config.py`'s
+disk shape contract that the executors still depend on (see
+`docs/runtime-configuration.md`) — it only turns silent drift between the two
+real deployed files into an explicit refusal.
+
+`storage_targets.check_runtime_consistency(runtime, targets)` checks, for
+every disk `runtime.json` declares, that the storage-targets entry with the
+same ID has the identical `local_path` and `remote_path`. `build_move_plan.py`,
+`build_execution_manifest.py` and `snapshot_run.py` all already load both
+`runtime_config` and `storage_targets`; each now calls this check immediately
+after loading `TARGETS`, so a deployment where the two files disagree fails
+before any Arr call, plan write or run snapshot rather than only being caught
+if someone happens to compare them by eye.
 
 ```sh
-python3 -m migratarr_validation.manifest_parity \
-  --baseline tests/fixtures/manifest_before_target_ids.py \
-  --run-dir /opt/media-stack/migratarr/runs/<run_id> \
-  --runtime-config /opt/media-stack/migratarr/config/runtime.json \
-  --targets /opt/media-stack/migratarr/config/storage-targets.json
+python3 -c '
+from runtime_config import get_config
+from storage_targets import load_targets, check_runtime_consistency
+import os
+runtime = get_config()
+targets = load_targets(os.environ.get("MIGRATARR_STORAGE_TARGETS") or runtime.base_path / "config/storage-targets.json")
+check_runtime_consistency(runtime, targets)
+print("runtime.json and storage-targets.json agree")
+'
 ```
-
-Exit 0 requires identical manifest bytes; exit 1 means differences and exit 2
-means incomplete verification. Use a `<run_id>` you already trust the plan
-for, the same way the planner gate uses saved CSVs rather than a fresh dry run.
 
 Remaining gates:
 
 1. ~~Obtain real-data byte parity for this planner integration.~~ Complete.
-2. Derive manifest target IDs and prove unchanged manifest bytes. (current gate)
-3. Migrate runtime storage settings, keeping compatibility shape validation.
+2. ~~Derive manifest target IDs and prove unchanged manifest bytes.~~ Complete.
+3. Migrate runtime storage settings, keeping compatibility shape validation. (current gate)
 4. Generalize executor disk sets and the media04 pin in a separate safety review
    with real approved-manifest check-only evidence.
 

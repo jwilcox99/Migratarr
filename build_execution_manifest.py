@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from runtime_config import get_config
-from storage_targets import load_targets
+from storage_targets import load_targets, check_runtime_consistency
 RUNTIME = get_config()
 
 BASE = RUNTIME.base_path
@@ -19,6 +19,7 @@ MANIFESTS = BASE / "manifests"
 
 # Explicit deployment configuration; never silently fall back to the example.
 TARGETS = load_targets(os.environ.get("MIGRATARR_STORAGE_TARGETS") or BASE / "config/storage-targets.json")
+check_runtime_consistency(RUNTIME, TARGETS)
 
 
 def sha256(path):

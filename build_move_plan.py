@@ -8,7 +8,7 @@ import urllib.request
 from pathlib import Path
 from collections import Counter
 
-from storage_targets import load_targets
+from storage_targets import load_targets, check_runtime_consistency
 from runtime_config import get_config
 RUNTIME = get_config()
 
@@ -20,6 +20,7 @@ OUTPUT = BASE / "move_plan.csv"
 
 # Explicit deployment configuration; never silently fall back to the example.
 TARGETS = load_targets(os.environ.get("MIGRATARR_STORAGE_TARGETS") or BASE / "config/storage-targets.json")
+check_runtime_consistency(RUNTIME, TARGETS)
 TARGET_BY_ID = {target.id: target for target in TARGETS.targets}
 DESTINATION_ROOTS = {
     media: {category: tuple(Path(str(root)) for root in roots)
