@@ -69,12 +69,17 @@ contract. Retain config snapshots when investigating old runs.
 
 - `config/legacy-storage.json` and `legacy-rules.json` remain independent
   planner/validation policy. No validation-engine cutover is included.
-- Disk IDs `media01`–`media04`, category assignments, container-visible
-  `/media/Movies` and `/media/TV`, and relative layout are Phase One contracts.
-  Local roots must share a parent and have shape `/component/component/mediaNN`;
-  remote roots must have two components. This retains existing fixed-depth path
-  checks instead of generalizing them. Same-disk NAS executors remain restricted
-  to media04. A deployment needing another shape requires separately reviewed work.
+- Category assignments, container-visible `/media/Movies` and `/media/TV`, and
+  relative layout are Phase One contracts. Local roots must still share a parent
+  and have shape `/component/component/<id>`; remote roots must still have two
+  components. This retains existing fixed-depth path checks instead of
+  generalizing them. A deployment needing a different path shape still requires
+  separately reviewed work.
+- Disk *count* is no longer a fixed Phase One contract (see
+  `docs/storage-targets.md` gate 4): `runtime.json`'s `storage` block accepts
+  any number of validly-shaped disk IDs, not only `media01`–`media04`, and the
+  same-disk NAS executors (`execute_movie_nas.py`, `execute_tv_nas.py`) resolve
+  the disk from each approved manifest row instead of assuming `media04`.
 - Recovery IDs, titles, fingerprints, journal guards, and the 0102 Moneyball
   literal NAS source/destination paths are incident evidence. They intentionally
   stay fixed: that recovery refuses a remapped incident rather than interpreting

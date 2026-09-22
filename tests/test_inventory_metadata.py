@@ -102,7 +102,8 @@ class InventoryMetadataTests(OfflineTest):
     def helper_namespace(self, name):
         # Compile the complete helper first, then execute only its definitions and
         # inert configuration. Dispatch/locking/mutation code is never executed.
-        code = self.modules[name].remote_program()
+        code = (self.modules[name].remote_program('media04') if name != 'execute_cross_movie'
+                else self.modules[name].remote_program())
         compile(code, '<NAS helper>', 'exec')
         tree = ast.parse(code)
         nodes = []

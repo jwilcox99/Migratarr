@@ -32,7 +32,7 @@ class RuntimeConfigTests(unittest.TestCase):
             self.assertEqual(c.local(disk), Path('/mnt/nas') / disk)
 
     def test_missing_required_settings(self):
-        for section in ('nas', 'containers', 'urls', 'storage'):
+        for section in ('nas', 'containers', 'urls'):
             for key in self.data[section]:
                 data = copy.deepcopy(self.data)
                 del data[section][key]
@@ -41,6 +41,25 @@ class RuntimeConfigTests(unittest.TestCase):
         del self.data['base_path']
         with self.assertRaises(ConfigError):
             RuntimeConfig(self.data)
+
+    def test_storage_disk_count_is_not_fixed(self):
+        # Disk count is not a Phase One contract (see docs/storage-targets.md gate 4);
+        # removing one of the four still validates, but an empty storage block does not.
+        data = copy.deepcopy(self.data)
+        del data['storage']['media01']
+        c = RuntimeConfig(data)
+        self.assertEqual(set(c.storage), {'media02', 'media03', 'media04'})
+        data = copy.deepcopy(self.data)
+        data['storage'] = {}
+        with self.assertRaises(ConfigError):
+            RuntimeConfig(data)
+
+    def test_fifth_disk_is_accepted(self):
+        data = copy.deepcopy(self.data)
+        data['storage']['media05'] = dict(local_path='/mnt/nas/media05', remote_path='/volume5/media05')
+        c = RuntimeConfig(data)
+        self.assertEqual(c.local('media05'), Path('/mnt/nas/media05'))
+        self.assertEqual(c.remote_disks['media05'], '/volume5/media05')
 
     def test_malformed_and_unknown_fields(self):
         mutations = [lambda d: d.update(extra=True), lambda d: d.update(schema_version=True),
@@ -99,7 +118,7 @@ class RuntimeWiringTests(unittest.TestCase):
                            ('execute_cross_movie', 'execute_movie_nas', 'execute_tv_nas',
                             'execute_movie', 'recover_cross_0102', 'recover_cross_0116', 'batch_cross_movies')}
 
-    def test_config_driven_mapping_and_narrow_same_disk_scope(self):
+    def test_config_driven_mapping_and_any_declared_disk(self):
         data = self.config.as_dict()
         for disk, entry in data['storage'].items():
             entry['local_path'] = '/srv/storage/' + disk
@@ -113,21 +132,40 @@ class RuntimeWiringTests(unittest.TestCase):
                       '/srv/storage/media02/Movies/../Title'):
                 with self.assertRaises(cross.Refused):
                     cross.remote_path(p)
+        # The same-disk NAS executors are no longer pinned to media04: any disk
+        # declared in runtime.json now works, the same as the cross-disk executor.
+        # An undeclared disk is still refused.
         for name, media in (('execute_movie_nas', 'Movies'), ('execute_tv_nas', 'TV')):
             m = self.modules[name]
             with patch.object(m, 'RUNTIME', c):
-                self.assertEqual(m.remote_path('/srv/storage/media04/' + media + '/Library/Title'),
-                                 '/newvol/media04/' + media + '/Library/Title')
+                for disk in ('media01', 'media04'):
+                    self.assertEqual(m.remote_path('/srv/storage/' + disk + '/' + media + '/Library/Title'),
+                                     '/newvol/' + disk + '/' + media + '/Library/Title')
                 with self.assertRaises(m.Refused):
-                    m.remote_path('/srv/storage/media01/' + media + '/Library/Title')
+                    m.remote_path('/srv/storage/media99/' + media + '/Library/Title')
+
+    def test_fifth_disk_works_end_to_end_through_same_disk_executors(self):
+        data = self.config.as_dict()
+        data['storage']['media05'] = dict(local_path='/mnt/nas/media05', remote_path='/volume5/media05')
+        c = RuntimeConfig(data)
+        for name, media in (('execute_movie_nas', 'Movies'), ('execute_tv_nas', 'TV')):
+            m = self.modules[name]
+            with patch.object(m, 'RUNTIME', c):
+                self.assertEqual(m.remote_path('/mnt/nas/media05/' + media + '/Library/Title'),
+                                 '/volume5/media05/' + media + '/Library/Title')
+                code = m.remote_program('media05')
+                self.assertIn('/volume5/media05', code)
 
     def test_generated_helpers_are_self_contained(self):
-        for name in ('execute_cross_movie', 'execute_movie_nas', 'execute_tv_nas'):
-            code = self.modules[name].remote_program()
+        for name, args in (('execute_cross_movie', ()), ('execute_movie_nas', ('media01',)),
+                           ('execute_tv_nas', ('media01',))):
+            code = self.modules[name].remote_program(*args)
             compile(code, '<NAS helper>', 'exec')
             self.assertNotIn('RUNTIME', code)
             self.assertNotIn('runtime_config', code)
             self.assertIn('LOCK_EX | fcntl.LOCK_NB', code)
+            if args:
+                self.assertIn(self.config.remote_disks[args[0]], code)
         recovery = self.modules['recover_cross_0102'].receipt_program()
         compile(recovery, '<recovery helper>', 'exec')
         self.assertIn('/volume3/media04/Movies/Library/Moneyball (2011)', recovery)

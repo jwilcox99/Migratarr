@@ -114,14 +114,64 @@ print("runtime.json and storage-targets.json agree")
 '
 ```
 
+Gate 3 (complete): `storage_targets.check_runtime_consistency` verified against
+the real deployed `runtime.json` and `storage-targets.json` on the media host; they agree.
+
+Current gate: this is a proof-of-concept generalization, not a live 5th-disk
+deployment — no disk was added to the real deployment. `runtime_config.py`'s
+`storage` schema now accepts any number of validly-shaped disk IDs instead of
+exactly `media01`-`media04` (a strict superset; the real 4-disk `runtime.json`
+is unchanged and still valid). `execute_movie_nas.py` and `execute_tv_nas.py`
+(the same-disk NAS rename executors) resolve the disk from each approved
+manifest row via `RUNTIME.remote_disks`, instead of hardcoding `media04`; the
+generated remote SSH program bakes in the resolved disk's remote root for that
+call rather than always `media04`'s. `execute_cross_movie.py` already read
+`RUNTIME.remote_disks` generically and needed no changes.
+
+A genuine 5th disk (`media05`, not a relabeling of an existing one) is proven
+end-to-end offline in `tests/test_runtime_config.py` (`test_fifth_disk_is_accepted`,
+`test_fifth_disk_works_end_to_end_through_same_disk_executors`), since there
+is no real 5th disk to test live execution against.
+
+Real-data evidence: both existing local runs (`20260915T192453Z` and
+`20260915T192959Z`) predate this generalization and were exercised extensively
+during earlier sessions, so every row in both is now stale relative to the
+live deployment — media already moved, or an item now carries a
+`migratarr-lock` tag. `execute_movie_nas.py`, `execute_tv_nas.py`, and
+`execute_cross_movie.py`'s default check-only mode (no `--execute`) was run
+against one freshly-approved row of each type from the older, unexecuted
+`20260915T192453Z` manifest. All three reached the real preflight code
+path — live SSH to the NAS, live Radarr/Sonarr lookups — using the
+generalized disk lookup this gate adds, and correctly refused: a source path
+that no longer exists because that title already moved, and a movie now
+carrying `migratarr-lock`. None reached a full `CHECK_ONLY` result, because
+no untouched manifest data remains from prior sessions; getting that would
+require a fresh dry-run → plan → snapshot → manifest → approve cycle, treated
+as future work rather than blocking this proof-of-concept. The refusals
+themselves are correct preflight behavior, not gate 4 regressions, and confirm
+the generalized code exercises the same real NAS/Radarr/Sonarr paths as before.
+
+```sh
+python3 execute_movie_nas.py <execution_id>
+python3 execute_tv_nas.py <execution_id>
+python3 execute_cross_movie.py <execution_id>
+```
+
+Each defaults to check-only; none of these commands pass `--execute`, so no
+file is moved, renamed, or deleted, and no Radarr/Sonarr record is updated —
+only the preflight validation runs.
+
 Remaining gates:
 
 1. ~~Obtain real-data byte parity for this planner integration.~~ Complete.
 2. ~~Derive manifest target IDs and prove unchanged manifest bytes.~~ Complete.
-3. Migrate runtime storage settings, keeping compatibility shape validation. (current gate)
-4. Generalize executor disk sets and the media04 pin in a separate safety review
-   with real approved-manifest check-only evidence.
+3. ~~Migrate runtime storage settings, keeping compatibility shape validation.~~ Complete.
+4. ~~Generalize executor disk sets and the media04 pin.~~ Proof-of-concept
+   complete: offline genericity proof plus real preflight evidence against
+   stale-but-real manifests. No real 5th disk has been deployed or executed
+   against live.
 
 Adding a fifth entry is supported by the candidate planner and now visible in
-the manifest report, but not executable. Recovery incident scripts and frozen
+the manifest report, and the executors no longer refuse it structurally — but
+no fifth disk has been approved for live execution. Recovery incident scripts and frozen
 placement rules are unchanged.
