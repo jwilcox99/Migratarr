@@ -4,21 +4,16 @@ import argparse
 import csv
 import hashlib
 import json
-import os
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 from runtime_config import get_config
-from storage_targets import load_targets
 RUNTIME = get_config()
 
 BASE = RUNTIME.base_path
 RUNS = BASE / "runs"
 MANIFESTS = BASE / "manifests"
-
-# Explicit deployment configuration; never silently fall back to the example.
-TARGETS = load_targets(os.environ.get("MIGRATARR_STORAGE_TARGETS") or BASE / "config/storage-targets.json")
 
 
 def sha256(path):
@@ -287,7 +282,12 @@ for (media, current, recommended), count in sorted(
 
 print("\n=== CROSS-DISK FLOW ===")
 
-for disk in [target.id for target in TARGETS.targets]:
+for disk in [
+    "media01",
+    "media02",
+    "media03",
+    "media04",
+]:
     incoming = disk_flow[(disk, "in")]
     outgoing = disk_flow[(disk, "out")]
 
