@@ -24,7 +24,7 @@ from .rules import load_rule_policy, validate_rule_references
 
 
 PLANNER = Path(__file__).resolve().parents[1] / "build_move_plan.py"
-CONSTANTS = {"DESTINATION_ROOTS", "MIN_FREE_AFTER_GB", "PROJECTED_FREE",
+CONSTANTS = {"DESTINATION_ROOTS", "MIN_FREE_AFTER_GB", "PROJECTED_FREE", "TARGET_BY_ID",
              "OVERRIDE_TAGS", "LOCK_TAG", "RADARR_URL", "SONARR_URL"}
 
 
@@ -40,15 +40,19 @@ def _execute(nodes, namespace):
     exec(code, namespace)
 
 
-def load_legacy(runtime=None):
+def load_legacy(runtime=None, targets=None, planner=None):
     """Load decision code without executing planner module side effects."""
-    tree = ast.parse(PLANNER.read_text(encoding="utf-8"), filename=str(PLANNER))
+    planner = planner or PLANNER
+    tree = ast.parse(planner.read_text(encoding="utf-8"), filename=str(planner))
     from runtime_config import load_config
     # Offline parity remains pinned to the documented Phase One deployment.
     # Live callers explicitly supply their deployed configuration.
     runtime = runtime or load_config(PLANNER.parent / 'config' / 'runtime.example.json', environ={})
     namespace = {"RUNTIME": runtime, "Path": Path, "os": os, "csv": csv, "json": json,
                  "subprocess": subprocess, "urllib": urllib}
+    if any(_assigned_name(node) == 'TARGETS' for node in tree.body):
+        from storage_targets import load_targets
+        namespace['TARGETS'] = targets or load_targets(PLANNER.parent / 'config/storage-targets.example.json')
     nodes = [
         node for node in tree.body
         if isinstance(node, ast.FunctionDef) or _assigned_name(node) in CONSTANTS
@@ -114,10 +118,13 @@ def compare(movie_csv, tv_csv, overrides, policy=None, rules=None):
     tree, namespace = load_legacy()
     legacy = run_legacy(tree, namespace, movie_csv, tv_csv, overrides)
     if policy is None:
+        reserves = {t.minimum_free_space_gb for t in namespace['TARGETS'].targets}
+        if len(reserves) != 1:
+            raise ValueError('Legacy validation engine requires a uniform target reserve')
         policy = ValidationPolicy(
             namespace["DESTINATION_ROOTS"],
             tuple(namespace["disk_roots"].values()),
-            namespace["MIN_FREE_AFTER_GB"] * 1024**3,
+            reserves.pop() * 1024**3,
         )
     if rules is not None:
         policy = replace(policy, rules=rules)

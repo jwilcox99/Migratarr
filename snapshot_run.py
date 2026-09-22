@@ -3,15 +3,19 @@
 import csv
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
 from runtime_config import get_config
+from storage_targets import load_targets
 RUNTIME = get_config()
 
 BASE = RUNTIME.base_path
+TARGET_CONFIG = Path(os.environ.get('MIGRATARR_STORAGE_TARGETS') or BASE / 'config/storage-targets.json')
+load_targets(TARGET_CONFIG)  # Validate before creating a run directory.
 RUNS = BASE / "runs"
 
 FILES = [
@@ -22,6 +26,7 @@ FILES = [
 
 CODE_FILES = [
     "runtime_config.py",
+    "storage_targets.py",
     "dry_run_movies.py",
     "dry_run_tv.py",
     "build_move_plan.py",
@@ -125,6 +130,10 @@ for filename in CODE_FILES:
 runtime_snapshot = code_dir / "runtime.json"
 runtime_snapshot.write_text(json.dumps(RUNTIME.as_dict(), indent=2) + "\n", encoding="utf-8")
 checksums["code/runtime.json"] = sha256(runtime_snapshot)
+
+# Keep the exact declared placement settings alongside the planner code.
+shutil.copy2(TARGET_CONFIG, code_dir / 'storage-targets.json')
+checksums['code/storage-targets.json'] = sha256(code_dir / 'storage-targets.json')
 
 
 # ------------------------------------------------------------

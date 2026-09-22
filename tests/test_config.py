@@ -29,7 +29,7 @@ class PolicyConfigTests(unittest.TestCase):
         self.assertEqual(policy.source_roots,
                          tuple(namespace["disk_roots"].values()))
         self.assertEqual(policy.min_free_after_bytes,
-                         namespace["MIN_FREE_AFTER_GB"] * 1024**3)
+                         namespace["minimum_free_bytes"]('media01'))
         self.assertEqual(
             policy.destination_roots,
             {media: {category: tuple(paths) for category, paths in groups.items()}

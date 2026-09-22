@@ -1,9 +1,15 @@
 # Storage target migration
 
-The standalone `storage_targets.py` model implements steps 0–1 of the supplied
-StorageTarget Phase 2 proposal. It has no live callers. Do not replace production
-runtime or legacy policy configuration yet. The example is a migration fixture,
-not another active source of storage settings.
+The `storage_targets.py` model now supplies the planner's source roots,
+destination paths, physical disk IDs and per-target reserves. The planner requires
+`config/storage-targets.json` beneath its runtime base directory, or an explicit
+`MIGRATARR_STORAGE_TARGETS` path. Missing or invalid configuration fails before
+Arr calls and plan writes. The example is never an implicit fallback.
+
+This branch is pending real-data parity evidence before merge/deployment.
+Runtime configuration and executors still retain their existing storage settings;
+do not remove those yet. Keep the existing four target paths consistent between
+the runtime and target configurations during this intermediate migration.
 
 Load an explicit file with `load_targets(filename)` or validate an object with
 `parse_targets(data)`. `config/storage-targets.example.json` reproduces the four
@@ -28,15 +34,49 @@ values); priority, storage class and tags have no placement effect. Optional
 remote paths must be omitted rather than null. An empty media-type list is valid
 for a source-only target, but cannot satisfy any placement reference.
 
-Next gates:
+Current gate:
 
-1. Replace planner storage constants with this model and prove byte-identical
-   plans using the frozen real-data parity harness.
+`python -m migratarr_validation.planner_parity` compares the planner at `c31afc6`
+with this candidate, using saved movie/TV CSVs and overrides. It runs only selected
+AST definitions, candidate loops and cumulative capacity checks; neither planner's
+CSV writes or Arr calls run. CSV serialization includes headers and row order.
+Filesystem exists/resolve/size/free results are memoized across both runs and can
+be saved with `--capture-facts` and replayed with `--replay-facts`. Capture performs
+read-only filesystem probes (including potentially slow directory-size scans).
+Observations are cached, not an atomic filesystem snapshot; pause other activity.
+
+```sh
+python3 -m migratarr_validation.planner_parity \
+  --baseline tests/fixtures/planner_before_storage_targets.py \
+  --movie-csv /path/to/frozen/movie_dry_run.csv \
+  --tv-csv /path/to/frozen/tv_dry_run.csv \
+  --overrides-json /path/to/frozen/overrides.json \
+  --runtime-config /opt/media-stack/migratarr/config/runtime.json \
+  --targets config/storage-targets.example.json \
+  --capture-facts /path/to/new/planner-facts.json
+```
+
+The baseline is a checksum-pinned, test-only copy of the pre-migration planner,
+not a second active implementation. Exit 0 requires identical CSV bytes; exit 1
+means differences and exit 2 means incomplete verification. Report includes code,
+input, observation and CSV hashes. Replaying the captured observations must also
+succeed. Existing live media may have moved since older CSVs were created; use
+saved observations from the same dataset when available, and do not claim an old
+historical move_plan was reproduced from today's filesystem observations.
+
+After the gate passes, install the reviewed target configuration before updating
+scheduled planning. Keep code and configuration unchanged between planning and
+snapshotting. `snapshot_run.py` includes the target config and loader in its
+checksummed code snapshot. Executors and manifest builders are not generalized by
+this change; fifth-target plans must not be approved for execution yet.
+
+Remaining gates:
+
+1. Obtain real-data byte parity for this planner integration.
 2. Derive manifest target IDs and prove unchanged manifest bytes.
 3. Migrate runtime storage settings, keeping compatibility shape validation.
 4. Generalize executor disk sets and the media04 pin in a separate safety review
    with real approved-manifest check-only evidence.
 
-Adding a fifth entry currently proves model/config support only. It does not
-make the live planner or executors support a fifth target. Recovery incident
-scripts and frozen placement rules are unchanged.
+Adding a fifth entry is supported by the candidate planner, not the executors.
+Recovery incident scripts and frozen placement rules are unchanged.
