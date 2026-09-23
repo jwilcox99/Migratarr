@@ -57,7 +57,7 @@ def pending_series(base, run):
     return sorted(pending, key=lambda r: float(r['size_gb'])), completed, manifest_hash
 
 
-def run_batch(base, run, execute, runner=subprocess.run):
+def run_batch(base, run, execute, runner=subprocess.run, limit=None):
     pending, completed, manifest_hash = pending_series(base, run)
     print(f'Completed: {completed}; remaining: {len(pending)} cross-disk TV series.', flush=True)
     for row in pending:
@@ -65,6 +65,10 @@ def run_batch(base, run, execute, runner=subprocess.run):
     if not execute:
         print('STATUS ONLY: no approvals, copies, updates, or deletions performed.')
         return 0
+    if limit is not None:
+        m.require(limit > 0, 'Limit must be positive')
+        pending = pending[:limit]
+        print(f'LIMIT: processing at most {limit} of the pending series this run.', flush=True)
     for index, row in enumerate(pending, 1):
         execution_id = row['execution_id']
         # Catch newly completed/uncertain work or manifest edits before each item.
@@ -97,9 +101,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run', required=True)
     parser.add_argument('--execute', action='store_true', help='Approve and move all pending eligible series')
+    parser.add_argument('--limit', type=int, default=None,
+                         help='Process at most N pending series (smallest first) instead of all of them')
     args = parser.parse_args()
     # Approval and both executor subprocesses inherit the same config environment.
-    return run_batch(RUNTIME.base_path, args.run, args.execute)
+    return run_batch(RUNTIME.base_path, args.run, args.execute, limit=args.limit)
 
 
 if __name__ == '__main__':
