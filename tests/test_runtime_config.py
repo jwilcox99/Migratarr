@@ -115,7 +115,7 @@ class RuntimeWiringTests(unittest.TestCase):
                 patch('subprocess.run', side_effect=AssertionError('external command')), \
                 patch('subprocess.check_output', side_effect=AssertionError('external command')):
             cls.modules = {name: importlib.import_module(name) for name in
-                           ('execute_cross_movie', 'execute_movie_nas', 'execute_tv_nas',
+                           ('execute_cross_movie', 'execute_cross_tv', 'execute_movie_nas', 'execute_tv_nas',
                             'execute_movie', 'recover_cross_0102', 'recover_cross_0116', 'batch_cross_movies')}
 
     def test_config_driven_mapping_and_any_declared_disk(self):
@@ -124,14 +124,15 @@ class RuntimeWiringTests(unittest.TestCase):
             entry['local_path'] = '/srv/storage/' + disk
             entry['remote_path'] = '/newvol/' + disk
         c = RuntimeConfig(data)
-        cross = self.modules['execute_cross_movie']
-        with patch.object(cross, 'RUNTIME', c), patch.object(cross, 'DISKS', c.remote_disks):
-            self.assertEqual(cross.remote_path('/srv/storage/media02/Movies/Rare/Title'),
-                             '/newvol/media02/Movies/Rare/Title')
-            for p in ('/mnt/nas/media02/Movies/Rare/Title', '/srv/storage/media99/Movies/Rare/Title',
-                      '/srv/storage/media02/Movies/../Title'):
-                with self.assertRaises(cross.Refused):
-                    cross.remote_path(p)
+        for name, folder in (('execute_cross_movie', 'Movies'), ('execute_cross_tv', 'TV')):
+            cross = self.modules[name]
+            with patch.object(cross, 'RUNTIME', c), patch.object(cross, 'DISKS', c.remote_disks):
+                self.assertEqual(cross.remote_path(f'/srv/storage/media02/{folder}/Rare/Title'),
+                                 f'/newvol/media02/{folder}/Rare/Title')
+                for p in (f'/mnt/nas/media02/{folder}/Rare/Title', f'/srv/storage/media99/{folder}/Rare/Title',
+                          f'/srv/storage/media02/{folder}/../Title'):
+                    with self.assertRaises(cross.Refused):
+                        cross.remote_path(p)
         # The same-disk NAS executors are no longer pinned to media04: any disk
         # declared in runtime.json now works, the same as the cross-disk executor.
         # An undeclared disk is still refused.
@@ -157,8 +158,8 @@ class RuntimeWiringTests(unittest.TestCase):
                 self.assertIn('/volume5/media05', code)
 
     def test_generated_helpers_are_self_contained(self):
-        for name, args in (('execute_cross_movie', ()), ('execute_movie_nas', ('media01',)),
-                           ('execute_tv_nas', ('media01',))):
+        for name, args in (('execute_cross_movie', ()), ('execute_cross_tv', ()),
+                           ('execute_movie_nas', ('media01',)), ('execute_tv_nas', ('media01',))):
             code = self.modules[name].remote_program(*args)
             compile(code, '<NAS helper>', 'exec')
             self.assertNotIn('RUNTIME', code)

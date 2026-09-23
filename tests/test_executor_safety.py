@@ -20,7 +20,8 @@ from runtime_config import load_config
 ROOT = Path(__file__).resolve().parents[1]
 RUN = '20260915T192959Z'
 EXECUTION = RUN + '-0001'
-EXECUTORS = ('execute_movie', 'execute_movie_nas', 'execute_tv_nas', 'execute_cross_movie')
+EXECUTORS = ('execute_movie', 'execute_movie_nas', 'execute_tv_nas', 'execute_cross_movie',
+             'execute_cross_tv')
 
 
 class OfflineTest(unittest.TestCase):
@@ -40,8 +41,8 @@ class OfflineTest(unittest.TestCase):
                 self.stack.enter_context(patch.object(module, 'progress'))
 
     def fixture(self, name):
-        media = 'TV' if name == 'execute_tv_nas' else 'Movie'
-        cross = name == 'execute_cross_movie'
+        media = 'TV' if name in ('execute_tv_nas', 'execute_cross_tv') else 'Movie'
+        cross = name in ('execute_cross_movie', 'execute_cross_tv')
         row = dict(execution_id=EXECUTION, media_type=media,
                    transfer_type='CROSS_DISK_TRANSFER' if cross else 'SAME_DISK_RENAME',
                    status='READY_FOR_REVIEW', blockers='', executed='NO', current='Library',
@@ -197,6 +198,8 @@ class JournalAndPathSafetyTests(OfflineTest):
             'execute_tv_nas': ('RENAME_INTENT', 'RENAMED', 'SONARR_UPDATE_INTENT', 'SUCCESS'),
             'execute_cross_movie': ('COPY_INTENT', 'COPIED', 'RADARR_UPDATE_INTENT',
                                     'DELETE_INTENT', 'SOURCE_REMOVED', 'SUCCESS', 'RENAME_INTENT'),
+            'execute_cross_tv': ('COPY_INTENT', 'COPIED', 'SONARR_UPDATE_INTENT',
+                                 'DELETE_INTENT', 'SOURCE_REMOVED', 'SUCCESS', 'RENAME_INTENT'),
         }
         journal = self.base / 'journal.jsonl'
         for name, kinds in blocked.items():
@@ -442,6 +445,219 @@ class CrossDiskSequenceTests(OfflineTest):
         with self.assertRaisesRegex(self.m.Refused, 'Radarr path verification failed'):
             self.run_move()
         self.assert_retained(copied=True)
+
+
+class FakeSonarr:
+    """Returns detached API records and verifies real temporary-file content."""
+    def __init__(self, case):
+        self.case = case
+        self.record = dict(id=11, path=case.logical_src, rootFolderPath='/media/TV/Library',
+                           seriesType='standard', seasonFolder=True, monitored=True,
+                           qualityProfileId=2, tags=[])
+
+    def api(self, endpoint, body=None):
+        c = self.case
+        if body is not None:
+            c.trace.append('arr:update')
+            self.record = copy.deepcopy(body)
+            c.hook('arr:update')
+            return copy.deepcopy(self.record)
+        if endpoint == 'system/status':
+            return {'version': '4.0.0'}
+        if endpoint == 'series':
+            return [copy.deepcopy(self.record)]
+        if endpoint == 'series/11':
+            return copy.deepcopy(self.record)
+        if endpoint == 'rootfolder':
+            return [dict(path='/media/TV/Current', accessible=True)]
+        if endpoint == 'tag':
+            return [dict(id=1, label='migratarr-lock'), dict(id=2, label='migratarr-rare')]
+        if endpoint == 'episodefile?seriesId=11':
+            return [dict(id=21, seriesId=11, relativePath='episode.mkv',
+                         path=self.record['path'] + '/episode.mkv', size=len(c.content))]
+        if endpoint == 'episode?seriesId=11':
+            return [dict(id=31, seriesId=11, episodeFileId=21, hasFile=True,
+                         seasonNumber=1, episodeNumber=1, monitored=True)]
+        raise AssertionError('Unexpected endpoint: ' + endpoint)
+
+    def visible(self, path, kind='-f'):
+        self.case.trace.append('arr:visible')
+
+    def verify_file(self, path, expected_hash):
+        c = self.case
+        root = c.src if path.startswith(c.logical_src + '/') else c.dst
+        c.trace.append('arr:verify:' + ('source' if root == c.src else 'destination'))
+        c.m.require(hashlib.sha256((root / 'episode.mkv').read_bytes()).hexdigest() == expected_hash,
+                    'Fake Sonarr-visible content mismatch')
+
+
+class TvFakeTransport:
+    def __init__(self, case):
+        self.case = case
+
+    def call(self, operation, src, dst, before, execution_id, receipt=None):
+        c = self.case
+        assert src == c.src and dst == c.dst and execution_id == EXECUTION
+        c.trace.append('nas:' + operation)
+        if operation == 'copy':
+            dst.mkdir()
+            (dst / 'episode.mkv').write_bytes((src / 'episode.mkv').read_bytes())
+        elif operation == 'delete':
+            assert receipt == {'result': 'OK', 'operation': 'copy'}
+            (src / 'episode.mkv').unlink()
+            src.rmdir()
+        elif operation != 'check':
+            raise AssertionError(operation)
+        c.hook('nas:' + operation)
+        return dict(result='OK', operation=operation)
+
+
+class TvCrossDiskSequenceTests(OfflineTest):
+    def setUp(self):
+        super().setUp()
+        self.m = self.modules['execute_cross_tv']
+        self.fixture('execute_cross_tv')
+        self.src = self.base / 'source' / 'Example'
+        self.dst = self.base / 'destination' / 'Example'
+        self.src.mkdir(parents=True)
+        self.dst.parent.mkdir()
+        self.content = b'offline disposable test episode'
+        (self.src / 'episode.mkv').write_bytes(self.content)
+        self.logical_src = '/media/TV/Library/Example'
+        self.logical_dst = '/media/TV/Current/Example'
+        self.trace = []
+        self.hook = lambda event: None
+        self.arr = FakeSonarr(self)
+        self.transport = TvFakeTransport(self)
+        # Only translate deployment paths to the sandbox; keep manifest verification,
+        # inventory hashing, destination verification and execution logic real.
+        self.stack.enter_context(patch.object(self.m, 'paths', return_value=(
+            self.src, self.dst, self.logical_src, self.logical_dst)))
+
+    def run_move(self, live=True):
+        def log(event, **details):
+            self.trace.append('log:' + event)
+            self.hook('log:' + event)
+        return self.m.execute(self.base, EXECUTION, live, self.arr, log, self.transport)
+
+    def assert_retained(self, copied=False):
+        self.assertEqual((self.src / 'episode.mkv').read_bytes(), self.content)
+        self.assertNotIn('nas:delete', self.trace)
+        self.assertNotIn('log:SUCCESS', self.trace)
+        if copied:
+            self.assertTrue(self.dst.is_dir())
+
+    def test_check_only_never_copies_updates_or_deletes(self):
+        self.assertEqual(self.run_move(live=False), 'CHECK_ONLY')
+        self.assertEqual([e for e in self.trace if e.startswith('nas:')], ['nas:check'])
+        self.assertNotIn('arr:update', self.trace)
+        self.assertFalse(self.dst.exists())
+        self.assert_retained()
+
+    def test_success_journals_copy_verify_update_then_delete(self):
+        self.assertEqual(self.run_move(), 'SUCCESS')
+        ordered = ['log:COPY_INTENT', 'nas:copy', 'log:COPIED', 'arr:verify:destination',
+                   'log:SONARR_UPDATE_INTENT', 'arr:update', 'log:DELETE_INTENT',
+                   'nas:delete', 'log:SOURCE_REMOVED', 'log:SUCCESS']
+        positions = [self.trace.index(event) for event in ordered]
+        self.assertEqual(positions, sorted(positions))
+        self.assertFalse(self.src.exists())
+        self.assertEqual((self.dst / 'episode.mkv').read_bytes(), self.content)
+
+    def test_existing_destination_blocks_before_transport(self):
+        self.dst.mkdir()
+        with self.assertRaisesRegex(self.m.Refused, 'Source/destination not ready'):
+            self.run_move()
+        self.assertNotIn('nas:check', self.trace)
+        self.assert_retained()
+
+    def test_lock_and_conflicting_override_block_copy(self):
+        for tag in (1, 2):
+            with self.subTest(tag=tag):
+                self.arr.record['tags'] = [tag]
+                with self.assertRaises(self.m.Refused):
+                    self.run_move()
+                self.assertNotIn('nas:copy', self.trace)
+                self.assert_retained()
+
+    def test_copy_timeout_keeps_source_and_never_updates_arr(self):
+        def fail(event):
+            if event == 'nas:copy':
+                raise TimeoutError('simulated uncertain copy response')
+        self.hook = fail
+        with self.assertRaises(TimeoutError):
+            self.run_move()
+        self.assertNotIn('arr:update', self.trace)
+        self.assert_retained(copied=True)
+
+    def test_source_change_after_copy_blocks_update_and_deletion(self):
+        changed = self.content + b' changed during copy'
+        def change(event):
+            if event == 'nas:copy':
+                (self.src / 'episode.mkv').write_bytes(changed)
+        self.hook = change
+        with self.assertRaisesRegex(self.m.Refused, 'Source changed while copying'):
+            self.run_move()
+        self.assertEqual((self.src / 'episode.mkv').read_bytes(), changed)
+        self.assertEqual((self.dst / 'episode.mkv').read_bytes(), self.content)
+        self.assertNotIn('arr:update', self.trace)
+        self.assertNotIn('nas:delete', self.trace)
+        self.assertNotIn('log:SUCCESS', self.trace)
+
+    def test_source_change_after_preflight_blocks_copy(self):
+        changed = self.content + b' changed after preflight'
+        def change(event):
+            if event == 'log:PREFLIGHT_OK':
+                (self.src / 'episode.mkv').write_bytes(changed)
+        self.hook = change
+        with self.assertRaisesRegex(self.m.Refused, 'Source changed during preflight'):
+            self.run_move()
+        self.assertEqual((self.src / 'episode.mkv').read_bytes(), changed)
+        self.assertNotIn('nas:copy', self.trace)
+        self.assertNotIn('arr:update', self.trace)
+        self.assertFalse(self.dst.exists())
+
+    def test_corrupt_destination_keeps_source(self):
+        def corrupt(event):
+            if event == 'nas:copy':
+                (self.dst / 'episode.mkv').write_bytes(b'corrupt')
+        self.hook = corrupt
+        with self.assertRaisesRegex(self.m.Refused, 'Destination content mismatch'):
+            self.run_move()
+        self.assertNotIn('arr:update', self.trace)
+        self.assert_retained(copied=True)
+
+    def test_approval_revoked_after_copy_blocks_arr_update(self):
+        def revoke(event):
+            if event == 'nas:copy':
+                self.approval['history'].append(dict(execution_id=EXECUTION, action='REVOKE'))
+                self.write_approval()
+        self.hook = revoke
+        with self.assertRaisesRegex(self.m.Refused, 'exact manifest hash'):
+            self.run_move()
+        self.assertNotIn('arr:update', self.trace)
+        self.assert_retained(copied=True)
+
+    def test_approval_revoked_after_arr_update_blocks_deletion(self):
+        def revoke(event):
+            if event == 'arr:update':
+                self.approval['approved_execution_ids'] = []
+                self.write_approval()
+        self.hook = revoke
+        with self.assertRaisesRegex(self.m.Refused, 'unapproved'):
+            self.run_move()
+        self.assertIn('arr:update', self.trace)
+        self.assert_retained(copied=True)
+
+    def test_wrong_arr_path_after_update_keeps_both_copies(self):
+        def change(event):
+            if event == 'arr:update':
+                self.arr.record['path'] = '/unexpected'
+        self.hook = change
+        with self.assertRaisesRegex(self.m.Refused, 'Sonarr path verification failed'):
+            self.run_move()
+        self.assert_retained(copied=True)
+
 
 
 if __name__ == '__main__':

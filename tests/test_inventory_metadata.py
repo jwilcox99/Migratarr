@@ -8,7 +8,8 @@ from unittest.mock import patch
 from test_executor_safety import OfflineTest
 
 
-NAS_EXECUTORS = ('execute_movie_nas', 'execute_tv_nas', 'execute_cross_movie')
+NAS_EXECUTORS = ('execute_movie_nas', 'execute_tv_nas', 'execute_cross_movie', 'execute_cross_tv')
+SAME_DISK_EXECUTORS = ('execute_movie_nas', 'execute_tv_nas')
 
 
 def progress(message):
@@ -102,7 +103,7 @@ class InventoryMetadataTests(OfflineTest):
     def helper_namespace(self, name):
         # Compile the complete helper first, then execute only its definitions and
         # inert configuration. Dispatch/locking/mutation code is never executed.
-        code = (self.modules[name].remote_program('media04') if name != 'execute_cross_movie'
+        code = (self.modules[name].remote_program('media04') if name in SAME_DISK_EXECUTORS
                 else self.modules[name].remote_program())
         compile(code, '<NAS helper>', 'exec')
         tree = ast.parse(code)
@@ -149,3 +150,21 @@ class InventoryMetadataTests(OfflineTest):
             with self.subTest(executor=name), patch.object(type(self.media), 'lstat', lstat):
                 with self.assertRaisesRegex(ns['Refused'], 'Link or nested device found'):
                     ns['file_metadata'](self.tree)
+
+    def test_generated_nas_operation_defines_every_referenced_helper(self):
+        # remote_program() hand-picks which module functions to ship over SSH; a
+        # helper nas_operation calls (like canonical_existing) but left out of that
+        # list compiles fine yet raises NameError only once actually invoked on the
+        # NAS host. Prove every name it touches is present by calling it for real,
+        # using real (but nonexistent) paths so any failure short of NameError is
+        # the expected refusal, not a missing definition.
+        for name, folder in (('execute_cross_movie', 'Movies'), ('execute_cross_tv', 'TV')):
+            with self.subTest(executor=name):
+                ns = self.helper_namespace(name)
+                disks = list(ns['DISKS'].values())
+                data = dict(operation='check', execution_id='20260101T000000Z-0001',
+                           source=disks[0] + '/' + folder + '/Library/Example',
+                           destination=disks[1] + '/' + folder + '/Library/Example',
+                           inventory={})
+                with self.assertRaises((FileNotFoundError, NotADirectoryError)):
+                    ns['nas_operation'](data)
