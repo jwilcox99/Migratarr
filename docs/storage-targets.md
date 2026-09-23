@@ -175,3 +175,58 @@ Adding a fifth entry is supported by the candidate planner and now visible in
 the manifest report, and the executors no longer refuse it structurally — but
 no fifth disk has been approved for live execution. Recovery incident scripts and frozen
 placement rules are unchanged.
+
+## Cross-disk TV executor and batch orchestrator (built after gate 4)
+
+Gate 4's disk-generalization work is about disk *count*, not media type — it
+left `execute_cross_movie.py`'s Movie-only cross-disk transfer capability with
+no TV equivalent, matching the Phase One boundary noted in
+`docs/phase-one-closeout.md` ("Cross-disk TV execution has not yet been
+promoted to the same validated live-execution status as Movies"). That gap is
+now closed.
+
+`execute_cross_tv.py` (PR #17) mirrors `execute_cross_movie.py`'s exact safety
+architecture — the same journal states (`COPY_INTENT` → `COPIED` →
+`SONARR_UPDATE_INTENT` → `DELETE_INTENT` → `SOURCE_REMOVED` → `SUCCESS`), the
+same staged copy → verify → update → verified-delete sequence, the same
+generalized `RUNTIME.remote_disks` lookup from gate 4 — substituting Sonarr's
+multi-episode-file verification (`episode_state()` / `verify_episode_contents()`)
+for Radarr's single-path check. `batch_cross_tv.py` (PR #18) mirrors
+`batch_cross_movies.py`: it lists pending `CROSS_DISK_TRANSFER` / `TV` rows from
+a run's manifest and, with `--execute`, approves and runs each through
+`execute_cross_tv.py` in sequence, smallest first. A later change
+(`codex/batch-cross-tv-limit`) added an optional `--limit N` to cap how many
+pending series a single `--execute` invocation processes, so a real run can be
+staged against a small subset before committing to the full pending backlog.
+
+Real-data evidence, both on the production host (the media host), using the real
+`media01`/`media04` disks (not a hypothetical 5th disk — this validates the
+generalized cross-disk **TV** capability, not gate 4's disk-count claim):
+
+- A single, manually-invoked `execute_cross_tv.py --execute` run moved the
+  *Rick and Morty* series (23 episode files, 5.91 GiB) from
+  `media04`/TV/Library to `media01`/TV/Current — full journal from `START`
+  through source/destination hashing, 23 Sonarr per-file verifications before
+  and after the Sonarr path update, staged copy, verified deletion of the
+  source, and a final post-delete Sonarr re-verification, ending `SUCCESS`
+  (execution ID `20260923T013125Z-0001`). This also caught and fixed a real
+  bug: `remote_program()` omitted `canonical_existing` from the functions it
+  ships to the NAS host, causing a `NameError` on first live attempt; a
+  regression test (`test_generated_nas_operation_defines_every_referenced_helper`
+  in `tests/test_inventory_metadata.py`) now calls the generated
+  `nas_operation()` for both `execute_cross_movie` and `execute_cross_tv` to
+  catch this class of bug before it reaches the NAS.
+- `batch_cross_tv.py --run 20260923T013125Z --limit 2 --execute` then drove
+  the sequential orchestrator for real against the two smallest of the
+  remaining pending series, each ending its own clean `SUCCESS` journal with
+  no manual intervention between them:
+  - *South Park*, `media04`→`media01` (execution ID `20260923T013125Z-0002`).
+  - *Scott Pilgrim Takes Off*, `media01`→`media03` (execution ID
+    `20260923T013125Z-0016`) — a different disk pair and direction than both
+    the item above and the manual Rick and Morty run, confirming the
+    generalized disk lookup isn't specific to one route.
+
+Ten cross-disk TV series remain pending in that same run's manifest as of
+this writing, ranging from *Doug* (5.66 GB) up to *Supernatural* (785.59 GB);
+`batch_cross_tv.py --run 20260923T013125Z` (no `--execute`) lists the current
+pending/completed counts at any time.

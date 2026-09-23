@@ -10,12 +10,15 @@ your disks have — instead of leaving everything on one volume forever.
 > **Status: early-stage, personally operated.** Migratarr currently runs
 > against one home media stack. As of the Phase One closeout
 > (`docs/phase-one-closeout.md`, 2026-09-19), same-disk Movie/TV moves
-> *and* a live-validated cross-disk Movie executor are on `main`; a
-> read-only validation/config layer (`migratarr_validation/`,
+> *and* a live-validated cross-disk Movie executor are on `main`. Since
+> then, a live-validated cross-disk **TV** executor (`execute_cross_tv.py`)
+> and batch orchestrators for both cross-disk Movie and TV moves
+> (`batch_cross_movies.py`, `batch_cross_tv.py`) have also landed and been
+> exercised against real production data (see [Project status](#project-status)).
+> A read-only validation/config layer (`migratarr_validation/`,
 > `config/legacy-*.json`) is also on `main` but not yet wired into live
-> execution (see [Project status](#project-status)). Read this whole
-> README, and particularly [Safety model](#safety-model), before pointing
-> it at a library you care about.
+> execution. Read this whole README, and particularly
+> [Safety model](#safety-model), before pointing it at a library you care about.
 
 ## What it does
 
@@ -61,7 +64,8 @@ approvals. There is no single command that runs the whole pipeline.
 | 4 | `snapshot_run.py` | Copies `movie_dry_run.csv`, `tv_dry_run.csv`, `move_plan.csv`, and selected current code files into a read-only, checksummed run under `runs/<timestamp>/`. Keep the code unchanged between planning and snapshotting. |
 | 5 | `build_execution_manifest.py` | Turns the frozen snapshot's eligible rows into a manifest with one stable `execution_id` per proposed move, hashed and stored under `manifests/<run>/`. |
 | 6 | `approve_execution.py` | Human review. Lists manifest rows and lets you `--approve <execution_id>` one at a time. Writes an approval record; **moves no files**. |
-| 7 | `execute_movie_nas.py` / `execute_tv_nas.py` (same-disk) / `execute_cross_movie.py` (cross-disk Movie) | Takes one approved `execution_id`, re-verifies everything (manifest hash, approval hash, live Radarr/Sonarr state, full file-content hash), performs the move, and updates Radarr/Sonarr. Defaults to check-only — pass `--execute` to actually move files. |
+| 7 | `execute_movie_nas.py` / `execute_tv_nas.py` (same-disk) / `execute_cross_movie.py` / `execute_cross_tv.py` (cross-disk) | Takes one approved `execution_id`, re-verifies everything (manifest hash, approval hash, live Radarr/Sonarr state, full file-content hash), performs the move, and updates Radarr/Sonarr. Defaults to check-only — pass `--execute` to actually move files. |
+| 8 | `batch_cross_movies.py` / `batch_cross_tv.py` (optional) | Lists every pending cross-disk Movie/TV row from a run's manifest and, with `--execute`, approves and runs each through its executor in sequence (smallest first). `--limit N` caps how many it processes in one invocation instead of the full pending set. Without `--execute` it only lists — no approvals, copies, updates, or deletions. |
 
 `movie_placement_v1.py` / `tv_placement_v1.py` are frozen, checksum-pinned
 copies of the scoring logic from the point it was first validated
@@ -159,13 +163,13 @@ you care about.
   retried automatically — it requires manual reconciliation (or, for one
   specifically diagnosed failure mode, `--resume-nfs-refusal`).
 - **Live execution coverage still isn't full parity with the planner.**
-  `build_move_plan.py` reasons about all four disks. `execute_movie_nas.py`
-  / `execute_tv_nas.py` perform same-disk renames on one disk (see
-  `remote_path()`); `execute_cross_movie.py` (on `main`, live-validated)
-  covers cross-disk **Movie** transfers via staged copy → verify → atomic
-  publish → Radarr update → verified delete. Cross-disk **TV** has no
-  validated executor yet. Read a plan's `transfer_type` and `status`
-  columns before assuming an executor can act on a row.
+  `execute_movie_nas.py` / `execute_tv_nas.py` perform same-disk renames on
+  one disk (see `remote_path()`); `execute_cross_movie.py` and
+  `execute_cross_tv.py` (both on `main`, live-validated) cover cross-disk
+  **Movie** and **TV** transfers via staged copy → verify → atomic
+  publish/Radarr-or-Sonarr update → verified delete. Read a plan's
+  `transfer_type` and `status` columns before assuming an executor can act
+  on a row.
 
 ## Project status
 
@@ -178,6 +182,21 @@ As of the **Phase One closeout** (`docs/phase-one-closeout.md`,
   source removal, full journal), plus `batch_cross_movies.py` and two
   incident-specific recovery scripts (`recover_cross_0102.py`,
   `recover_cross_0116.py`) from real runs.
+- A live-validated **cross-disk TV executor** (`execute_cross_tv.py`),
+  mirroring the Movie executor's safety architecture with Sonarr
+  multi-episode-file verification, plus `batch_cross_tv.py`. Both have
+  moved real series end-to-end on the production host — a single
+  `execute_cross_tv.py` run and a multi-series `batch_cross_tv.py --execute`
+  run (see `docs/storage-targets.md` for the exact evidence).
+- Storage-target configuration (`storage_targets.py`,
+  `config/storage-targets.json`) has replaced hardcoded planner/executor
+  disk assumptions across four migration gates (`docs/storage-targets.md`):
+  planner byte parity, manifest target IDs, `runtime.json`/
+  `storage-targets.json` consistency checking, and executor disk
+  generalization. `runtime_config.py` now accepts any number of validly-shaped
+  disk IDs instead of exactly `media01`-`media04`; the real deployment is
+  still four disks, but the four-disk assumption is no longer load-bearing
+  in the code.
 - A standalone, read-only **validation engine** (`migratarr_validation/`)
   with planner characterization tests, parity checks against real server
   data, capture/audit tooling, and the project's first automated tests
@@ -205,16 +224,21 @@ pre-execution gate.
 ## Known limitations
 
 - No orchestrating entry point; the pipeline order above is documentation,
-  not enforced by any single command.
+  not enforced by any single command. `batch_cross_movies.py` /
+  `batch_cross_tv.py` sequence one media type's cross-disk moves, but
+  nothing drives the whole dry-run → plan → snapshot → manifest pipeline.
 - Significant duplication between `execute_movie_nas.py`,
-  `execute_tv_nas.py`, and `execute_cross_movie.py` — changes to the
-  shared safety logic currently have to be ported by hand.
+  `execute_tv_nas.py`, `execute_cross_movie.py`, and `execute_cross_tv.py`
+  — changes to the shared safety logic currently have to be ported by hand
+  across all four (see the Phase Two handoff in `docs/phase-one-closeout.md`).
 - **No CI.** `tests/` exists on `main` but nothing runs it automatically —
   `docs/phase-one-closeout.md` states this explicitly.
 - `migratarr_validation/` is read-only and not yet the live gate for
   planning or execution.
-- Runtime configuration supports one host/NAS with the existing four disk IDs
-  and fixed layout depth; it does not generalize executor topology.
+- Runtime configuration supports one host/NAS pairing. Disk IDs are no
+  longer fixed to exactly four (`docs/storage-targets.md`, gate 4), but
+  local/remote path layout is still fixed-depth and single-host; the
+  executor topology itself isn't otherwise generalized.
 - User-facing preferences (subscriptions, scoring weights, tier
   thresholds) are Python constants, not something a user sets.
 
