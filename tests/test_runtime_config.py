@@ -116,7 +116,8 @@ class RuntimeWiringTests(unittest.TestCase):
                 patch('subprocess.check_output', side_effect=AssertionError('external command')):
             cls.modules = {name: importlib.import_module(name) for name in
                            ('execute_cross_movie', 'execute_cross_tv', 'execute_movie_nas', 'execute_tv_nas',
-                            'execute_movie', 'recover_cross_0102', 'recover_cross_0116', 'batch_cross_movies')}
+                            'execute_movie', 'recover_cross_0102', 'recover_cross_0116', 'batch_cross_movies',
+                            'batch_cross_tv')}
 
     def test_config_driven_mapping_and_any_declared_disk(self):
         data = self.config.as_dict()
@@ -198,28 +199,34 @@ class RuntimeWiringTests(unittest.TestCase):
             compile(tree, '<capture>', 'exec')
 
     def test_batch_propagates_config_and_order(self):
-        batch = self.modules['batch_cross_movies']
-        row = dict(execution_id='20260915T192959Z-0001', title='Title', size_gb='1')
-        calls = []
-        with tempfile.TemporaryDirectory() as temp:
-            base = Path(temp)
-            logs = base / 'execution_logs'
-            logs.mkdir()
-            def runner(command, **kwargs):
-                calls.append((command, kwargs))
-                if '--execute' in command:
-                    (logs / (row['execution_id'] + '.jsonl')).write_text(
-                        json.dumps(dict(event='SUCCESS', manifest_sha256='hash')) + '\n')
-                return Mock(returncode=0)
-            with patch.object(batch, 'pending_movies', return_value=([row], 0, 'hash')):
-                self.assertEqual(batch.run_batch(base, '20260915T192959Z', True, runner), 0)
-            self.assertEqual(len(calls), 3)
-            self.assertTrue(calls[0][0][1].endswith('approve_execution.py'))
-            self.assertNotIn('--execute', calls[1][0])
-            self.assertIn('--execute', calls[2][0])
-            for _, kwargs in calls:
-                self.assertEqual(kwargs['env']['MIGRATARR_CONFIG'], str(EXAMPLE.resolve()))
-                self.assertEqual(kwargs['env']['MIGRATARR_BASE_PATH'], base.as_posix())
+        for module_name, pending_name, executor_name in (
+                ('batch_cross_movies', 'pending_movies', 'execute_cross_movie.py'),
+                ('batch_cross_tv', 'pending_series', 'execute_cross_tv.py')):
+            with self.subTest(batch=module_name):
+                batch = self.modules[module_name]
+                row = dict(execution_id='20260915T192959Z-0001', title='Title', size_gb='1')
+                calls = []
+                with tempfile.TemporaryDirectory() as temp:
+                    base = Path(temp)
+                    logs = base / 'execution_logs'
+                    logs.mkdir()
+                    def runner(command, **kwargs):
+                        calls.append((command, kwargs))
+                        if '--execute' in command:
+                            (logs / (row['execution_id'] + '.jsonl')).write_text(
+                                json.dumps(dict(event='SUCCESS', manifest_sha256='hash')) + '\n')
+                        return Mock(returncode=0)
+                    with patch.object(batch, pending_name, return_value=([row], 0, 'hash')):
+                        self.assertEqual(batch.run_batch(base, '20260915T192959Z', True, runner), 0)
+                    self.assertEqual(len(calls), 3)
+                    self.assertTrue(calls[0][0][1].endswith('approve_execution.py'))
+                    self.assertTrue(calls[1][0][1].endswith(executor_name))
+                    self.assertNotIn('--execute', calls[1][0])
+                    self.assertTrue(calls[2][0][1].endswith(executor_name))
+                    self.assertIn('--execute', calls[2][0])
+                    for _, kwargs in calls:
+                        self.assertEqual(kwargs['env']['MIGRATARR_CONFIG'], str(EXAMPLE.resolve()))
+                        self.assertEqual(kwargs['env']['MIGRATARR_BASE_PATH'], base.as_posix())
 
 
 if __name__ == '__main__':
