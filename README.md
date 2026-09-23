@@ -118,7 +118,7 @@ unchanged. Safe unit tests run in GitHub Actions and locally with
 `python3 -m unittest discover -s tests -v`.
 
 **These config files do not cover everything deployment-specific.**
-Logical category/tag names, scoring weights, NAS mount-layout shape, and Docker secret extraction are still
+Category folder names, scoring weights, NAS mount-layout shape, and Docker secret extraction are still
 Python literals in the source, not settings. See [SETUP.md](SETUP.md) for
 exactly what and where, before running this against a library you care about.
 

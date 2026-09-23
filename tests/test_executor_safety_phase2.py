@@ -315,7 +315,7 @@ class NasReceiptTests(OfflineTest):
 
 class IncidentRecoveryTests(OfflineTest):
     def recovery_fixture(self, name):
-        with patch('runtime_config.get_config', return_value=self.config):
+        with patch('runtime_config.get_config', return_value=self.config),                 patch('planner_settings.get_settings', return_value=self.settings):
             module = importlib.import_module(name)
         execution_id = module.EXECUTION_ID
         row = dict(recommended='Common')

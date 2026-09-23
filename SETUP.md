@@ -47,32 +47,21 @@ None of the following are read from `runtime.json` or any other config file.
 They're Python literals, and the planner will silently apply *this*
 deployment's values to yours unless you change them.
 
-### Logical category names and override tags
+### Category folder names
 
-The four Movie categories (`Common`, `Library`, `Rare`, `Archive`), the four
-TV categories (`Current`, `Library`, `Rare`, `Archive`), and their
-`migratarr-common` / `migratarr-lock` / etc. manual-override tag names are
-string literals repeated across `dry_run_movies.py`, `dry_run_tv.py`, and
-`build_move_plan.py` — not sourced from any config file.
+The planners and executors identify an item's category from fixed folder
+names under each disk: Movies in `Movies/{Common,Library,Rare,Archive}`, TV
+in `TV/{Current,Library,Rare,Archive}`. `storage-targets.json` declares
+these paths in `category_paths`, but the planners' path detection
+(`current_bucket()` in `dry_run_movies.py` / `dry_run_tv.py`) and the
+executors' path safety checks, including the checks run on the NAS itself,
+still match the literal names. Renaming those folders means editing code in
+all of those places.
 
-An equivalent schema already exists — just not wired into the live planner.
-`config/legacy-rules.json` (read by the read-only `migratarr_validation/`
-package, see `docs/validation-engine.md`) expresses exactly this as JSON:
-
-```json
-{
-  "lock_tag": "migratarr-lock",
-  "category_override_tags": {
-    "migratarr-common": "Common",
-    "migratarr-rare": "Rare"
-  }
-}
-```
-
-If you want different tag names or category labels, you're changing the
-live planner's string literals directly (and keeping them consistent across
-all three files), not editing that JSON — it's a preview of a shape the live
-path doesn't use yet, not a working input to it.
+The category IDs themselves (`Common`, `Current`, `Library`, `Rare`,
+`Archive`) are code identities the scoring logic branches on, not settings.
+The Arr tags that pin or lock a category *are* settings; see
+[Planner settings](docs/planner-settings.md#override-tags).
 
 ### Scoring weights and thresholds
 

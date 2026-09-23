@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch, Mock
 
+from planner_settings import load_settings
 from runtime_config import ConfigError, RuntimeConfig, get_config, load_config
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -111,7 +112,7 @@ class RuntimeWiringTests(unittest.TestCase):
     def setUpClass(cls):
         cls.config = load_config(EXAMPLE, environ={})
         # Importing executors must not invoke NAS, Docker, or HTTP.
-        with patch('runtime_config.get_config', return_value=cls.config), \
+        with patch('runtime_config.get_config', return_value=cls.config),                 patch('planner_settings.get_settings', return_value=load_settings(ROOT / 'config/planner.example.json')), \
                 patch('subprocess.run', side_effect=AssertionError('external command')), \
                 patch('subprocess.check_output', side_effect=AssertionError('external command')):
             cls.modules = {name: importlib.import_module(name) for name in

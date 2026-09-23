@@ -273,7 +273,7 @@ class PlannerCharacterization(unittest.TestCase):
         namespace = {"load_arr_overrides": lambda: {
             "Movie": {7: {"migratarr-rare", "migratarr-lock"}}, "TV": {}}}
         with patch("migratarr_validation.parity.load_legacy",
-                   return_value=(None, namespace)), patch("runtime_config.get_config", return_value=None):
+                   return_value=(None, namespace)), patch("runtime_config.get_config", return_value=None),                 patch("planner_settings.get_settings", return_value=None):
             snapshot_live_overrides(snapshot)
             self.assertEqual(load_overrides(snapshot), namespace["load_arr_overrides"]())
             with self.assertRaises(FileExistsError):

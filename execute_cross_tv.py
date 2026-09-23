@@ -37,10 +37,12 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 from runtime_config import get_config
+from planner_settings import get_settings
 from executor_manifest import digest, load_approved_plan
 from executor_command import run_command
 from executor_inventory import scan_metadata, metadata_from_inventory
 RUNTIME = get_config()
+OVERRIDES = get_settings().overrides
 
 class Refused(RuntimeError):
     pass
@@ -371,9 +373,8 @@ def execute(base, execution_id, live, sonarr, log, transport):
             'Sonarr destination root inaccessible')
     labels = {t['id']: t['label'].lower() for t in sonarr.api('tag')}
     tags = {labels.get(t, '') for t in series.get('tags', [])}
-    require('migratarr-lock' not in tags, 'Series is locked')
-    overrides = tags & {'migratarr-common', 'migratarr-rare', 'migratarr-library', 'migratarr-archive', 'migratarr-current'}
-    require(not overrides or overrides == {'migratarr-' + row['recommended'].lower()}, 'Conflicting override')
+    require(not OVERRIDES.locked(tags), 'Series is locked')
+    require(OVERRIDES.agrees(tags, row['recommended']), 'Conflicting override')
     before = inventory(src)
     records, associations = episode_state(sonarr, series_id, logical_src, before)
     verify_episode_contents(sonarr, logical_src, records, before)

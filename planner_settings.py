@@ -1,6 +1,8 @@
-"""Validated planner preferences: what the owner can stream, and where."""
+"""Validated planner preferences: streaming access and Arr override tag names."""
 from dataclasses import dataclass
+from functools import lru_cache
 import json
+from types import MappingProxyType
 import os
 from pathlib import Path
 import re
@@ -15,9 +17,11 @@ def _require(ok, message):
         raise SettingsError('Planner settings: ' + message)
 
 
-def _fields(value, expected, label):
+def _fields(value, expected, label, optional=()):
     _require(isinstance(value, dict), label + ' must be an object')
-    _require(set(value) == set(expected), label + ' requires exactly: ' + ', '.join(expected))
+    _require(set(expected) <= set(value) <= set(expected) | set(optional),
+             label + ' requires exactly: ' + ', '.join(expected)
+             + (' (optional: ' + ', '.join(optional) + ')' if optional else ''))
 
 
 def _families(value, label):
@@ -29,16 +33,76 @@ def _families(value, label):
     return frozenset(value)
 
 
+# Logical category IDs the planners' decision logic branches on. They are code
+# identities, not settings; only the Arr tags that select them are configurable.
+CATEGORIES = ('Common', 'Current', 'Library', 'Rare', 'Archive')
+
+# Migratarr's own tag namespace, used when planner.json has no "overrides".
+DEFAULT_OVERRIDES = {
+    'lock_tag': 'migratarr-lock',
+    'category_tags': {
+        'migratarr-common': 'Common',
+        'migratarr-current': 'Current',
+        'migratarr-library': 'Library',
+        'migratarr-rare': 'Rare',
+        'migratarr-archive': 'Archive',
+    },
+}
+
+
+@dataclass(frozen=True)
+class OverrideTags:
+    """Arr tag labels (compared lowercased) that pin or lock an item's category."""
+    lock_tag: str
+    category_tags: MappingProxyType
+
+    def locked(self, tags):
+        return self.lock_tag in tags
+
+    def agrees(self, tags, recommended):
+        """True unless a category tag is present that doesn't select `recommended`.
+
+        Matches the executors' former `'migratarr-' + recommended.lower()`
+        comparison for every input, including unexpected `recommended` values.
+        """
+        found = set(tags) & set(self.category_tags)
+        expected = {tag for tag, category in self.category_tags.items()
+                    if category.lower() == str(recommended).lower()}
+        return not found or found == expected
+
+
 @dataclass(frozen=True)
 class PlannerSettings:
     # ISO 3166-1 alpha-2 key of TMDB's watch/providers "results" object.
     region: str
     subscribed: frozenset
     user_free_access: frozenset
+    overrides: OverrideTags
+
+
+def _tag(value, label):
+    # Arr labels are lowercased before comparison, so an uppercase tag could never match.
+    _require(isinstance(value, str) and value and value == value.lower()
+             and not any(c.isspace() or c in ',;' or ord(c) < 32 for c in value),
+             label + ' must be a lowercase tag without spaces or separators')
+
+
+def _overrides(data):
+    _fields(data, ('lock_tag', 'category_tags'), 'overrides')
+    _tag(data['lock_tag'], 'overrides.lock_tag')
+    tags = data['category_tags']
+    _require(isinstance(tags, dict) and tags, 'overrides.category_tags must be a nonempty object')
+    for tag, category in tags.items():
+        _tag(tag, 'overrides.category_tags key')
+        _require(category in CATEGORIES,
+                 'overrides.category_tags values must be one of: ' + ', '.join(CATEGORIES))
+    _require(len(set(tags.values())) == len(tags), 'overrides.category_tags must map to distinct categories')
+    _require(data['lock_tag'] not in tags, 'overrides.lock_tag cannot also be a category tag')
+    return OverrideTags(data['lock_tag'], MappingProxyType(dict(tags)))
 
 
 def parse_settings(data):
-    _fields(data, ('schema_version', 'streaming'), 'root')
+    _fields(data, ('schema_version', 'streaming'), 'root', optional=('overrides',))
     _require(type(data['schema_version']) is int and data['schema_version'] == 1,
              'unsupported schema_version')
     streaming = data['streaming']
@@ -47,7 +111,8 @@ def parse_settings(data):
              'streaming.region must be a two-letter uppercase TMDB region code')
     return PlannerSettings(streaming['region'],
                            _families(streaming['subscribed'], 'streaming.subscribed'),
-                           _families(streaming['user_free_access'], 'streaming.user_free_access'))
+                           _families(streaming['user_free_access'], 'streaming.user_free_access'),
+                           _overrides(data.get('overrides', DEFAULT_OVERRIDES)))
 
 
 def _unique_object(pairs):
@@ -70,3 +135,9 @@ def load_settings(filename=None, environ=None):
             raise
         raise SettingsError('Planner settings: cannot load ' + str(filename) + ': ' + str(exc)) from exc
     return parse_settings(data)
+
+
+@lru_cache(maxsize=1)
+def get_settings():
+    """Freeze effective settings for the lifetime of this process."""
+    return load_settings()
