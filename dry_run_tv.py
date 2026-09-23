@@ -13,7 +13,7 @@ from pathlib import Path
 from statistics import mean
 
 from runtime_config import get_config
-from planner_settings import load_settings
+from planner_settings import at_least, at_most, load_settings
 RUNTIME = get_config()
 PLANNER_SETTINGS = load_settings()
 
@@ -33,6 +33,8 @@ OUTPUT = (RUNTIME.base_path / "tv_dry_run.csv")
 SUBSCRIBED = set(PLANNER_SETTINGS.subscribed)
 USER_FREE_ACCESS = set(PLANNER_SETTINGS.user_free_access)
 STREAMING_REGION = PLANNER_SETTINGS.region
+# Every scoring weight, tier and threshold (config/planner.json "scoring").
+SCORING = PLANNER_SETTINGS.scoring
 
 
 def docker_output(container, command):
@@ -181,22 +183,7 @@ def normalize_release(title):
 
 
 def scarcity(count):
-    if count >= 20:
-        return 0
-    if count >= 10:
-        return 15
-    if count >= 6:
-        return 30
-    if count >= 4:
-        return 45
-    if count == 3:
-        return 60
-    if count == 2:
-        return 75
-    if count == 1:
-        return 90
-
-    return 100
+    return at_least(count, SCORING.replacement.tiers, SCORING.replacement.none)
 
 
 def season_replacement(series_id, season_number, owned_episode_numbers):
@@ -253,7 +240,8 @@ def season_replacement(series_id, season_number, owned_episode_numbers):
         paths.discard("")
 
         episode_scores.append(
-            scarcity(min(len(paths), 20))
+            # Capping at the top tier's minimum never changes the tier reached.
+            scarcity(min(len(paths), SCORING.replacement.tiers[0][0]))
         )
 
     if not episode_scores:
@@ -262,7 +250,7 @@ def season_replacement(series_id, season_number, owned_episode_numbers):
     hardest = max(episode_scores)
     average = mean(episode_scores)
 
-    score = 0.70 * hardest + 0.30 * average
+    score = SCORING.tv_aggregation.worst * hardest + SCORING.tv_aggregation.average * average
 
     return round(score, 1), "high", from_cache, (
         f"hardest={hardest:.1f}; avg={average:.1f}; packs={len(packs)}"
@@ -317,7 +305,7 @@ def series_replacement(series):
     worst = max(season_scores)
     average = mean(season_scores)
 
-    result = 0.70 * worst + 0.30 * average
+    result = SCORING.tv_aggregation.worst * worst + SCORING.tv_aggregation.average * average
 
     return (
         round(result, 1),
@@ -423,32 +411,32 @@ def provider_score(data):
     subscribed = flat & SUBSCRIBED
 
     if subscribed:
-        return 0, "Subscribed: " + ", ".join(sorted(subscribed))
+        return SCORING.streaming.subscribed, "Subscribed: " + ", ".join(sorted(subscribed))
 
     accessible_free = free & USER_FREE_ACCESS
 
     if accessible_free:
-        return 0, "Free access: " + ", ".join(sorted(accessible_free))
+        return SCORING.streaming.free_access, "Free access: " + ", ".join(sorted(accessible_free))
 
     if ads:
-        return 25, "Free with ads: " + ", ".join(sorted(ads))
+        return SCORING.streaming.ads, "Free with ads: " + ", ".join(sorted(ads))
 
     unsub = flat - SUBSCRIBED
 
     if len(unsub) >= 3:
-        return 35, f"{len(unsub)} subscription families"
+        return SCORING.streaming.three_or_more_families, f"{len(unsub)} subscription families"
     if len(unsub) == 2:
-        return 40, "2 subscription families"
+        return SCORING.streaming.two_families, "2 subscription families"
     if len(unsub) == 1:
-        return 50, "1 subscription family: " + next(iter(unsub))
+        return SCORING.streaming.one_family, "1 subscription family: " + next(iter(unsub))
 
     if rent:
-        return 60, "Rental available"
+        return SCORING.streaming.rental, "Rental available"
 
     if buy:
-        return 80, "Purchase only"
+        return SCORING.streaming.purchase, "Purchase only"
 
-    return 100, f"No {STREAMING_REGION} availability found"
+    return SCORING.streaming.unavailable, f"No {STREAMING_REGION} availability found"
 
 
 def series_streaming(tmdb_id, owned_seasons):
@@ -503,7 +491,7 @@ def series_streaming(tmdb_id, owned_seasons):
     worst = max(scores)
     average = mean(scores)
 
-    result = 0.70 * worst + 0.30 * average
+    result = SCORING.tv_aggregation.worst * worst + SCORING.tv_aggregation.average * average
 
     return round(result, 1), "; ".join(details)
 
@@ -579,54 +567,21 @@ for user in jf_users:
 
 def recency_points(last):
     if not last:
-        return 0
+        return SCORING.usage.recency_never
 
     days = (
         datetime.now(timezone.utc) - last
     ).total_seconds() / 86400
 
-    if days <= 7:
-        return 100
-    if days <= 30:
-        return 90
-    if days <= 90:
-        return 75
-    if days <= 180:
-        return 55
-    if days <= 365:
-        return 35
-    if days <= 730:
-        return 20
-
-    return 10
+    return at_most(days, SCORING.usage.recency_days, SCORING.usage.recency_older)
 
 
 def repeat_points(plays):
-    if plays >= 10:
-        return 100
-    if plays >= 6:
-        return 80
-    if plays >= 3:
-        return 60
-    if plays == 2:
-        return 40
-    if plays == 1:
-        return 20
-
-    return 0
+    return at_least(plays, SCORING.usage.plays, SCORING.usage.plays_none)
 
 
 def user_points(users):
-    if users >= 4:
-        return 100
-    if users == 3:
-        return 80
-    if users == 2:
-        return 60
-    if users == 1:
-        return 35
-
-    return 0
+    return at_least(users, SCORING.usage.users, SCORING.usage.users_none)
 
 
 def usage_score(tmdb_id):
@@ -644,19 +599,22 @@ def usage_score(tmdb_id):
             datetime.now(timezone.utc) - created
         ).total_seconds() / 86400
 
-        if age <= 90:
-            return 50, "New unwatched grace"
+        grace = SCORING.usage
 
-        if age <= 180:
-            value = 50 * (180 - age) / 90
+        if age <= grace.grace_full_days:
+            return grace.grace_points, "New unwatched grace"
+
+        if age <= grace.grace_end_days:
+            value = grace.grace_points * (grace.grace_end_days - age) / (
+                grace.grace_end_days - grace.grace_full_days)
             return round(value, 1), "Decaying new-item grace"
 
         return 0, "Never played"
 
     result = (
-        0.60 * recency_points(usage["last"])
-        + 0.25 * repeat_points(usage["plays"])
-        + 0.15 * user_points(usage["users"])
+        SCORING.usage.weights.recency * recency_points(usage["last"])
+        + SCORING.usage.weights.repeat * repeat_points(usage["plays"])
+        + SCORING.usage.weights.users * user_points(usage["users"])
     )
 
     return round(result, 1), (
@@ -768,7 +726,9 @@ def days_since_played(tmdb_id):
 
 
 def archive_eligible(series, replacement, tmdb_id):
-    if replacement is None or replacement >= 35:
+    rules = SCORING.archive
+
+    if replacement is None or replacement >= rules.max_replacement:
         return False
 
     if series_status(series) != "ended":
@@ -783,17 +743,17 @@ def archive_eligible(series, replacement, tmdb_id):
         datetime.now(timezone.utc) - finale
     ).total_seconds() / 86400
 
-    if finale_age < 365:
+    if finale_age < rules.tv_min_days_since_finale:
         return False
 
     added = days_since_added(tmdb_id)
 
-    if added is None or added < 180:
+    if added is None or added < rules.min_days_since_added:
         return False
 
     played = days_since_played(tmdb_id)
 
-    if played is not None and played < 180:
+    if played is not None and played < rules.min_days_since_played:
         return False
 
     return True
@@ -865,7 +825,7 @@ for i, series in enumerate(selected, 1):
         elif (
             current == "Archive"
             and replacement is not None
-            and replacement >= 35
+            and replacement >= SCORING.archive.max_replacement
         ):
             recommendation = "Library"
             decision = (
@@ -928,20 +888,21 @@ for i, series in enumerate(selected, 1):
 
     else:
         final = round(
-            0.45 * replacement
-            + 0.30 * streaming
-            + 0.25 * usage,
+            SCORING.weights.replacement * replacement
+            + SCORING.weights.streaming * streaming
+            + SCORING.weights.usage * usage,
             1
         )
 
         # Same blackout preservation rule as movies.
-        if streaming == 100 and replacement >= 15:
+        if (streaming == SCORING.streaming.unavailable
+                and replacement >= SCORING.thresholds.blackout_min_replacement):
             recommendation = "Rare"
             decision = "Streaming blackout + limited replacement paths"
 
-        elif final >= 70:
+        elif final >= SCORING.thresholds.rare:
             recommendation = "Rare"
-            decision = "Placement score >=70"
+            decision = f"Placement score >={SCORING.thresholds.rare:g}"
 
         elif lifecycle == "active":
             recommendation = "Current"

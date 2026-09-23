@@ -1,3 +1,4 @@
+import contextlib
 import csv
 import io
 import json
@@ -24,7 +25,8 @@ class DryRunParityTests(unittest.TestCase):
 
     def recording(self, kind):
         out = self.dir / f'{kind}.json'
-        summary = record(kind, out, cache_dir=self.dir / 'cache', now=NOW)
+        with contextlib.redirect_stderr(io.StringIO()):  # planner progress and retry chatter
+            summary = record(kind, out, cache_dir=self.dir / 'cache', now=NOW)
         return out, summary
 
     def test_recording_holds_no_api_keys(self):
@@ -64,13 +66,29 @@ class DryRunParityTests(unittest.TestCase):
     def test_changed_scoring_is_reported_row_by_row(self):
         out, _ = self.recording('movie')
         changed = self.dir / 'changed.py'
-        source = (ROOT / 'dry_run_movies.py').read_text(encoding='utf-8')
+        source = BASELINE['movie'].read_text(encoding='utf-8')
         self.assertEqual(source.count('elif final >= 70:'), 1)
         changed.write_text(source.replace('elif final >= 70:', 'elif final >= 40:'), encoding='utf-8')
         result = compare(out, BASELINE['movie'], changed)
         self.assertFalse(result['byte_identical'])
         self.assertGreater(result['differences']['rows_changed'], 0)
         self.assertIn('recommended', result['differences']['sample'][0]['changed'])
+
+    def test_planner_json_scoring_changes_whole_script_output(self):
+        from unittest.mock import patch
+        out, _ = self.recording('movie')
+        config = json.loads((ROOT / 'config/planner.example.json').read_text(encoding='utf-8'))
+        config['scoring'] = {'thresholds': {'rare': 40, 'library': 20}}
+        custom = self.dir / 'planner.json'
+        custom.write_text(json.dumps(config), encoding='utf-8')
+        with patch.dict('os.environ', {'MIGRATARR_PLANNER_CONFIG': str(custom)}):
+            result = compare(out, BASELINE['movie'])
+        self.assertFalse(result['byte_identical'])
+        changed = {row['title']: row['changed'] for row in result['differences']['sample']}
+        # Just Added scored 41.0: Library at the default 70/35, Rare at 40.
+        self.assertEqual(changed['Just Added']['recommended'], ['Library', 'Rare'])
+        self.assertEqual(changed['Just Added']['decision_reason'],
+                         ['Placement score 35-69.9', 'Placement score >=40'])
 
     def test_request_missing_from_recording_fails_parity(self):
         out, _ = self.recording('movie')

@@ -31,7 +31,8 @@ agreement; `storage_targets.check_runtime_consistency()` refuses a deployment
 where they disagree.
 
 `planner.json` holds your streaming subscriptions and TMDB watch-provider
-region (see [Planner settings](docs/planner-settings.md)). The example's
+region, and optionally your override tag names and scoring tuning (see
+[Planner settings](docs/planner-settings.md)). The example's
 values (Hulu, Peacock, `US`) are this deployment's, not defaults: change them,
 or streaming scarcity will be scored against someone else's subscriptions.
 Family names must match what the planners' `provider_family()`/`family()`
@@ -62,17 +63,6 @@ The category IDs themselves (`Common`, `Current`, `Library`, `Rare`,
 `Archive`) are code identities the scoring logic branches on, not settings.
 The Arr tags that pin or lock a category *are* settings; see
 [Planner settings](docs/planner-settings.md#override-tags).
-
-### Scoring weights and thresholds
-
-Point values for replacement-difficulty tiers, subscription-family
-counts, and similar tuning are inline numeric literals inside the scoring
-functions in `dry_run_movies.py` / `dry_run_tv.py`, not named constants or
-config fields. If you disagree with how aggressively this protects
-hard-to-replace titles versus watched-often titles, that's a code change to
-the scoring function itself, reasoned about and tested the way
-[CONTRIBUTING.md](CONTRIBUTING.md#the-parity-testing-pattern) describes for
-planner logic changes.
 
 ### NAS mount-layout shape
 

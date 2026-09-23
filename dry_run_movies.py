@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from runtime_config import get_config
-from planner_settings import load_settings
+from planner_settings import at_least, at_most, load_settings
 RUNTIME = get_config()
 PLANNER_SETTINGS = load_settings()
 
@@ -38,6 +38,8 @@ CACHE_DAYS = 7
 SUBSCRIBED = set(PLANNER_SETTINGS.subscribed)
 USER_FREE_ACCESS = set(PLANNER_SETTINGS.user_free_access)
 STREAMING_REGION = PLANNER_SETTINGS.region
+# Every scoring weight, tier and threshold (config/planner.json "scoring").
+SCORING = PLANNER_SETTINGS.scoring
 
 # ============================================================
 # HELPERS
@@ -182,22 +184,7 @@ def normalize_release(title):
 
 
 def scarcity_from_count(count):
-    if count >= 20:
-        return 0
-    if count >= 10:
-        return 15
-    if count >= 6:
-        return 30
-    if count >= 4:
-        return 45
-    if count == 3:
-        return 60
-    if count == 2:
-        return 75
-    if count == 1:
-        return 90
-
-    return 100
+    return at_least(count, SCORING.replacement.tiers, SCORING.replacement.none)
 
 
 def replacement_score(movie):
@@ -315,39 +302,39 @@ def streaming_score(tmdb_id):
         subscribed = flat & SUBSCRIBED
 
         if subscribed:
-            return 0, "Subscribed: " + ", ".join(sorted(subscribed))
+            return SCORING.streaming.subscribed, "Subscribed: " + ", ".join(sorted(subscribed))
 
         accessible_free = free & USER_FREE_ACCESS
 
         if accessible_free:
-            return 0, "Free access: " + ", ".join(
+            return SCORING.streaming.free_access, "Free access: " + ", ".join(
                 sorted(accessible_free)
             )
 
         if ads:
-            return 25, "Free with ads: " + ", ".join(sorted(ads))
+            return SCORING.streaming.ads, "Free with ads: " + ", ".join(sorted(ads))
 
         unsubscribed = flat - SUBSCRIBED
 
         if len(unsubscribed) >= 3:
-            return 35, f"{len(unsubscribed)} subscription families"
+            return SCORING.streaming.three_or_more_families, f"{len(unsubscribed)} subscription families"
 
         if len(unsubscribed) == 2:
-            return 40, "2 subscription families"
+            return SCORING.streaming.two_families, "2 subscription families"
 
         if len(unsubscribed) == 1:
-            return 50, (
+            return SCORING.streaming.one_family, (
                 "1 subscription family: "
                 + next(iter(unsubscribed))
             )
 
         if rent:
-            return 60, "Rental available"
+            return SCORING.streaming.rental, "Rental available"
 
         if buy:
-            return 80, "Purchase only"
+            return SCORING.streaming.purchase, "Purchase only"
 
-        return 100, f"No {STREAMING_REGION} availability found"
+        return SCORING.streaming.unavailable, f"No {STREAMING_REGION} availability found"
 
     except Exception:
         return None, "Streaming lookup failed"
@@ -377,56 +364,23 @@ def parse_dt(value):
 
 def recency_points(last_played):
     if not last_played:
-        return 0
+        return SCORING.usage.recency_never
 
     days = (
         datetime.now(timezone.utc) - last_played
     ).total_seconds() / 86400
 
-    if days <= 7:
-        return 100
-    if days <= 30:
-        return 90
-    if days <= 90:
-        return 75
-    if days <= 180:
-        return 55
-    if days <= 365:
-        return 35
-    if days <= 730:
-        return 20
-
-    return 10
+    return at_most(days, SCORING.usage.recency_days, SCORING.usage.recency_older)
 
 
 def repeat_points(play_count):
     # Proxy using Jellyfin aggregate PlayCount.
     # Playback Reporting can replace this later.
-    if play_count >= 10:
-        return 100
-    if play_count >= 6:
-        return 80
-    if play_count >= 3:
-        return 60
-    if play_count == 2:
-        return 40
-    if play_count == 1:
-        return 20
-
-    return 0
+    return at_least(play_count, SCORING.usage.plays, SCORING.usage.plays_none)
 
 
 def users_points(users):
-    if users >= 4:
-        return 100
-    if users == 3:
-        return 80
-    if users == 2:
-        return 60
-    if users == 1:
-        return 35
-
-    return 0
+    return at_least(users, SCORING.usage.users, SCORING.usage.users_none)
 
 
 print("Loading Jellyfin users and movie usage...")
@@ -508,11 +462,14 @@ def usage_score(tmdb_id):
             datetime.now(timezone.utc) - created
         ).total_seconds() / 86400
 
-        if age_days <= 90:
-            return 50, "New unwatched grace"
+        grace = SCORING.usage
 
-        if age_days <= 180:
-            score = 50 * (180 - age_days) / 90
+        if age_days <= grace.grace_full_days:
+            return grace.grace_points, "New unwatched grace"
+
+        if age_days <= grace.grace_end_days:
+            score = grace.grace_points * (grace.grace_end_days - age_days) / (
+                grace.grace_end_days - grace.grace_full_days)
             return round(score, 1), "Decaying new-item grace"
 
         return 0, "Never played"
@@ -522,9 +479,9 @@ def usage_score(tmdb_id):
     distinct = users_points(u["users"])
 
     score = (
-        0.60 * recency
-        + 0.25 * repeat
-        + 0.15 * distinct
+        SCORING.usage.weights.recency * recency
+        + SCORING.usage.weights.repeat * repeat
+        + SCORING.usage.weights.users * distinct
     )
 
     return round(score, 1), (
@@ -610,23 +567,25 @@ def archive_eligible(movie, replacement):
     if replacement is None:
         return False
 
-    if replacement >= 35:
+    rules = SCORING.archive
+
+    if replacement >= rules.max_replacement:
         return False
 
     age = movie_age_years(movie)
 
-    if age is None or age < 5:
+    if age is None or age < rules.movie_min_age_years:
         return False
 
     added = days_since_added(movie["tmdbId"])
 
-    if added is None or added < 180:
+    if added is None or added < rules.min_days_since_added:
         return False
 
     last_play = days_since_last_play(movie["tmdbId"])
 
     # Never played is considered cold once grace has expired.
-    if last_play is not None and last_play < 180:
+    if last_play is not None and last_play < rules.min_days_since_played:
         return False
 
     return True
@@ -664,7 +623,8 @@ def franchise_bonus(movie):
     if cid is None:
         return 0, ""
 
-    bonus = 5
+    rules = SCORING.franchise
+    bonus = rules.collection_bonus
     reason = "Recognized collection"
 
     members = collection_members.get(str(cid), [])
@@ -674,11 +634,11 @@ def franchise_bonus(movie):
         for m in members
     )
 
-    if protected >= 2:
-        bonus += 5
+    if protected >= rules.min_protected:
+        bonus += rules.protected_bonus
         reason += "; related titles already protected"
 
-    return min(bonus, 10), reason
+    return min(bonus, rules.max_bonus), reason
 
 
 # Deterministic random sample.
@@ -690,6 +650,8 @@ else:
     selected = movies
 
 rows = []
+RARE = SCORING.thresholds.rare
+LIBRARY = SCORING.thresholds.library
 
 print(f"Scoring {len(selected)} movies.")
 print("No files will be moved.")
@@ -726,23 +688,24 @@ for i, movie in enumerate(selected, 1):
 
     else:
         final = (
-            0.45 * replacement
-            + 0.30 * streaming
-            + 0.25 * usage_value
+            SCORING.weights.replacement * replacement
+            + SCORING.weights.streaming * streaming
+            + SCORING.weights.usage * usage_value
             + bonus
         )
 
         final = min(100, round(final, 1))
 
-        if streaming == 100 and replacement >= 15:
+        if (streaming == SCORING.streaming.unavailable
+                and replacement >= SCORING.thresholds.blackout_min_replacement):
             recommendation = "Rare"
             reason = (
                 "Streaming blackout + limited replacement paths"
             )
 
-        elif final >= 70:
+        elif final >= RARE:
             recommendation = "Rare"
-            reason = "Placement score >=70"
+            reason = f"Placement score >={RARE:g}"
 
         elif archive_eligible(movie, replacement):
             recommendation = "Archive"
@@ -750,24 +713,24 @@ for i, movie in enumerate(selected, 1):
                 "Old + cold + easy to replace"
             )
 
-        elif final >= 35:
+        elif final >= LIBRARY:
             recommendation = "Library"
-            reason = "Placement score 35-69.9"
+            reason = f"Placement score {LIBRARY:g}-{RARE - 0.1:g}"
 
         else:
             recommendation = "Common"
-            reason = "Placement score <35"
+            reason = f"Placement score <{LIBRARY:g}"
 
     current = current_bucket(movie.get("path"))
 
     threshold_flag = ""
 
     if final is not None:
-        if abs(final - 35) <= 5:
-            threshold_flag = "NEAR_35"
+        if abs(final - LIBRARY) <= SCORING.thresholds.near_margin:
+            threshold_flag = f"NEAR_{LIBRARY:g}"
 
-        elif abs(final - 70) <= 5:
-            threshold_flag = "NEAR_70"
+        elif abs(final - RARE) <= SCORING.thresholds.near_margin:
+            threshold_flag = f"NEAR_{RARE:g}"
 
     proposed_change = (
         recommendation not in {"HOLD", current}
