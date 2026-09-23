@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "streaming": {
+    "region": "US",
+    "subscribed": [
+      "Hulu",
+      "Peacock"
+    ],
+    "user_free_access": []
+  }
+}

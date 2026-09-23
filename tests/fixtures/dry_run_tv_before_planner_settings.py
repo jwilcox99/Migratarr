@@ -13,9 +13,7 @@ from pathlib import Path
 from statistics import mean
 
 from runtime_config import get_config
-from planner_settings import load_settings
 RUNTIME = get_config()
-PLANNER_SETTINGS = load_settings()
 
 SONARR_URL = RUNTIME.urls["sonarr"]
 JELLYFIN_URL = RUNTIME.urls["jellyfin"]
@@ -27,12 +25,12 @@ CACHE_DAYS = 7
 CACHE_DIR = (RUNTIME.base_path / "cache")
 OUTPUT = (RUNTIME.base_path / "tv_dry_run.csv")
 
-# Streaming preferences come from config/planner.json (see planner_settings.py).
-# SUBSCRIBED/USER_FREE_ACCESS hold family() names; STREAMING_REGION is the TMDB
-# watch/providers region whose availability is scored.
-SUBSCRIBED = set(PLANNER_SETTINGS.subscribed)
-USER_FREE_ACCESS = set(PLANNER_SETTINGS.user_free_access)
-STREAMING_REGION = PLANNER_SETTINGS.region
+SUBSCRIBED = {
+    "Hulu",
+    "Peacock",
+}
+
+USER_FREE_ACCESS = set()
 
 
 def docker_output(container, command):
@@ -393,7 +391,7 @@ def tmdb_series_providers(tmdb_id):
 
 
 def provider_score(data):
-    us = data.get("results", {}).get(STREAMING_REGION, {})
+    us = data.get("results", {}).get("US", {})
 
     flat = {
         family(x["provider_name"])
@@ -448,7 +446,7 @@ def provider_score(data):
     if buy:
         return 80, "Purchase only"
 
-    return 100, f"No {STREAMING_REGION} availability found"
+    return 100, "No US availability found"
 
 
 def series_streaming(tmdb_id, owned_seasons):
@@ -471,8 +469,8 @@ def series_streaming(tmdb_id, owned_seasons):
                 season
             )
 
-            # A successful response can still contain no regional availability.
-            if season_data.get("results", {}).get(STREAMING_REGION):
+            # A successful response can still contain no US availability.
+            if season_data.get("results", {}).get("US"):
                 data = season_data
 
         except Exception:
@@ -480,7 +478,7 @@ def series_streaming(tmdb_id, owned_seasons):
 
         # Fall back to show-level availability.
         if data is None and series_data is not None:
-            if series_data.get("results", {}).get(STREAMING_REGION):
+            if series_data.get("results", {}).get("US"):
                 data = series_data
                 source = "series-fallback"
 
