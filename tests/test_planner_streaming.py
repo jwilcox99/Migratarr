@@ -69,6 +69,64 @@ class StreamingCharacterizationTests(unittest.TestCase):
         self.assertEqual(self.tv['series_streaming'](7, {2}), (None, 'S2=UNKNOWN (no provider data)'))
 
 
+BASELINE_MOVIES = ROOT / 'tests/fixtures/dry_run_movies_before_planner_settings.py'
+BASELINE_TV = ROOT / 'tests/fixtures/dry_run_tv_before_planner_settings.py'
+
+
+class StreamingSettingsTests(unittest.TestCase):
+    def settings(self, region='US', subscribed=('Hulu', 'Peacock'), free=()):
+        return parse_settings({'schema_version': 1, 'streaming': {
+            'region': region, 'subscribed': list(subscribed), 'user_free_access': list(free)}})
+
+    def test_pinned_cases_also_describe_the_baseline(self):
+        movies, tv = load_streaming('movies', BASELINE_MOVIES), load_streaming('tv', BASELINE_TV)
+        for data, expected in CASES:
+            with self.subTest(data=data):
+                movies['tmdb_movie_providers'] = lambda _id, data=data: (data, True)
+                self.assertEqual(movies['streaming_score'](42), expected)
+                self.assertEqual(tv['provider_score'](data), expected)
+
+    def test_configured_region_and_subscriptions_drive_scoring(self):
+        settings = self.settings('GB', ['Netflix'], ['Tubi TV'])
+        movies, tv = load_streaming('movies', settings=settings), load_streaming('tv', settings=settings)
+        for data, expected in [
+            (response('GB', flatrate=['Netflix', 'Hulu']), (0, 'Subscribed: Netflix')),
+            (response('GB', free=['Tubi TV']), (0, 'Free access: Tubi TV')),
+            (response('GB', flatrate=['Hulu']), (50, '1 subscription family: Hulu')),
+            (response('US', flatrate=['Netflix']), (100, 'No GB availability found')),
+        ]:
+            with self.subTest(data=data):
+                movies['tmdb_movie_providers'] = lambda _id, data=data: (data, True)
+                self.assertEqual(movies['streaming_score'](42), expected)
+                self.assertEqual(tv['provider_score'](data), expected)
+        tv['tmdb_season_providers'] = lambda _id, _s: (response('US', flatrate=['Netflix']), True)
+        tv['tmdb_series_providers'] = lambda _id: (response('GB', flatrate=['Netflix']), True)
+        self.assertEqual(tv['series_streaming'](7, {1}),
+                         (0.0, 'S1=0 [series-fallback] (Subscribed: Netflix)'))
+
+    def write_cache(self, directory):
+        for index, (data, _) in enumerate(CASES):
+            (directory / f'tmdb_provider_{index}.json').write_text(json.dumps(data))
+            (directory / f'tmdb_tv_series_provider_{index}.json').write_text(json.dumps(data))
+            (directory / f'tmdb_tv_provider_{index}_s1.json').write_text(json.dumps(CASES[-index][0]))
+        (directory / 'tmdb_tv_provider_99_s2.json').write_text(json.dumps(CASES[0][0]))
+        (directory / 'jellyfin_ignored.json').write_text('{}')
+
+    def test_parity_harness_on_cached_responses(self):
+        with tempfile.TemporaryDirectory() as temp:
+            cache = Path(temp)
+            self.write_cache(cache)
+            result = compare_streaming(BASELINE_MOVIES, BASELINE_TV, cache, self.settings())
+            self.assertTrue(result['byte_identical'], result)
+            self.assertEqual((result['movie_responses'], result['tv_responses'], result['tv_series']),
+                             (len(CASES), 2 * len(CASES) + 1, len(CASES) + 1))
+            changed = compare_streaming(BASELINE_MOVIES, BASELINE_TV, cache, self.settings(subscribed=['Hulu']))
+            self.assertFalse(changed['byte_identical'])
+            self.assertIn('movie/1', changed['differences'])
+            with self.assertRaisesRegex(ValueError, 'Baseline must be'):
+                compare_streaming(ROOT / 'dry_run_movies.py', BASELINE_TV, cache, self.settings())
+
+
 class PlannerSettingsTests(unittest.TestCase):
     def valid(self):
         return json.loads((ROOT / 'config/planner.example.json').read_text(encoding='utf-8'))

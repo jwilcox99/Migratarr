@@ -13,9 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from runtime_config import get_config
-from planner_settings import load_settings
 RUNTIME = get_config()
-PLANNER_SETTINGS = load_settings()
 
 # ============================================================
 # CONFIG
@@ -32,12 +30,16 @@ OUTPUT = (RUNTIME.base_path / "movie_dry_run.csv")
 
 CACHE_DAYS = 7
 
-# Streaming preferences come from config/planner.json (see planner_settings.py).
-# SUBSCRIBED/USER_FREE_ACCESS hold provider_family() names; STREAMING_REGION is
-# the TMDB watch/providers region whose availability is scored.
-SUBSCRIBED = set(PLANNER_SETTINGS.subscribed)
-USER_FREE_ACCESS = set(PLANNER_SETTINGS.user_free_access)
-STREAMING_REGION = PLANNER_SETTINGS.region
+# Known subscriptions for this test.
+# Add/remove these later through Migratarr's user profile.
+SUBSCRIBED = {
+    "Hulu",
+    "Peacock",
+}
+
+# Conditional "free" providers that YOU actually have access to.
+# Leave empty unless confirmed.
+USER_FREE_ACCESS = set()
 
 # ============================================================
 # HELPERS
@@ -285,7 +287,7 @@ def streaming_score(tmdb_id):
     try:
         data, from_cache = tmdb_movie_providers(tmdb_id)
 
-        us = data.get("results", {}).get(STREAMING_REGION, {})
+        us = data.get("results", {}).get("US", {})
 
         flat = {
             provider_family(x["provider_name"])
@@ -347,7 +349,7 @@ def streaming_score(tmdb_id):
         if buy:
             return 80, "Purchase only"
 
-        return 100, f"No {STREAMING_REGION} availability found"
+        return 100, "No US availability found"
 
     except Exception:
         return None, "Streaming lookup failed"

@@ -17,8 +17,10 @@ Follow [Configuration](README.md#configuration) first:
 ```sh
 cp config/runtime.example.json config/runtime.json
 cp config/storage-targets.example.json config/storage-targets.json
-# edit both for your deployment
+cp config/planner.example.json config/planner.json
+# edit all three for your deployment
 python3 -c 'from runtime_config import get_config; get_config(); print("Runtime config valid")'
+python3 -c 'from planner_settings import load_settings; load_settings(); print("Planner settings valid")'
 ```
 
 That covers: base path, NAS host/user/SSH key, Docker container names,
@@ -28,6 +30,14 @@ no longer fixed to four — see `docs/storage-targets.md` gate 4). Keep
 agreement; `storage_targets.check_runtime_consistency()` refuses a deployment
 where they disagree.
 
+`planner.json` holds your streaming subscriptions and TMDB watch-provider
+region (see [Planner settings](docs/planner-settings.md)). The example's
+values (Hulu, Peacock, `US`) are this deployment's, not defaults: change them,
+or streaming scarcity will be scored against someone else's subscriptions.
+Family names must match what the planners' `provider_family()`/`family()`
+return (e.g. `"Max"`, `"Disney+"`, `"Prime Video"`); anything else is the raw
+TMDB provider name.
+
 You'll also need a [TMDB Read Access
 Token](https://www.themoviedb.org/settings/api) exported as `TMDB_TOKEN`.
 
@@ -36,38 +46,6 @@ Token](https://www.themoviedb.org/settings/api) exported as `TMDB_TOKEN`.
 None of the following are read from `runtime.json` or any other config file.
 They're Python literals, and the planner will silently apply *this*
 deployment's values to yours unless you change them.
-
-### Streaming subscriptions and region
-
-[`dry_run_movies.py:35`](dry_run_movies.py:35) (and the equivalent in
-`dry_run_tv.py`):
-
-```python
-# Known subscriptions for this test.
-# Add/remove these later through Migratarr's user profile.
-SUBSCRIBED = {
-    "Hulu",
-    "Peacock",
-}
-```
-
-That comment is the project's own acknowledgment that this was meant to
-become a real setting and never did. Edit the set directly for your
-subscriptions in both files.
-
-Separately, the TMDB watch-provider lookup
-([`dry_run_movies.py:290`](dry_run_movies.py:290)) reads only the `"US"`
-region from the response:
-
-```python
-us = data.get("results", {}).get("US", {})
-```
-
-Outside the US, this silently returns no streaming data for every title
-(read as "streams nowhere," not an error) rather than failing loudly — the
-one place in this codebase that guesses instead of refusing. Change the key
-to your TMDB region code, or scoring for streaming availability will be
-wrong for every item.
 
 ### Logical category names and override tags
 

@@ -17,9 +17,11 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# Reviewed for planner settings: the scripts now also read config/planner.json
+# (planner_settings.load_settings); their only writes remain OUTPUT and CACHE_DIR.
 SCRIPTS = {
-    "movie": ("dry_run_movies.py", "257383f1e380239b414eeea7aa8f3bd910141986db6a0baa661257716d3e6bb7"),
-    "tv": ("dry_run_tv.py", "422ba0e1db5bf34b1cf0778b433da26f570ae7712eb81ac028957d6ba9ab7b50"),
+    "movie": ("dry_run_movies.py", "c4f8b3bd10436f562868409e031ed5b9acdc6ab8dcf75b8300cafe67ebbcac75"),
+    "tv": ("dry_run_tv.py", "cac10b7fc58e8d3e48b775778966e8a9221ee2645ace52d5cbb1b2fbc7d62809"),
 }
 
 
