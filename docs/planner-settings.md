@@ -62,4 +62,20 @@ python3 -m migratarr_validation.streaming_parity \
 `build_move_plan.py`, which consumes the dry-run CSVs rather than producing
 them.
 
-Real-data result on the media host: *pending.*
+Real-data result on the media host (2026-09-23, candidate `e4427e0`, example
+settings copied to `config/planner.json`, production cache): every cached
+response scored identically.
+
+```json
+{
+  "baseline_sha256": "3eab027eaaab3dba3d549867f3e254d9c75bb40f5228314020a524f568c02f41",
+  "byte_identical": true,
+  "candidate_sha256": "3eab027eaaab3dba3d549867f3e254d9c75bb40f5228314020a524f568c02f41",
+  "differences": [],
+  "movie_responses": 167,
+  "tv_responses": 209,
+  "tv_series": 42
+}
+```
+
+The full offline suite (153 tests) also passed on the media host.
