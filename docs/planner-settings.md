@@ -141,4 +141,21 @@ which also derived the expected tag as `'migratarr-' + recommended.lower()`.
    `migratarr_validation.planner_parity` (the pinned `c31afc6` baseline
    carries the literal tags) with a fresh live override snapshot.
 
-Real-data result on the media host: *pending.*
+Real-data result on the media host (2026-09-23, candidate `9868c18`, deployed
+`runtime.json`, `storage-targets.json` and `planner.json` without an
+`overrides` section, current dry-run CSVs). The live snapshot held one
+`migratarr-lock` and one `migratarr-rare` movie; `--capture-facts` and
+`--replay-facts` both reported:
+
+```json
+{
+  "byte_identical": true,
+  "baseline_rows": 16,
+  "candidate_rows": 16,
+  "baseline_csv_sha256": "883898df75d992b32579d1c8b9fe317e635df6ffe5ce5a0196899394d86a71d1",
+  "candidate_csv_sha256": "883898df75d992b32579d1c8b9fe317e635df6ffe5ce5a0196899394d86a71d1",
+  "facts_sha256": "55c3fcc420746cf666eb2f1b9ecafd8db3fa9e20cb66f9e313f866c598716379"
+}
+```
+
+The full offline suite (162 tests) also passed on the media host.
