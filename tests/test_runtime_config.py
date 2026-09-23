@@ -228,6 +228,27 @@ class RuntimeWiringTests(unittest.TestCase):
                         self.assertEqual(kwargs['env']['MIGRATARR_CONFIG'], str(EXAMPLE.resolve()))
                         self.assertEqual(kwargs['env']['MIGRATARR_BASE_PATH'], base.as_posix())
 
+    def test_batch_limit_restricts_execution_to_first_n_pending(self):
+        batch = self.modules['batch_cross_tv']
+        rows = [dict(execution_id=f'20260915T192959Z-000{i}', title=f'Title{i}', size_gb=str(i))
+                for i in (1, 2, 3)]
+        calls = []
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            logs = base / 'execution_logs'
+            logs.mkdir()
+            def runner(command, **kwargs):
+                calls.append(command)
+                if '--execute' in command:
+                    (logs / (command[2] + '.jsonl')).write_text(
+                        json.dumps(dict(event='SUCCESS', manifest_sha256='hash')) + '\n')
+                return Mock(returncode=0)
+            with patch.object(batch, 'pending_series', return_value=(rows, 0, 'hash')):
+                self.assertEqual(batch.run_batch(base, '20260915T192959Z', True, runner, limit=2), 0)
+            self.assertEqual(len(calls), 6)
+            executed = {command[2] for command in calls if command[1].endswith('execute_cross_tv.py')}
+            self.assertEqual(executed, {'20260915T192959Z-0001', '20260915T192959Z-0002'})
+
 
 if __name__ == '__main__':
     unittest.main()
