@@ -2,6 +2,8 @@
 
 `config/planner.json` holds preferences the dry-run planners
 (`dry_run_movies.py`, `dry_run_tv.py`) apply when scoring streaming scarcity.
+It also names the Radarr/Sonarr tags that lock an item or pin its category,
+which the planner (`build_move_plan.py`) and every executor read.
 It is separate from `runtime.json` on purpose: `runtime.json` describes the
 host (paths, containers, NAS), this file describes the owner. It is required,
 ignored by Git, and validated by `planner_settings.py` before either planner
@@ -14,6 +16,16 @@ contacts any service.
     "region": "US",
     "subscribed": ["Hulu", "Peacock"],
     "user_free_access": []
+  },
+  "overrides": {
+    "lock_tag": "migratarr-lock",
+    "category_tags": {
+      "migratarr-common": "Common",
+      "migratarr-current": "Current",
+      "migratarr-library": "Library",
+      "migratarr-rare": "Rare",
+      "migratarr-archive": "Archive"
+    }
   }
 }
 ```
@@ -33,7 +45,34 @@ Set `MIGRATARR_PLANNER_CONFIG` to use a file elsewhere. Validation refuses
 unknown or missing fields, duplicate JSON keys, duplicate names, lowercase or
 three-letter regions and non-string entries.
 
+## Override tags
+
+`overrides` is optional; leaving it out means exactly the `migratarr-*` tags
+shown above.
+
+| Field | Meaning |
+|---|---|
+| `overrides.lock_tag` | An item carrying this tag is never moved: the planner keeps it in place (`LOCK`) and every executor refuses it at preflight. |
+| `overrides.category_tags` | Tag → category. One matching tag forces that category (`CATEGORY`); two or more is a `CONFLICT`. Executors refuse a move whose tags name a category other than the manifest's recommendation. |
+
+Tags must be lowercase with no spaces, commas or semicolons (Arr labels are
+lowercased before comparison, so an uppercase tag could never match).
+Categories must be one of `Common`, `Current`, `Library`, `Rare`, `Archive`:
+those are the planners' fixed category IDs, not folder names. Each category
+may have at most one tag, and the lock tag can't also be a category tag.
+
+**Change tags between runs, not during one.** Executors check the tags
+configured when *they* run against the manifest the planner wrote earlier.
+If you rename a tag in Radarr/Sonarr, rename it here at the same time;
+otherwise items carrying the renamed tag are neither locked nor pinned.
+
+`config/legacy-rules.json` (the read-only validation layer's policy) carries
+its own copy of these tags; keep it in step unless you are deliberately
+previewing a different policy (see `docs/validation-engine.md`).
+
 ## Migration evidence
+
+### Streaming (item #1)
 
 These values were Python literals in both planners (`SUBSCRIBED`,
 `USER_FREE_ACCESS`, and five `"US"` lookups) through `6dc21bd`. The change
@@ -79,3 +118,27 @@ response scored identically.
 ```
 
 The full offline suite (153 tests) also passed on the media host.
+
+### Override tags (item #2)
+
+The lock tag and category tags were literals in `build_move_plan.py`
+(`OVERRIDE_TAGS`, `LOCK_TAG`, and a `"migratarr-lock"` reason string) and in
+the preflight of all seven executors (`execute_movie.py`,
+`execute_movie_nas.py`, `execute_tv_nas.py`, `execute_cross_movie.py`,
+`execute_cross_tv.py`, `recover_cross_0102.py`, `recover_cross_0116.py`),
+which also derived the expected tag as `'migratarr-' + recommended.lower()`.
+
+1. `tests/test_override_tags.py` pinned the executors' inline check verbatim
+   and proved `OverrideTags.locked()`/`agrees()` with default tags equal it
+   for all 3,584 combinations of tag sets and recommended values, before
+   any executor changed.
+2. The planner and executors were changed to read `overrides`. The same test
+   file now also fails if any live script reintroduces a tag literal, and
+   `tests/test_executor_safety.py` proves both cross-disk executors refuse
+   on configured lock/category tags and ignore `migratarr-lock` once it is
+   configured away.
+3. Real-data planner parity uses the existing
+   `migratarr_validation.planner_parity` (the pinned `c31afc6` baseline
+   carries the literal tags) with a fresh live override snapshot.
+
+Real-data result on the media host: *pending.*

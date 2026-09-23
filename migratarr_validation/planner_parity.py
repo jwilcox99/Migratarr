@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+from planner_settings import load_settings
 from runtime_config import load_config
 from storage_targets import load_targets
 from .parity import PLANNER, _assigned_name, _execute, load_legacy, load_overrides, run_legacy
@@ -23,13 +24,13 @@ def csv_bytes(tree, rows):
     return output.getvalue().encode('utf-8')
 
 
-def compare_planners(baseline, movie_csv, tv_csv, overrides, runtime, targets, facts=None):
+def compare_planners(baseline, movie_csv, tv_csv, overrides, runtime, targets, facts=None, settings=None):
     """Memoize read-only observations, or replay them without touching NAS paths."""
     baseline_hash = hashlib.sha256(baseline.read_text(encoding='utf-8').encode()).hexdigest()
     if baseline_hash != '9f01c24ee8b50aa375641b2d1447aa0f7438ae261cef01da1642b2c6f20c8009':
         raise ValueError('Baseline must be the planner at c31afc6')
     old_tree, old = load_legacy(runtime, planner=baseline)
-    new_tree, new = load_legacy(runtime, targets=targets)
+    new_tree, new = load_legacy(runtime, targets=targets, settings=settings)
     replay = facts is not None
     facts = facts if replay else {'exists': {}, 'resolve': {}, 'size': {}, 'free': {}}
     original_exists, original_resolve = Path.exists, Path.resolve
@@ -66,6 +67,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('baseline', 'movie-csv', 'tv-csv', 'overrides-json', 'runtime-config', 'targets'):
         parser.add_argument('--' + name, type=Path, required=True)
+    parser.add_argument('--planner-config', type=Path,
+                        help='candidate override tags (default: config/planner.example.json)')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--capture-facts', type=Path)
     group.add_argument('--replay-facts', type=Path)
@@ -77,9 +80,12 @@ def main():
         result, facts = compare_planners(
             args.baseline, args.movie_csv, args.tv_csv, load_overrides(args.overrides_json),
             load_config(args.runtime_config, environ={}), load_targets(args.targets),
-            json.loads(args.replay_facts.read_text()) if args.replay_facts else None)
-        for name in ('overrides_json', 'runtime_config', 'targets'):
+            json.loads(args.replay_facts.read_text()) if args.replay_facts else None,
+            load_settings(args.planner_config) if args.planner_config else None)
+        for name in ('overrides_json', 'runtime_config', 'targets', 'planner_config'):
             path = getattr(args, name)
+            if path is None:
+                continue
             result['input_sha256'][str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
         if args.capture_facts:
             with args.capture_facts.open('x', encoding='utf-8') as handle:

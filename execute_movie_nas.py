@@ -18,11 +18,13 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 from runtime_config import get_config
+from planner_settings import get_settings
 from executor_manifest import digest, load_approved_plan
 from executor_nfs import verify_after_rename
 from executor_command import run_command
 from executor_inventory import scan_metadata, metadata_from_inventory
 RUNTIME = get_config()
+OVERRIDES = get_settings().overrides
 
 
 class Refused(RuntimeError):
@@ -213,9 +215,8 @@ def execute(base, execution_id, live, radarr, log, transport=None, recovery=None
             'Destination is not an accessible Radarr root')
     labels = {t['id']: t['label'].lower() for t in radarr.api('tag')}
     tags = {labels.get(t, '') for t in movie.get('tags', [])}
-    require('migratarr-lock' not in tags, 'Movie now has migratarr-lock')
-    overrides = tags & {'migratarr-common', 'migratarr-rare', 'migratarr-library', 'migratarr-archive', 'migratarr-current'}
-    require(not overrides or overrides == {'migratarr-' + row['recommended'].lower()}, 'Current override conflicts')
+    require(not OVERRIDES.locked(tags), 'Movie now has ' + OVERRIDES.lock_tag)
+    require(OVERRIDES.agrees(tags, row['recommended']), 'Current override conflicts')
     relative = movie.get('movieFile', {}).get('relativePath', '')
     rp = PurePosixPath(relative)
     require(relative and not rp.is_absolute() and '..' not in rp.parts, 'Invalid Radarr movie file')

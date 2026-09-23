@@ -225,8 +225,12 @@ python -m migratarr_validation.parity \
 For custom override tag names, capture a new snapshot with
 `--snapshot-overrides /path/to/new.json --rules-config /path/to/custom-rules.json`.
 That mode uses the configured tag names in read-only Radarr/Sonarr requests.
-The original planner will still use its fixed tag names, so parity differences
-from custom tags are expected and must be reviewed as policy changes.
+The live planner and executors use the tag names in `config/planner.json`
+(`overrides`, default `migratarr-*`; see `docs/planner-settings.md`). A rules
+file whose tags differ from those is a what-if policy: parity differences
+from it are expected and must be reviewed as policy changes. The committed
+`legacy-rules.json` and `planner.example.json` tags are kept equal by
+`tests/test_override_tags.py`.
 
 The operator reran the saved server inputs with both committed default policy
 files and reported 134 legacy rows, 134 configured-engine rows, zero

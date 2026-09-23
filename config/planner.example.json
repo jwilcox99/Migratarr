@@ -7,5 +7,15 @@
       "Peacock"
     ],
     "user_free_access": []
+  },
+  "overrides": {
+    "lock_tag": "migratarr-lock",
+    "category_tags": {
+      "migratarr-common": "Common",
+      "migratarr-current": "Current",
+      "migratarr-library": "Library",
+      "migratarr-rare": "Rare",
+      "migratarr-archive": "Archive"
+    }
   }
 }

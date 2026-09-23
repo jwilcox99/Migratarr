@@ -12,7 +12,9 @@ import shlex
 import execute_cross_movie as m
 
 from runtime_config import get_config
+from planner_settings import get_settings
 RUNTIME = get_config()
+OVERRIDES = get_settings().overrides
 
 EXECUTION_ID = '20260915T192959Z-0102'
 OPERATION_TIMEOUT = 7200
@@ -62,11 +64,8 @@ def check_radarr(radarr, plan, row, expected, logical_src, logical_dst):
                   for x in radarr.api('rootfolder')), 'Destination root inaccessible')
     labels = {t['id']: t['label'].lower() for t in radarr.api('tag')}
     tags = {labels.get(t, '') for t in movie.get('tags', [])}
-    m.require('migratarr-lock' not in tags, 'Movie is now locked')
-    overrides = tags & {'migratarr-common', 'migratarr-rare', 'migratarr-library',
-                        'migratarr-archive', 'migratarr-current'}
-    m.require(not overrides or overrides == {'migratarr-' + row['recommended'].lower()},
-              'Current override conflicts')
+    m.require(not OVERRIDES.locked(tags), 'Movie is now locked')
+    m.require(OVERRIDES.agrees(tags, row['recommended']), 'Current override conflicts')
     return movie, file_record, root
 
 

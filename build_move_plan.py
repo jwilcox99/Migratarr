@@ -10,7 +10,9 @@ from collections import Counter
 
 from storage_targets import load_targets, check_runtime_consistency
 from runtime_config import get_config
+from planner_settings import get_settings
 RUNTIME = get_config()
+PLANNER_SETTINGS = get_settings()
 
 BASE = RUNTIME.base_path
 
@@ -359,15 +361,10 @@ def evaluate_move(
 RADARR_URL = RUNTIME.urls["radarr"]
 SONARR_URL = RUNTIME.urls["sonarr"]
 
-OVERRIDE_TAGS = {
-    "migratarr-common": "Common",
-    "migratarr-current": "Current",
-    "migratarr-library": "Library",
-    "migratarr-rare": "Rare",
-    "migratarr-archive": "Archive",
-}
+# Arr tag labels from config/planner.json "overrides" (default: migratarr-*).
+OVERRIDE_TAGS = dict(PLANNER_SETTINGS.overrides.category_tags)
 
-LOCK_TAG = "migratarr-lock"
+LOCK_TAG = PLANNER_SETTINGS.overrides.lock_tag
 
 
 def docker_key(container):
@@ -439,7 +436,7 @@ def apply_override(media_type, item_id, current, recommended, overrides):
         return recommended, "", ""
 
     if LOCK_TAG in tags:
-        return current, "LOCK", "migratarr-lock"
+        return current, "LOCK", LOCK_TAG
 
     category_tags = [
         tag for tag in tags

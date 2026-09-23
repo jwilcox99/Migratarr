@@ -1,9 +1,11 @@
 from itertools import chain, combinations
 import json
 from pathlib import Path
+import re
 import unittest
 
 from planner_settings import CATEGORIES, DEFAULT_OVERRIDES, SettingsError, load_settings, parse_settings
+from migratarr_validation.parity import load_legacy
 from migratarr_validation.rules import load_rule_policy
 
 
@@ -57,6 +59,13 @@ class OverrideTagCharacterizationTests(unittest.TestCase):
         self.assertEqual(dict(planner.category_tags), dict(rules.category_override_tags))
         self.assertEqual(dict(planner.category_tags), DEFAULT_OVERRIDES['category_tags'])
 
+    def test_omitted_section_uses_migratarr_defaults(self):
+        data = json.loads((ROOT / 'config/planner.example.json').read_text(encoding='utf-8'))
+        explicit = parse_settings(data).overrides
+        del data['overrides']
+        self.assertEqual(parse_settings(data).overrides, explicit)
+        self.assertEqual(explicit.lock_tag, DEFAULT_OVERRIDES['lock_tag'])
+
     def test_configured_tags_replace_the_defaults(self):
         tags = settings_with({'lock_tag': 'keep', 'category_tags': {'vault': 'Rare', 'shelf': 'Library'}}).overrides
         self.assertTrue(tags.locked({'keep'}))
@@ -65,6 +74,28 @@ class OverrideTagCharacterizationTests(unittest.TestCase):
         self.assertFalse(tags.agrees({'vault'}, 'Library'))
         self.assertFalse(tags.agrees({'vault', 'shelf'}, 'Rare'))
         self.assertTrue(tags.agrees({'migratarr-archive'}, 'Rare'))
+
+    def test_no_live_script_hardcodes_override_tags(self):
+        # planner_settings.py owns the defaults; *_placement_v1.py are frozen,
+        # hash-pinned snapshots; migratarr_validation/ reads legacy-rules.json.
+        literal = re.compile(r"migratarr-(lock|common|current|library|rare|archive)\b|'migratarr-' \+")
+        offenders = [f'{path.name}:{n}' for path in sorted(ROOT.glob('*.py'))
+                     if path.name != 'planner_settings.py' and not path.name.endswith('_placement_v1.py')
+                     for n, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1)
+                     if literal.search(line)]
+        self.assertEqual(offenders, [])
+
+    def test_planner_apply_override_uses_configured_tags(self):
+        settings = settings_with({'lock_tag': 'keep', 'category_tags': {'vault': 'Rare', 'shelf': 'Library'}})
+        _, planner = load_legacy(settings=settings)
+        apply = lambda tags: planner['apply_override']('Movie', 7, 'Common', 'Archive', {'Movie': {7: set(tags)}})
+        self.assertEqual(apply({'keep', 'vault'}), ('Common', 'LOCK', 'keep'))
+        self.assertEqual(apply({'vault'}), ('Rare', 'CATEGORY', 'vault'))
+        self.assertEqual(apply({'vault', 'shelf'}), ('Archive', 'CONFLICT', 'shelf,vault'))
+        self.assertEqual(apply({'migratarr-lock', 'migratarr-rare'}), ('Archive', '', ''))
+        _, default = load_legacy()
+        self.assertEqual(default['apply_override']('Movie', 7, 'Common', 'Archive', {'Movie': {7: {'migratarr-lock'}}}),
+                         ('Common', 'LOCK', 'migratarr-lock'))
 
     def test_rejects_malformed_overrides(self):
         good = {'lock_tag': 'keep', 'category_tags': {'vault': 'Rare'}}

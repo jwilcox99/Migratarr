@@ -40,7 +40,7 @@ def _execute(nodes, namespace):
     exec(code, namespace)
 
 
-def load_legacy(runtime=None, targets=None, planner=None):
+def load_legacy(runtime=None, targets=None, planner=None, settings=None):
     """Load decision code without executing planner module side effects."""
     planner = planner or PLANNER
     tree = ast.parse(planner.read_text(encoding="utf-8"), filename=str(planner))
@@ -48,7 +48,9 @@ def load_legacy(runtime=None, targets=None, planner=None):
     # Offline parity remains pinned to the documented Phase One deployment.
     # Live callers explicitly supply their deployed configuration.
     runtime = runtime or load_config(PLANNER.parent / 'config' / 'runtime.example.json', environ={})
-    namespace = {"RUNTIME": runtime, "Path": Path, "os": os, "csv": csv, "json": json,
+    from planner_settings import load_settings
+    settings = settings or load_settings(PLANNER.parent / 'config' / 'planner.example.json')
+    namespace = {"RUNTIME": runtime, "PLANNER_SETTINGS": settings, "Path": Path, "os": os, "csv": csv, "json": json,
                  "subprocess": subprocess, "urllib": urllib}
     if any(_assigned_name(node) == 'TARGETS' for node in tree.body):
         from storage_targets import load_targets
@@ -214,7 +216,8 @@ def _load_custom_overrides(namespace, rules):
 def snapshot_live_overrides(path, rules=None):
     """Save only current relevant Arr tags using read-only API requests."""
     from runtime_config import get_config
-    _, namespace = load_legacy(get_config())
+    from planner_settings import get_settings
+    _, namespace = load_legacy(get_config(), settings=get_settings())
     overrides = (namespace["load_arr_overrides"]() if rules is None
                  else _load_custom_overrides(namespace, rules))
     serializable = {

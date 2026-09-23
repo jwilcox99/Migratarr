@@ -15,6 +15,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from planner_settings import load_settings, parse_settings
 from runtime_config import load_config
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,7 +33,8 @@ class OfflineTest(unittest.TestCase):
                        'socket.create_connection'):
             self.stack.enter_context(patch(target, side_effect=AssertionError('External I/O forbidden')))
         self.config = load_config(ROOT / 'config/runtime.example.json', environ={})
-        with patch('runtime_config.get_config', return_value=self.config):
+        self.settings = load_settings(ROOT / 'config/planner.example.json')
+        with patch('runtime_config.get_config', return_value=self.config),                 patch('planner_settings.get_settings', return_value=self.settings):
             self.modules = {name: importlib.import_module(name) for name in EXECUTORS}
         self.base = Path(self.stack.enter_context(tempfile.TemporaryDirectory())).resolve()
         for module in self.modules.values():
@@ -300,7 +302,36 @@ class FakeTransport:
         return dict(result='OK', operation=operation)
 
 
-class CrossDiskSequenceTests(OfflineTest):
+class ConfiguredOverrideTagsMixin:
+    """Executors honor planner.json override tags, not the migratarr-* literals."""
+    def use_tags(self, recommended):
+        data = json.loads((ROOT / 'config/planner.example.json').read_text(encoding='utf-8'))
+        data['overrides'] = {'lock_tag': 'keep', 'category_tags': {'vault': 'Rare', 'shelf': recommended}}
+        self.stack.enter_context(patch.object(self.m, 'OVERRIDES', parse_settings(data).overrides))
+        original = self.arr.api
+        labels = [dict(id=1, label='keep'), dict(id=2, label='vault'),
+                  dict(id=3, label='migratarr-lock'), dict(id=4, label='shelf')]
+        self.arr.api = lambda endpoint, body=None: (copy.deepcopy(labels) if endpoint == 'tag'
+                                                    else original(endpoint, body))
+
+    def test_configured_lock_and_category_tags_gate_the_move(self):
+        self.use_tags(self.RECOMMENDED)
+        for tag in (1, 2):
+            with self.subTest(tag=tag):
+                self.arr.record['tags'] = [tag]
+                with self.assertRaises(self.m.Refused):
+                    self.run_move()
+                self.assertNotIn('nas:copy', self.trace)
+                self.assert_retained()
+        # The former literal lock tag is an ordinary label once configured away,
+        # and a configured tag agreeing with the recommendation is accepted.
+        self.arr.record['tags'] = [3, 4]
+        self.assertEqual(self.run_move(), 'SUCCESS')
+
+
+class CrossDiskSequenceTests(ConfiguredOverrideTagsMixin, OfflineTest):
+    RECOMMENDED = 'Common'
+
     def setUp(self):
         super().setUp()
         self.m = self.modules['execute_cross_movie']
@@ -512,7 +543,9 @@ class TvFakeTransport:
         return dict(result='OK', operation=operation)
 
 
-class TvCrossDiskSequenceTests(OfflineTest):
+class TvCrossDiskSequenceTests(ConfiguredOverrideTagsMixin, OfflineTest):
+    RECOMMENDED = 'Current'
+
     def setUp(self):
         super().setUp()
         self.m = self.modules['execute_cross_tv']
