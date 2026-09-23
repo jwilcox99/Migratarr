@@ -107,6 +107,12 @@ validation policy. Scoring, category placement policy and executor semantics are
 unchanged. Safe unit tests run in GitHub Actions and locally with
 `python3 -m unittest discover -s tests -v`.
 
+**This config file does not cover everything deployment-specific.**
+Streaming subscriptions, TMDB region, logical category/tag names, scoring
+weights, NAS mount-layout shape, and Docker secret extraction are still
+Python literals in the source, not settings. See [SETUP.md](SETUP.md) for
+exactly what and where, before running this against a library you care about.
+
 ## Usage
 
 ```bash
