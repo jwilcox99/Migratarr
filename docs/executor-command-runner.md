@@ -1,9 +1,9 @@
 # Shared monitored command runner
 
 `executor_command.py` contains the subprocess monitoring loop shared by the NAS
-Movie, TV and cross-disk Movie executors. Executor-local `run_progress`
-signatures and their existing default timeouts remain unchanged: 1,800 seconds
-for same-disk executors and 7,200 seconds for cross-disk transfers.
+Movie, TV, cross-disk Movie and cross-disk TV executors. Executor-local
+`run_progress` signatures and their existing default timeouts remain unchanged:
+1,800 seconds for same-disk executors and 7,200 seconds for cross-disk transfers.
 
 Each wrapper passes its existing `require` and `progress` callbacks. That keeps
 executor-specific `Refused` types, failure messages and progress output intact.
@@ -19,11 +19,11 @@ The runner retains these safety behaviors:
 - a nonzero exit refuses as failed or uncertain and includes stripped stderr;
 - successful stdout is returned unchanged.
 
-Offline tests use an inert process double and cover all three wrappers, stdin
+Offline tests use an inert process double and cover all four wrappers, stdin
 mode, timed polling, overall timeout, kill/reap, unexpected communication errors,
 nonzero exits and executor-specific refusal types.
 
-Deploy `executor_command.py` with all three updated executors. A partial install
+Deploy `executor_command.py` with all four updated executors. A partial install
 fails closed during import. Run:
 
 ```sh

@@ -17,7 +17,7 @@ python3 -m unittest discover -s tests -p test_executor_safety.py -v
 
 ## Contracts covered
 
-- All four executors' `load_plan` functions accept a valid fixture and refuse
+- All five executors' `load_plan` functions accept a valid fixture and refuse
   modified manifest/metadata bytes, duplicate rows/checksum entries, missing or
   revoked approval, approval for another run, empty history, and blocked/executed
   rows. Recomputing checksums does not bypass approval's manifest hash binding.
@@ -26,15 +26,17 @@ python3 -m unittest discover -s tests -p test_executor_safety.py -v
   treated as a fresh journal. Clean check-only history remains usable.
 - Each executor's `paths` rejects traversal, disk mismatch and changed folder
   names. The same-disk Movie recovery override rejects an unrelated failure.
-- Cross-disk Movie `execute` keeps its real approval loader, inventory hashing,
-  source metadata checks, destination verification and Arr record verification.
-  Check-only does not copy, update Arr or delete. A successful simulated transfer
-  journals intent before copy/update/delete and verifies the destination before
-  updating Arr and deleting the source.
+- Cross-disk Movie and TV `execute` each keep their real approval loader,
+  inventory hashing, source metadata checks, destination verification and
+  Radarr/Sonarr record verification (the TV path additionally verifies every
+  episode file, not just one). Check-only does not copy, update Arr or delete.
+  A successful simulated transfer journals intent before copy/update/delete
+  and verifies the destination before updating Arr and deleting the source.
 - Destination collision, lock/conflicting override, uncertain copy response,
   corrupt destination, source changes, revoked approval after copy or Arr update,
-  and incorrect Arr path after update stop progress. Failure cases explicitly
-  assert source retention and absence of downstream mutations.
+  and incorrect Arr path after update stop progress in both cross-disk executors.
+  Failure cases explicitly assert source retention and absence of downstream
+  mutations.
 - Same-disk Movie and TV check-only flows do not rename or update Arr. Successful
   simulations assert `RENAME_INTENT` before rename, destination verification
   before the Arr update intent, and `SUCCESS` only after post-update checks.

@@ -76,9 +76,12 @@ where someone's media library lives.
 See the README's [Known limitations](README.md#known-limitations) section
 and `docs/phase-one-closeout.md`'s Phase Two handoff. In particular:
 
-- De-duplicating `execute_movie_nas.py`, `execute_tv_nas.py`, and
-  `execute_cross_movie.py` into a shared module — right now a safety fix
-  has to be manually ported across near-identical files.
+- De-duplicating `execute_movie_nas.py`, `execute_tv_nas.py`,
+  `execute_cross_movie.py`, and `execute_cross_tv.py` into a shared module —
+  right now a safety fix has to be manually ported across near-identical
+  files (`executor_command.py`, `executor_inventory.py`, and
+  `executor_manifest.py` already extract some shared pieces; the four
+  execution flows themselves are still separate).
 - Promoting `migratarr_validation/` from a parity-checked, read-only
   layer into the actual pre-execution gate.
 - Expanding runtime layout support beyond the conservative path-shape contracts

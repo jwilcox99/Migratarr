@@ -46,7 +46,7 @@ class CommandRunnerTests(OfflineTest):
         return result, popen
 
     def test_all_wrappers_return_stdout_and_preserve_input_mode(self):
-        for name in ('execute_movie_nas', 'execute_tv_nas', 'execute_cross_movie'):
+        for name in ('execute_movie_nas', 'execute_tv_nas', 'execute_cross_movie', 'execute_cross_tv'):
             process = FakeProcess([('verified\n', '')])
             with self.subTest(executor=name):
                 output, popen = self.run_with(self.modules[name], process, input_data='payload')
@@ -78,7 +78,7 @@ class CommandRunnerTests(OfflineTest):
         self.assertEqual(process.calls, [('payload', 1), (None, None)])
 
     def test_nonzero_exit_uses_executor_refusal_type_and_stderr(self):
-        for name in ('execute_movie_nas', 'execute_tv_nas', 'execute_cross_movie'):
+        for name in ('execute_movie_nas', 'execute_tv_nas', 'execute_cross_movie', 'execute_cross_tv'):
             process = FakeProcess([('', 'uncertain state')], returncode=7)
             with self.subTest(executor=name), \
                     patch('executor_command.subprocess.Popen', return_value=process), \
