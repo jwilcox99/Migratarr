@@ -2,7 +2,8 @@
 
 `executor_manifest.py` is the first deliberately small executor refactor. It
 owns the immutable manifest, checksum and execution-approval verification that
-was previously copied verbatim across four executor scripts.
+was previously copied verbatim across executor scripts — four at the time of
+this refactor, now five with the later addition of `execute_cross_tv.py`.
 
 Each executor keeps a local `load_plan(base, execution_id)` wrapper and passes
 three explicit values to the shared function:

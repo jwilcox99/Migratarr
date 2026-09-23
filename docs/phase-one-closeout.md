@@ -53,7 +53,7 @@ The prior `same-disk-tv` branch contains no unique commits relative to the pre-c
 
 The following are intentionally left for later phases rather than treated as incomplete Phase One work:
 
-- Cross-disk **TV** execution has not yet been promoted to the same validated live-execution status as Movies.
+- ~~Cross-disk **TV** execution has not yet been promoted to the same validated live-execution status as Movies.~~ Closed: `execute_cross_tv.py` and `batch_cross_tv.py` now exist and have been live-validated on the production host, both as a single-series run and as a multi-series, multi-disk-pair batch — see `docs/storage-targets.md`.
 - The standalone validation engine is not yet the live planner/executor gate.
 - Executors still contain implementation-specific infrastructure assumptions that should be abstracted before broader deployment.
 - There is not yet a unified executor architecture for Movie/TV and same-disk/cross-disk operations.
