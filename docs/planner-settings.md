@@ -333,4 +333,15 @@ python3 -m migratarr_validation.dry_run_parity compare --recording ~/migratarr-r
   --baseline tests/fixtures/dry_run_movies_before_scoring_settings.py
 ```
 
-Real-data result on the media host: *pending.*
+Real-data result on the media host (2026-09-23, candidate `53f531d`, deployed
+config with no `scoring` section). Both recordings were made with the
+candidate; replaying them through the `f49052d` baseline and the candidate
+reproduced the recording run's own CSV exactly, with no replay misses:
+
+| | Recording | Rows | Baseline CSV | Candidate CSV |
+|---|---|---|---|---|
+| Movies | 184 requests, 346 cache reads | 173 | `6096d165...37a2` | `6096d165...37a2` |
+| TV | 249 requests, 428 cache reads | 44 | `aedb21b4...34e0` | `aedb21b4...34e0` |
+
+Both `compare` runs reported `"byte_identical": true`, and the full offline
+suite passed on the media host.
