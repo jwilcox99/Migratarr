@@ -390,4 +390,8 @@ Real data: `streaming_parity` replays every cached TMDB provider response
 through the `6dc21bd` planners and the candidate, and `dry_run_parity`
 replays the item #3 recordings.
 
-Real-data result on the media host: *pending.*
+Real-data result on the media host (2026-09-24, candidate `f7f4c54`):
+`streaming_parity` replayed 173 movie and 213 TV provider responses (44
+series) byte-identically against the `6dc21bd` planners, and both recordings
+replayed byte-identically (movies 173 rows, TV 44) with no misses; the offline
+suite passed.
