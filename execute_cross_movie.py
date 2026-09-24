@@ -39,6 +39,7 @@ from runtime_config import get_config
 from planner_settings import get_settings
 from media_layout import MediaLayout, canonical, get_targets, split_media_path
 from service_keys import SecretError, service_endpoint
+from arr_files import host_path, host_sha256, host_visible
 from executor_manifest import digest, load_approved_plan
 from executor_command import run_command
 from executor_inventory import scan_metadata, metadata_from_inventory
@@ -155,13 +156,24 @@ class Radarr:
             return json.loads(data) if data else None
 
     def visible(self, path, kind='-f'):
-        r = subprocess.run(['docker', 'exec', RUNTIME.containers['radarr'], 'test', kind, path], timeout=30,
+        # runtime.json arr_file_checks (default docker; see arr_files.py).
+        check = RUNTIME.arr_file_checks['radarr']
+        if check['mode'] == 'host':
+            require(host_visible(host_path(check, TARGETS.arr_root, path), kind),
+                    'Radarr path not visible on this host: ' + path)
+            return
+        r = subprocess.run(['docker', 'exec', check['container'], 'test', kind, path], timeout=30,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         require(r.returncode == 0, 'Radarr container cannot see required path: ' + path)
 
     def verify_file(self, path, expected_hash):
         self.visible(path)
-        result = run_progress(['docker', 'exec', RUNTIME.containers['radarr'], 'sha256sum', '--', path],
+        check = RUNTIME.arr_file_checks['radarr']
+        if check['mode'] == 'host':
+            digest = host_sha256(host_path(check, TARGETS.arr_root, path))
+            require(digest == expected_hash, 'Radarr-visible file content mismatch')
+            return
+        result = run_progress(['docker', 'exec', check['container'], 'sha256sum', '--', path],
                               'Radarr file-content verification')
         require(result.split()[0] == expected_hash, 'Radarr-visible file content mismatch')
 

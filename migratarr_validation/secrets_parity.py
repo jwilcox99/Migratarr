@@ -82,7 +82,7 @@ def compare(runtime):
     report = {}
     new = {service: attempt(read_credential, service, runtime) for service in ('radarr', 'sonarr', 'jellyfin', 'tmdb')}
     for service in ('radarr', 'sonarr'):
-        container = runtime.containers[service]
+        container = runtime.containers.get(service)
         planner, executor, current = attempt(old_planner_arr_key, container), attempt(old_executor_arr, container), new[service]
         report[service] = {
             'old_planner_ok': planner[0], 'old_executor_ok': executor[0], 'new_ok': current[0],
@@ -113,7 +113,7 @@ def compare(runtime):
         entry['endpoint_ok'] = endpoint[0]
         entry['endpoint_identical_to_urls'] = endpoint[0] and endpoint[1][0] == url
         if service != 'jellyfin':
-            executor = attempt(old_executor_arr, runtime.containers[service])
+            executor = attempt(old_executor_arr, runtime.containers.get(service))
             entry['endpoint_identical_to_url_base_executors'] = (
                 endpoint[0] and executor[0] and endpoint[1][0] == url + executor[1][1])
     report['identical'] = all(v for service in report.values() for k, v in service.items() if 'identical' in k)
