@@ -110,7 +110,13 @@ holds those lookups verbatim (cited at `260746d`).
   compares the real old and new lookups for every service and prints only
   booleans.
 
-Real-data result on the media host: *pending.*
+Real-data result on the media host (2026-09-24, candidate `82f4210`, no `secrets`
+section, so every service on its default source): `secrets_parity` reported
+the real old and new lookups identical for Radarr and Sonarr (planner key,
+executor key and `UrlBase`), Jellyfin (both planners' lookups) and TMDB, with
+every lookup succeeding (`"identical": true`). Replaying the item #3
+recordings stayed byte-identical for movies and TV with no misses, and the
+offline suite passed.
 
 ## Environment and command-line precedence
 
