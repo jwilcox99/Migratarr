@@ -46,6 +46,12 @@ real saved data before claiming the new version is equivalent. "I ported
 the logic and it looks right" is not sufficient for code that decides
 where someone's media library lives.
 
+The tools for that comparison: `migratarr_validation.planner_parity` for
+`build_move_plan.py`, and `migratarr_validation.dry_run_parity` for the
+dry-run planners (record one real dry run's API traffic, then replay it
+through the old and new planner offline with the clock frozen). See
+`docs/planner-settings.md` for worked examples of both.
+
 ## Code conventions already in use
 
 - **Fail loud, never guess.** The codebase's dominant pattern is a

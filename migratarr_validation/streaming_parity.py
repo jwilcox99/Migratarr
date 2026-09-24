@@ -21,7 +21,7 @@ FUNCTIONS = {
     'movies': {'provider_family', 'streaming_score'},
     'tv': {'family', 'provider_score', 'series_streaming'},
 }
-CONSTANTS = {'SUBSCRIBED', 'USER_FREE_ACCESS', 'STREAMING_REGION'}
+CONSTANTS = {'SUBSCRIBED', 'USER_FREE_ACCESS', 'STREAMING_REGION', 'SCORING'}
 FETCHERS = ('tmdb_movie_providers', 'tmdb_series_providers', 'tmdb_season_providers')
 
 
