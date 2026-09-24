@@ -60,7 +60,7 @@ approvals. There is no single command that runs the whole pipeline.
 |---|--------|---------------|
 | 1 | `dry_run_movies.py` / `dry_run_tv.py` | Score every movie/series and write `movie_dry_run.csv` / `tv_dry_run.csv`. Read-only against Radarr/Sonarr/Jellyfin/TMDB. |
 | 2 | `build_move_plan.py` | Turn score-based recommendations into concrete source→destination paths, resolve which physical disk to use, check free space, and write `move_plan.csv`. Still read-only. |
-| 3 | `audit_overrides.py` | Optional. Lists any manual `migratarr-*` tags currently set in Radarr/Sonarr, so you can see what's being manually pinned before you plan around it. |
+| 3 | `audit_overrides.py` | Optional. Lists the override tags configured in `config/planner.json` (default `migratarr-*`) that are currently set in Radarr/Sonarr, so you can see what's being manually pinned before you plan around it. Other `migratarr-*` tags are flagged as unrecognized. |
 | 4 | `snapshot_run.py` | Copies `movie_dry_run.csv`, `tv_dry_run.csv`, `move_plan.csv`, and selected current code files into a read-only, checksummed run under `runs/<timestamp>/`. Keep the code unchanged between planning and snapshotting. |
 | 5 | `build_execution_manifest.py` | Turns the frozen snapshot's eligible rows into a manifest with one stable `execution_id` per proposed move, hashed and stored under `manifests/<run>/`. |
 | 6 | `approve_execution.py` | Human review. Lists manifest rows and lets you `--approve <execution_id>` one at a time. Writes an approval record; **moves no files**. |

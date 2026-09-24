@@ -3,6 +3,7 @@
 import json
 import urllib.request
 
+from planner_settings import TAG_NAMESPACE, get_settings
 from runtime_config import get_config
 from service_keys import read_key
 RUNTIME = get_config()
@@ -10,7 +11,9 @@ RUNTIME = get_config()
 RADARR_URL = RUNTIME.urls["radarr"]
 SONARR_URL = RUNTIME.urls["sonarr"]
 
-PREFIX = "migratarr-"
+# Arr tag labels from config/planner.json "overrides" (default: migratarr-*),
+# compared lowercased as build_move_plan.py and the executors do.
+OVERRIDES = get_settings().overrides
 
 
 def get_json(url, key):
@@ -23,6 +26,24 @@ def get_json(url, key):
         return json.load(r)
 
 
+def meaning(label):
+    """What the planner and executors do with `label`, or None if they ignore it."""
+    label = label.lower()
+
+    if label == OVERRIDES.lock_tag:
+        return "lock"
+
+    if label in OVERRIDES.category_tags:
+        return "category " + OVERRIDES.category_tags[label]
+
+    return None
+
+
+def unrecognized(label):
+    """A Migratarr-looking tag that the current configuration ignores."""
+    return meaning(label) is None and label.lower().startswith(TAG_NAMESPACE)
+
+
 def audit(name, url, key, endpoint):
     tags = get_json(f"{url}/api/v3/tag", key)
 
@@ -31,10 +52,16 @@ def audit(name, url, key, endpoint):
         for t in tags
     }
 
-    relevant = {
+    known = {
         tid: label
         for tid, label in tag_map.items()
-        if label.lower().startswith(PREFIX)
+        if meaning(label)
+    }
+
+    stray = {
+        tid: label
+        for tid, label in tag_map.items()
+        if unrecognized(label)
     }
 
     print()
@@ -42,14 +69,28 @@ def audit(name, url, key, endpoint):
     print(name)
     print("=" * 72)
 
-    if not relevant:
+    if not known and not stray:
         print("No Migratarr override tags currently exist.")
         return
 
-    print("Known override tags:")
+    print("Configured override tags:")
 
-    for tid, label in relevant.items():
-        print(f"  {tid}: {label}")
+    if not known:
+        print("  None")
+
+    for tid, label in known.items():
+        print(f"  {tid}: {label} ({meaning(label)})")
+
+    if stray:
+        print(
+            f"\nUnrecognized {TAG_NAMESPACE}* tags "
+            "(not in config/planner.json overrides; planner and executors ignore them):"
+        )
+
+        for tid, label in stray.items():
+            print(f"  {tid}: {label}")
+
+    relevant = {**known, **stray}
 
     items = get_json(
         f"{url}/api/v3/{endpoint}",
@@ -62,7 +103,7 @@ def audit(name, url, key, endpoint):
 
     for item in items:
         labels = [
-            relevant[tag]
+            relevant[tag] if tag in known else relevant[tag] + " (unrecognized)"
             for tag in item.get("tags", [])
             if tag in relevant
         ]
@@ -78,20 +119,25 @@ def audit(name, url, key, endpoint):
         print("None")
 
 
-# Credential sources: runtime.json "secrets" (see service_keys.py).
-radarr_key = read_key("radarr")
-sonarr_key = read_key("sonarr")
+def main():
+    # Credential sources: runtime.json "secrets" (see service_keys.py).
+    radarr_key = read_key("radarr", RUNTIME)
+    sonarr_key = read_key("sonarr", RUNTIME)
 
-audit(
-    "RADARR",
-    RADARR_URL,
-    radarr_key,
-    "movie"
-)
+    audit(
+        "RADARR",
+        RADARR_URL,
+        radarr_key,
+        "movie"
+    )
 
-audit(
-    "SONARR",
-    SONARR_URL,
-    sonarr_key,
-    "series"
-)
+    audit(
+        "SONARR",
+        SONARR_URL,
+        sonarr_key,
+        "series"
+    )
+
+
+if __name__ == "__main__":
+    main()

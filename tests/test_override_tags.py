@@ -78,7 +78,12 @@ class OverrideTagCharacterizationTests(unittest.TestCase):
     def test_no_live_script_hardcodes_override_tags(self):
         # planner_settings.py owns the defaults; *_placement_v1.py are frozen,
         # hash-pinned snapshots; migratarr_validation/ reads legacy-rules.json.
-        literal = re.compile(r"migratarr-(lock|common|current|library|rare|archive)\b|'migratarr-' \+")
+        # Also a bare prefix literal in either quote style ('migratarr-' + x,
+        # PREFIX = "migratarr-"), but not longer names like 'migratarr-ssh-'.
+        literal = re.compile(r"migratarr-(lock|common|current|library|rare|archive)\b|([\"'])migratarr-\2")
+        for line in ('PREFIX = "migratarr-"', "tag = 'migratarr-' + name", 'x = "migratarr-rare"'):
+            self.assertTrue(literal.search(line), line)
+        self.assertFalse(literal.search("tempfile.TemporaryDirectory(prefix='migratarr-ssh-')"))
         offenders = [f'{path.name}:{n}' for path in sorted(ROOT.glob('*.py'))
                      if path.name != 'planner_settings.py' and not path.name.endswith('_placement_v1.py')
                      for n, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1)
