@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""List pending cross-disk movies; --execute approves and runs them sequentially."""
+"""List pending cross-disk movies; --execute runs the already-approved ones sequentially."""
 import argparse
 import csv
 import io
@@ -12,6 +12,7 @@ import sys
 
 import execute_cross_movie as m
 
+from executor_manifest import approval_is_current
 from runtime_config import get_config, load_config
 RUNTIME = get_config()
 
@@ -57,24 +58,50 @@ def pending_movies(base, run):
     return sorted(pending, key=lambda r: float(r['size_gb'])), completed, manifest_hash
 
 
+def split_approved(base, run, pending, manifest_hash):
+    """Separate pending rows with a current approval from ones still awaiting approval.
+
+    The batch never approves anything itself: approval is a separate, recorded
+    step (approve_execution.py --approve-batch or --approve).
+    """
+    approved, awaiting = [], []
+    for row in pending:
+        current = approval_is_current(base, run, row['execution_id'], manifest_hash, m.require)
+        (approved if current else awaiting).append(row)
+    return approved, awaiting
+
+
 def run_batch(base, run, execute, runner=subprocess.run):
     pending, completed, manifest_hash = pending_movies(base, run)
-    print(f'Completed: {completed}; remaining: {len(pending)} cross-disk movies.', flush=True)
-    for row in pending:
-        print(f'{row["execution_id"]} | {row["title"]} | {row["size_gb"]} GB', flush=True)
+    approved, awaiting = split_approved(base, run, pending, manifest_hash)
+    print(f'Completed: {completed}; approved and pending: {len(approved)}; '
+          f'awaiting approval: {len(awaiting)} cross-disk movies.', flush=True)
+    for row in approved:
+        print(f'{row["execution_id"]} | {row["title"]} | {row["size_gb"]} GB | APPROVED', flush=True)
+    for row in awaiting:
+        print(f'{row["execution_id"]} | {row["title"]} | {row["size_gb"]} GB | AWAITING APPROVAL',
+              flush=True)
+    if awaiting:
+        print(f'Approve first (preview, then add --yes): approve_execution.py --run {run} '
+              f'--approve-batch --media Movie --transfer CROSS_DISK_TRANSFER [--limit N]', flush=True)
     if not execute:
         print('STATUS ONLY: no approvals, copies, updates, or deletions performed.')
         return 0
-    for index, row in enumerate(pending, 1):
+    if not approved:
+        print('NOTHING TO EXECUTE: no pending movies are approved for this manifest.')
+        return 0
+    for index, row in enumerate(approved, 1):
         execution_id = row['execution_id']
-        # Catch newly completed/uncertain work or manifest edits before each item.
+        # Catch newly completed/uncertain work, manifest edits or revoked approval before each item.
         fresh, _, current_hash = pending_movies(base, run)
         m.require(current_hash == manifest_hash, 'Manifest changed during batch')
         if execution_id not in {r['execution_id'] for r in fresh}:
             continue
-        print(f'\n=== {index}/{len(pending)} | {row["title"]} ===', flush=True)
+        if not approval_is_current(base, run, execution_id, manifest_hash, m.require):
+            print(f'SKIPPED: approval no longer current for {execution_id}', flush=True)
+            continue
+        print(f'\n=== {index}/{len(approved)} | {row["title"]} ===', flush=True)
         commands = [
-            [sys.executable, str(base / 'approve_execution.py'), '--run', run, '--approve', execution_id],
             [sys.executable, str(base / 'execute_cross_movie.py'), execution_id, '--base', str(base)],
             [sys.executable, str(base / 'execute_cross_movie.py'), execution_id, '--base', str(base), '--execute'],
         ]
@@ -89,16 +116,16 @@ def run_batch(base, run, execute, runner=subprocess.run):
                   (base / 'execution_logs' / (execution_id + '.jsonl')).read_text().splitlines()]
         m.require(events[-1]['event'] == 'SUCCESS' and events[-1].get('manifest_sha256') == manifest_hash,
                   'No matching final SUCCESS for ' + execution_id)
-    print('BATCH COMPLETE: selected cross-disk movies succeeded or were already complete.')
+    print('BATCH COMPLETE: selected approved cross-disk movies succeeded or were already complete.')
     return 0
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run', required=True)
-    parser.add_argument('--execute', action='store_true', help='Approve and move all pending eligible movies')
+    parser.add_argument('--execute', action='store_true', help='Move pending movies that are already approved; never approves')
     args = parser.parse_args()
-    # Approval and both executor subprocesses inherit the same config environment.
+    # Both executor subprocesses inherit the same config environment.
     return run_batch(RUNTIME.base_path, args.run, args.execute)
 
 

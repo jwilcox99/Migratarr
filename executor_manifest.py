@@ -73,3 +73,26 @@ def load_approved_plan(base, execution_id, media_type, transfer_type, require):
     require(row.get('status') == 'READY_FOR_REVIEW' and not row.get('blockers'), 'Row is blocked')
     require(row.get('executed') == 'NO', 'Manifest row already executed or invalid')
     return row, digest(raw)
+
+
+def approval_is_current(base, run, execution_id, manifest_hash, require):
+    """True when ``execution_id`` holds a current approval for this exact manifest hash.
+
+    Mirrors the approval half of ``load_approved_plan`` (approved list plus a
+    latest APPROVE history entry bound to ``manifest_hash``) so batch runners
+    can tell approved rows from ones awaiting approval without refusing. A
+    missing approval file means nothing is approved; a malformed one refuses.
+    """
+    path = base / 'approvals' / (run + '.json')
+    if not path.exists():
+        return False
+    approvals = json.loads(path.read_bytes())
+    require(isinstance(approvals.get('approved_execution_ids'), list)
+            and isinstance(approvals.get('history'), list), 'Invalid approval record')
+    require(approvals.get('run_id') == run, 'Approval run mismatch')
+    if execution_id not in approvals['approved_execution_ids']:
+        return False
+    history = [event for event in approvals['history']
+               if event.get('execution_id') == execution_id]
+    return bool(history) and history[-1].get('action') == 'APPROVE' \
+        and history[-1].get('manifest_sha256') == manifest_hash

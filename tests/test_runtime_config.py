@@ -232,6 +232,7 @@ class RuntimeWiringTests(unittest.TestCase):
                     base = Path(temp)
                     logs = base / 'execution_logs'
                     logs.mkdir()
+                    write_approvals(base, [row['execution_id']])
                     def runner(command, **kwargs):
                         calls.append((command, kwargs))
                         if '--execute' in command:
@@ -240,12 +241,14 @@ class RuntimeWiringTests(unittest.TestCase):
                         return Mock(returncode=0)
                     with patch.object(batch, pending_name, return_value=([row], 0, 'hash')):
                         self.assertEqual(batch.run_batch(base, '20260915T192959Z', True, runner), 0)
-                    self.assertEqual(len(calls), 3)
-                    self.assertTrue(calls[0][0][1].endswith('approve_execution.py'))
+                    # The batch never approves: check-only, then --execute, nothing else.
+                    self.assertEqual(len(calls), 2)
+                    self.assertTrue(calls[0][0][1].endswith(executor_name))
+                    self.assertNotIn('--execute', calls[0][0])
                     self.assertTrue(calls[1][0][1].endswith(executor_name))
-                    self.assertNotIn('--execute', calls[1][0])
-                    self.assertTrue(calls[2][0][1].endswith(executor_name))
-                    self.assertIn('--execute', calls[2][0])
+                    self.assertIn('--execute', calls[1][0])
+                    self.assertFalse(any('approve_execution.py' in part
+                                         for command, _ in calls for part in command))
                     for _, kwargs in calls:
                         self.assertEqual(kwargs['env']['MIGRATARR_CONFIG'], str(EXAMPLE.resolve()))
                         self.assertEqual(kwargs['env']['MIGRATARR_BASE_PATH'], base.as_posix())
@@ -259,6 +262,7 @@ class RuntimeWiringTests(unittest.TestCase):
             base = Path(temp)
             logs = base / 'execution_logs'
             logs.mkdir()
+            write_approvals(base, [row['execution_id'] for row in rows])
             def runner(command, **kwargs):
                 calls.append(command)
                 if '--execute' in command:
@@ -267,9 +271,18 @@ class RuntimeWiringTests(unittest.TestCase):
                 return Mock(returncode=0)
             with patch.object(batch, 'pending_series', return_value=(rows, 0, 'hash')):
                 self.assertEqual(batch.run_batch(base, '20260915T192959Z', True, runner, limit=2), 0)
-            self.assertEqual(len(calls), 6)
+            self.assertEqual(len(calls), 4)
             executed = {command[2] for command in calls if command[1].endswith('execute_cross_tv.py')}
             self.assertEqual(executed, {'20260915T192959Z-0001', '20260915T192959Z-0002'})
+
+
+def write_approvals(base, execution_ids, manifest_hash='hash', run='20260915T192959Z'):
+    folder = base / 'approvals'
+    folder.mkdir(exist_ok=True)
+    (folder / (run + '.json')).write_text(json.dumps(dict(
+        run_id=run, approved_execution_ids=sorted(execution_ids),
+        history=[dict(action='APPROVE', execution_id=i, manifest_sha256=manifest_hash)
+                 for i in execution_ids])))
 
 
 if __name__ == '__main__':

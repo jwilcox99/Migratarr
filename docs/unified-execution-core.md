@@ -126,9 +126,7 @@ Live progress for a running execution comes from `progress` events (D3). The UI 
 ## 6. Decisions needed from Josh
 
 1. **Package location:** `migratarr/engine/` (recommended, because Step 4 builds on it) vs. keeping flat top-level modules.
-2. **Batch approval semantics.** `batch_cross_*.py --execute` runs `approve_execution.py --approve <id>` itself, for each pending row, just before executing it. So one batch command both approves and executes, and the human's decision is made per batch, not per item. That's reasonable operationally, but the public messaging ("Why every move needs approval") and the Step 6 UI approval flow should say the same thing. Options:
-   - (a) Keep it, and document batch approval as a batch-level decision.
-   - (b) Recommended: the engine and batch never approve. Batch approval becomes an explicit step first ("approve these N execution IDs", recorded in the approvals history like any other approval), and the batch executes only rows that are already approved.
+2. ~~**Batch approval semantics.**~~ **Decided 2026-09-24: option (b).** Batch runners never approve. Approval is a separate, recorded step: `approve_execution.py --approve-batch --media … --transfer … [--limit N]` shows a preview, and `--yes` writes one hash-bound `APPROVE` entry per row with a shared `batch` record. `batch_cross_*.py --execute` runs only rows whose approval is current, and re-checks it before each row. Implemented on `chore/release-housekeeping`, with tests in `tests/test_batch_approval.py`. The engine inherits this: `run()` requires an existing approval and never writes one.
 3. Whether the D8 items should be unified during Step 6, and in which direction (for example, should same-disk Movie gain the settings comparison both TV executors have).
 
 ## 7. Out of scope

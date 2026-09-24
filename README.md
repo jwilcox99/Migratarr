@@ -63,9 +63,9 @@ approvals. There is no single command that runs the whole pipeline.
 | 3 | `audit_overrides.py` | Optional. Lists the override tags configured in `config/planner.json` (default `migratarr-*`) that are currently set in Radarr/Sonarr, so you can see what's being manually pinned before you plan around it. Other `migratarr-*` tags are flagged as unrecognized. |
 | 4 | `snapshot_run.py` | Copies `movie_dry_run.csv`, `tv_dry_run.csv`, `move_plan.csv`, and selected current code files into a read-only, checksummed run under `runs/<timestamp>/`. Keep the code unchanged between planning and snapshotting. |
 | 5 | `build_execution_manifest.py` | Turns the frozen snapshot's eligible rows into a manifest with one stable `execution_id` per proposed move, hashed and stored under `manifests/<run>/`. |
-| 6 | `approve_execution.py` | Human review. Lists manifest rows and lets you `--approve <execution_id>` one at a time. Writes an approval record; **moves no files**. |
+| 6 | `approve_execution.py` | Human review. Lists manifest rows and lets you `--approve <execution_id>` one at a time, or `--approve-batch --media TV --transfer CROSS_DISK_TRANSFER [--limit N]` to approve every eligible pending row of one kind at once (smallest first; shows a preview and approves nothing until you add `--yes`). Either way it writes one hash-bound APPROVE entry per row; **moves no files**. |
 | 7 | `execute_movie_nas.py` / `execute_tv_nas.py` (same-disk) / `execute_cross_movie.py` / `execute_cross_tv.py` (cross-disk) | Takes one approved `execution_id`, re-verifies everything (manifest hash, approval hash, live Radarr/Sonarr state, full file-content hash), performs the move, and updates Radarr/Sonarr. Defaults to check-only — pass `--execute` to actually move files. |
-| 8 | `batch_cross_movies.py` / `batch_cross_tv.py` (optional) | Lists every pending cross-disk Movie/TV row from a run's manifest and, with `--execute`, approves and runs each through its executor in sequence (smallest first). `--limit N` caps how many it processes in one invocation instead of the full pending set. Without `--execute` it only lists — no approvals, copies, updates, or deletions. |
+| 8 | `batch_cross_movies.py` / `batch_cross_tv.py` (optional) | Lists every pending cross-disk Movie/TV row from a run's manifest as APPROVED or AWAITING APPROVAL and, with `--execute`, runs each **already-approved** row through its executor in sequence (smallest first), re-checking the approval before each one. It never approves anything itself — approve first with step 6. `--limit N` (TV) caps how many approved rows it processes in one invocation. Without `--execute` it only lists — no copies, updates, or deletions. |
 
 `movie_placement_v1.py` / `tv_placement_v1.py` are frozen, checksum-pinned
 copies of the scoring logic from the point it was first validated
@@ -141,6 +141,17 @@ python3 approve_execution.py --approve "$EXECUTION_ID"
 python3 execute_movie_nas.py "$EXECUTION_ID"
 # Then actually move it:
 python3 execute_movie_nas.py "$EXECUTION_ID" --execute
+```
+
+To move a whole set of cross-disk rows, approve them as one batch, then run
+the batch:
+
+```bash
+RUN='REPLACE_WITH_RUN_ID'
+python3 approve_execution.py --run "$RUN" --approve-batch --media TV --transfer CROSS_DISK_TRANSFER          # preview
+python3 approve_execution.py --run "$RUN" --approve-batch --media TV --transfer CROSS_DISK_TRANSFER --yes    # record approvals
+python3 batch_cross_tv.py --run "$RUN"             # status: approved vs awaiting approval
+python3 batch_cross_tv.py --run "$RUN" --execute   # moves approved rows only
 ```
 
 Set `EXECUTION_ID` to the Movie row you selected before running
