@@ -50,7 +50,8 @@ def load_legacy(runtime=None, targets=None, planner=None, settings=None):
     runtime = runtime or load_config(PLANNER.parent / 'config' / 'runtime.example.json', environ={})
     from planner_settings import load_settings
     settings = settings or load_settings(PLANNER.parent / 'config' / 'planner.example.json')
-    namespace = {"RUNTIME": runtime, "PLANNER_SETTINGS": settings, "Path": Path, "os": os, "csv": csv, "json": json,
+    from service_keys import read_key
+    namespace = {"RUNTIME": runtime, "PLANNER_SETTINGS": settings, "read_key": read_key, "Path": Path, "os": os, "csv": csv, "json": json,
                  "subprocess": subprocess, "urllib": urllib}
     if any(_assigned_name(node) == 'TARGETS' for node in tree.body):
         from storage_targets import load_targets
@@ -190,11 +191,11 @@ def _load_custom_overrides(namespace, rules):
     """Read Arr tags matching a custom rule policy without changing Arr."""
     result = {"Movie": {}, "TV": {}}
     systems = (
-        ("Movie", namespace["RADARR_URL"], namespace["RUNTIME"].containers["radarr"], "movie"),
-        ("TV", namespace["SONARR_URL"], namespace["RUNTIME"].containers["sonarr"], "series"),
+        ("Movie", namespace["RADARR_URL"], "radarr", "movie"),
+        ("TV", namespace["SONARR_URL"], "sonarr", "series"),
     )
-    for media, base, container, endpoint in systems:
-        key = namespace["docker_key"](container)
+    for media, base, service, endpoint in systems:
+        key = namespace["arr_key"](service)
         tags = namespace["api_json"](f"{base}/api/v3/tag", key)
         tag_map = {tag["id"]: tag["label"].lower() for tag in tags}
         items = namespace["api_json"](f"{base}/api/v3/{endpoint}", key)

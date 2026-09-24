@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from migratarr_validation import capture
+from runtime_config import load_config
 
 
 class CaptureTests(unittest.TestCase):
@@ -42,7 +43,8 @@ class CaptureTests(unittest.TestCase):
 
     def test_refuses_existing_capture_directory(self):
         with tempfile.TemporaryDirectory() as temp:
-            with patch.dict("os.environ", {"TMDB_TOKEN": "test"}):
+            example = load_config(Path(__file__).resolve().parents[1] / "config/runtime.example.json", environ={})
+            with patch.dict("os.environ", {"TMDB_TOKEN": "test"}),                     patch("runtime_config.get_config", return_value=example):
                 with self.assertRaises(FileExistsError):
                     capture.capture(Path(temp))
 

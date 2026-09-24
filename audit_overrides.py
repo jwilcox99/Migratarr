@@ -1,26 +1,16 @@
 #!/usr/bin/env python3
 
 import json
-import subprocess
 import urllib.request
 
 from runtime_config import get_config
+from service_keys import read_key
 RUNTIME = get_config()
 
 RADARR_URL = RUNTIME.urls["radarr"]
 SONARR_URL = RUNTIME.urls["sonarr"]
 
 PREFIX = "migratarr-"
-
-
-def docker_key(container):
-    return subprocess.check_output(
-        [
-            "docker", "exec", container, "sh", "-c",
-            r"""sed -n 's:.*<ApiKey>\(.*\)</ApiKey>.*:\1:p' /config/config.xml"""
-        ],
-        text=True
-    ).strip()
 
 
 def get_json(url, key):
@@ -88,8 +78,9 @@ def audit(name, url, key, endpoint):
         print("None")
 
 
-radarr_key = docker_key(RUNTIME.containers["radarr"])
-sonarr_key = docker_key(RUNTIME.containers["sonarr"])
+# Credential sources: runtime.json "secrets" (see service_keys.py).
+radarr_key = read_key("radarr")
+sonarr_key = read_key("sonarr")
 
 audit(
     "RADARR",

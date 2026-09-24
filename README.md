@@ -77,12 +77,14 @@ reproducing past decisions. They are not part of the pipeline you run.
 - Linux host with **Python 3.10+** — standard library only, nothing to
   `pip install`. (`migratarr_validation/` uses PEP 604 `X | None` union
   annotations, evaluated at import time; 3.9 will fail to import it.)
-- Docker, with `docker exec` access to your Radarr, Sonarr, and (for the
-  Jellyfin API key) a container that holds a Jellyfin secret — the scripts
-  read API keys directly out of each container rather than storing them
-  anywhere.
+- Docker, with `docker exec` access to your Radarr and Sonarr containers
+  (the executors verify files as Radarr/Sonarr see them). By default API keys
+  are read straight out of each service's config (Radarr/Sonarr
+  `config.xml`, a Jellyfin secret in a `homepage` container) rather than
+  stored anywhere; see [Service credentials](docs/runtime-configuration.md#service-credentials)
+  for other sources.
 - A [TMDB](https://www.themoviedb.org/settings/api) API **Read Access
-  Token**, exported as `TMDB_TOKEN` (see [Usage](#usage)).
+  Token**, by default exported as `TMDB_TOKEN` (see [Usage](#usage)).
 - SSH access to your NAS with a dedicated key, if you want the executors
   to perform moves remotely rather than on the media host's local mounts.
 - Radarr/Sonarr root folders and Jellyfin libraries already pointed at
@@ -117,10 +119,8 @@ validation policy. Scoring, category placement policy and executor semantics are
 unchanged. Safe unit tests run in GitHub Actions and locally with
 `python3 -m unittest discover -s tests -v`.
 
-**These config files do not cover everything deployment-specific.**
-Docker secret extraction is still a Python literal in the source, not a
-setting. See [SETUP.md](SETUP.md) for
-exactly what and where, before running this against a library you care about.
+See [SETUP.md](SETUP.md) for what still assumes this deployment's shape
+before running this against a library you care about.
 
 ## Usage
 

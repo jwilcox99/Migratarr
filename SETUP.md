@@ -40,25 +40,30 @@ return (e.g. `"Max"`, `"Disney+"`, `"Prime Video"`); anything else is the raw
 TMDB provider name.
 
 You'll also need a [TMDB Read Access
-Token](https://www.themoviedb.org/settings/api) exported as `TMDB_TOKEN`.
+Token](https://www.themoviedb.org/settings/api), by default exported as
+`TMDB_TOKEN`. API keys and the TMDB token can instead come from other sources
+set in `runtime.json` "secrets" (for example an owner-only file, so the token
+survives new shells); see
+[Service credentials](docs/runtime-configuration.md#service-credentials).
 
-## 2. What isn't config yet — you have to edit source
+## 2. What still assumes this deployment's shape
 
-None of the following are read from `runtime.json` or any other config file.
-They're Python literals, and the planner will silently apply *this*
-deployment's values to yours unless you change them.
+Every value SETUP.md used to list as a Python literal (streaming
+subscriptions and region, override tags, scoring, NAS layout and category
+folders, where API keys come from) is now configuration. What remains is
+topology rather than values:
 
-### Docker-exec secret extraction
-
-`docker_output()` in `dry_run_movies.py` / `dry_run_tv.py` assumes Radarr and
-Sonarr run in Docker containers with a `sh` shell and API keys at
-`/config/config.xml` inside them. Jellyfin's key is read from a *different*
-container's secrets file — `docker exec homepage cat
-/run/secrets/jellyfin_api_key` — not Jellyfin's own container (see
-[SECURITY.md](SECURITY.md)). If your Radarr/Sonarr/Jellyfin aren't
-Dockerized, don't expose `/config/config.xml` the same way, or don't run a
-`homepage` dashboard container holding the Jellyfin secret, this code needs
-to change, not just the container *names* in `runtime.json`.
+- **One host, one NAS.** Planning and execution run on one host (here
+  "the media host") that sees the NAS disks locally and reaches the NAS over SSH
+  for cross-disk and same-disk moves.
+- **Radarr and Sonarr in Docker.** Even with API keys from `env` or `file`
+  sources, the executors run `docker exec <container> test` / `sha256sum` to
+  verify media as Radarr/Sonarr see it, so both must be containers named in
+  `runtime.json` `containers`.
+- **Arr URL base.** `execute_cross_movie.py`, `execute_cross_tv.py` and
+  `execute_tv_nas.py` honor a Radarr/Sonarr `UrlBase`; `execute_movie.py`,
+  `execute_movie_nas.py` and the planners assume none. Serve Radarr/Sonarr at
+  the root of their `urls` origin.
 
 ## 3. Recommended first run
 

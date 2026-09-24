@@ -2,10 +2,8 @@
 
 import csv
 import json
-import os
 import random
 import re
-import subprocess
 import time
 import urllib.parse
 import urllib.request
@@ -15,6 +13,7 @@ from pathlib import Path
 from runtime_config import get_config
 from planner_settings import at_least, at_most, load_settings
 from media_layout import MediaLayout, get_targets
+from service_keys import read_key
 RUNTIME = get_config()
 PLANNER_SETTINGS = load_settings()
 LAYOUT = MediaLayout(RUNTIME, get_targets())
@@ -47,40 +46,10 @@ SCORING = PLANNER_SETTINGS.scoring
 # HELPERS
 # ============================================================
 
-def docker_output(container, command):
-    return subprocess.check_output(
-        ["docker", "exec", container, "sh", "-c", command],
-        text=True
-    ).strip()
-
-
-def get_radarr_key():
-    return docker_output(
-        RUNTIME.containers["radarr"],
-        r"""sed -n 's:.*<ApiKey>\(.*\)</ApiKey>.*:\1:p' /config/config.xml"""
-    )
-
-
-def get_jellyfin_key():
-    paths = [
-        "/run/secrets/jellyfin_api_key",
-        "/run/secrets/jellyfin_key",
-    ]
-
-    for path in paths:
-        try:
-            value = docker_output(RUNTIME.containers["homepage"], f"cat {path}")
-            if value:
-                return value
-        except Exception:
-            pass
-
-    raise RuntimeError("Could not read Jellyfin key from Homepage secrets")
-
-
-RADARR_KEY = get_radarr_key()
-JELLYFIN_KEY = get_jellyfin_key()
-TMDB_TOKEN = os.environ["TMDB_TOKEN"]
+# Credential sources: runtime.json "secrets" (see service_keys.py).
+RADARR_KEY = read_key("radarr")
+JELLYFIN_KEY = read_key("jellyfin")
+TMDB_TOKEN = read_key("tmdb")
 
 
 def request_json(url, headers=None, timeout=60):

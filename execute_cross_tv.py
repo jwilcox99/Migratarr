@@ -34,11 +34,11 @@ from datetime import datetime, timezone
 
 import urllib.request
 
-import xml.etree.ElementTree as ET
 
 from runtime_config import get_config
 from planner_settings import get_settings
 from media_layout import MediaLayout, canonical, get_targets, split_media_path
+from service_keys import SecretError, read_credential
 from executor_manifest import digest, load_approved_plan
 from executor_command import run_command
 from executor_inventory import scan_metadata, metadata_from_inventory
@@ -133,10 +133,11 @@ def sync_parents(src, dst):
 
 class Sonarr:
     def __init__(self):
-        xml = subprocess.check_output(['docker', 'exec', RUNTIME.containers['sonarr'], 'cat', '/config/config.xml'], timeout=30)
-        config = ET.fromstring(xml)
-        self.key = config.findtext('ApiKey')
-        self.url_base = (config.findtext('UrlBase') or '').rstrip('/')
+        # Source is runtime.json "secrets" (default: ApiKey/UrlBase from the container's config.xml).
+        try:
+            self.key, self.url_base = read_credential('sonarr', RUNTIME)
+        except SecretError as exc:
+            require(False, str(exc))
         require(self.key, 'Sonarr API key missing')
         # Disable redirects so an API key cannot be forwarded to another server.
         class NoRedirect(urllib.request.HTTPRedirectHandler):

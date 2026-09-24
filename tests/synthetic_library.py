@@ -155,6 +155,14 @@ def fake_urlopen(request, timeout=None):
     return io.BytesIO(json.dumps(route(request.full_url)).encode())
 
 
+def fake_docker(command, text=False, **_):
+    # Arr config.xml for `docker exec <arr> cat /config/config.xml`; the bare key
+    # for secret files and older planners' `sh -c sed` extraction.
+    data = ('<Config><ApiKey>fake-key</ApiKey><UrlBase></UrlBase></Config>'
+            if command[-1] == '/config/config.xml' else 'fake-key\n')
+    return data if text else data.encode()
+
+
 def offline_world(network=True):
     """Patches that let a planner run for real against this fake world.
 
@@ -168,7 +176,7 @@ def offline_world(network=True):
         'MIGRATARR_STORAGE_TARGETS': str(ROOT / 'config/storage-targets.example.json')}))
     if network:
         stack.enter_context(patch('urllib.request.urlopen', fake_urlopen))
-        stack.enter_context(patch('subprocess.check_output', return_value='fake-key\n'))
+        stack.enter_context(patch('subprocess.check_output', fake_docker))
     else:
         for target in ('urllib.request.urlopen', 'subprocess.check_output', 'subprocess.run'):
             stack.enter_context(patch(target, side_effect=AssertionError('I/O during replay: ' + target)))

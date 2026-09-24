@@ -13,19 +13,21 @@ how to reproduce it, and — if it relates to a specific run — the relevant
 
 ## How secrets are currently handled
 
-- Radarr/Sonarr API keys are read at run time from each container's
-  `/config/config.xml` over `docker exec`, using shell extraction or XML
-  parsing depending on the script. They are not intentionally persisted
-  by the pipeline. Keep new code following
-  this pattern rather than caching keys in a file.
-- The Jellyfin API key is read the same way, but from a *different*
-  container: `docker exec homepage cat /run/secrets/jellyfin_api_key`
-  (the Movie script also tries `/run/secrets/jellyfin_key`) — a secrets file
-  mounted into the `homepage` dashboard container, not Jellyfin's own. New
-  code touching Jellyfin auth should know the key doesn't live where the
-  service name would suggest.
-- The placement scripts expect `TMDB_TOKEN` in the environment; see
-  [Usage](README.md#usage). Do not log its value or include it in reports.
+- Every API key and the TMDB token are read at run time through
+  `service_keys.py`, from the source named in `runtime.json` "secrets"
+  ([Service credentials](docs/runtime-configuration.md#service-credentials)).
+  By default: Radarr/Sonarr `ApiKey` from each container's
+  `/config/config.xml` (`docker exec ... cat`, no shell, XML-parsed); the
+  Jellyfin key from a secrets file mounted into the `homepage` dashboard
+  container, not Jellyfin's own (`/run/secrets/jellyfin_api_key`, then
+  `/run/secrets/jellyfin_key`); the TMDB token from `TMDB_TOKEN`.
+- The pipeline never persists credentials it reads, and must not: new code
+  gets keys from `service_keys`, not by caching them in a file, a snapshot, a
+  journal or a parity recording (`dry_run_parity` replaces key lookups with a
+  placeholder). Error messages name a credential's source, never its value.
+- A `file` source is a secret *you* provision, like an SSH key. It is refused
+  unless the file is owner-only (`chmod 600`) and outside the repository.
+  Do not log a credential's value or include it in reports.
 - The NAS SSH key is referenced by path (`~/.ssh/migratarr_nas`) and is
   expected to live outside the repository entirely, authenticated with
   `IdentitiesOnly` and `BatchMode` so it never falls back to a password

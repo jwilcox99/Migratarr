@@ -5,7 +5,9 @@ same read-only Radarr/Sonarr/Jellyfin/TMDB traffic and cache use as a normal
 dry run) and saves every response it received, plus the instant it started.
 `compare` replays that recording through a baseline and a candidate planner
 with no network, Docker, cache or sleep, the clock frozen at the recorded
-instant, and compares their CSVs byte for byte. API keys are never recorded.
+instant, and compares their CSVs byte for byte. API keys are never recorded:
+key lookups (docker_output in older planners, service_keys.read_key in newer
+ones) pass through while recording and return a placeholder on replay.
 """
 import argparse
 import ast
@@ -26,6 +28,7 @@ from .capture import redirect_destinations
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = {'movie': 'dry_run_movies.py', 'tv': 'dry_run_tv.py'}
 HOOKED = ('docker_output', 'request_json', 'cached')
+REQUIRED_HOOKS = {'request_json', 'cached'}
 IO_NAME = '__migratarr_io__'
 
 
@@ -109,8 +112,8 @@ def instrument(source, filename, output, cache_dir):
         elif isinstance(node, ast.ImportFrom) and node.module == 'datetime' and any(
                 alias.name == 'datetime' and alias.asname is None for alias in node.names):
             body.append(ast.parse(f'datetime = {IO_NAME}.datetime').body[0])
-    if hooked != set(HOOKED):
-        raise ValueError(f'{filename}: missing I/O functions {sorted(set(HOOKED) - hooked)}')
+    if not REQUIRED_HOOKS <= hooked:
+        raise ValueError(f'{filename}: missing I/O functions {sorted(REQUIRED_HOOKS - hooked)}')
     tree.body = body
     return compile(ast.fix_missing_locations(tree), filename, 'exec')
 
@@ -123,6 +126,7 @@ def run_planner(path, io_layer, output, cache_dir):
         # A live recording keeps the planner's progress output on stderr.
         stack.enter_context(contextlib.redirect_stdout(stdout if io_layer.replay else sys.stderr))
         if io_layer.replay:
+            stack.enter_context(patch('service_keys.read_key', lambda service, runtime=None: 'replay-placeholder-key'))
             stack.enter_context(patch('time.sleep'))
             stack.enter_context(patch.dict(os.environ, {'TMDB_TOKEN': os.environ.get('TMDB_TOKEN', 'replay')}))
         exec(code, namespace)
@@ -136,8 +140,8 @@ def sha256(data):
 def record(kind, out, cache_dir=None, now=None):
     if out.exists():
         raise ValueError(f'Recording already exists: {out}')
-    if not os.environ.get('TMDB_TOKEN'):
-        raise ValueError('TMDB_TOKEN is required by the placement scripts')
+    from service_keys import read_key
+    read_key('tmdb')  # fail before any work if the TMDB credential is unavailable
     script = ROOT / SCRIPTS[kind]
     if cache_dir is None:
         from runtime_config import get_config
