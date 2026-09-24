@@ -23,10 +23,10 @@ This module performs no storage probes and writes no snapshots or media files.
 Disabled targets remain source roots but cannot appear in placement lists.
 Placement references must be enabled and support the requested media type.
 Missing `remote_path` means plan-only; no transport authorization is inferred from
-this model. If any remote path exists, the entire configuration retains the
-`phase1-fixed-depth` local shape and shared-parent checks, plus the two-component
-remote shape. Target IDs remain independent of paths in configurations with no
-remote paths. Local roots cannot overlap; remote roots must be distinct.
+this model. Roots may be any depth and need not share a parent or end in the
+target ID; local roots cannot overlap and remote roots cannot overlap. Optional
+`arr_root` (default `/media`) is where Radarr/Sonarr see `category_paths`; see
+`docs/media-layout.md`, which the executors and planners now follow.
 
 Reserve values are nonnegative integer GiB, with a default and optional per-target
 override. Priority defaults to 100 and accepts integers (including negative

@@ -5,7 +5,7 @@ import ctypes
 import hashlib
 import json
 import os
-from pathlib import Path, PurePath, PurePosixPath
+from pathlib import Path, PurePosixPath
 import re
 import stat
 import subprocess
@@ -16,11 +16,9 @@ import xml.etree.ElementTree as ET
 
 from runtime_config import get_config
 from planner_settings import get_settings
-from media_layout import MediaLayout, canonical, get_targets, split_media_path
 from executor_manifest import digest, load_approved_plan
 RUNTIME = get_config()
 OVERRIDES = get_settings().overrides
-TARGETS = get_targets()
 
 
 class Refused(RuntimeError):
@@ -36,33 +34,24 @@ def load_plan(base, execution_id):
     return load_approved_plan(base, execution_id, 'Movie', 'SAME_DISK_RENAME', require)
 
 
-MEDIA = 'Movie'
-
-
-def layout():
-    # Built per call from RUNTIME, so a patched or reloaded runtime is honored.
-    return MediaLayout(RUNTIME, TARGETS)
-
-
-def posix(path):
-    return path.as_posix() if isinstance(path, PurePath) else str(path)
-
-
 def paths(row):
     result = []
     for field, category, disk_field in [('source_path', 'current', 'source_disk'),
                                          ('target_path', 'recommended', 'target_disk')]:
         raw = row[field]
-        require(canonical(raw), 'Noncanonical path')
-        found = layout().parse_local(raw, MEDIA)
-        require(found is not None and found[0] == row[disk_field] and found[1] == row[category],
-                'Path/category/disk mismatch')
+        p = PurePosixPath(raw)
+        require(str(p) == raw and '..' not in p.parts, 'Noncanonical path')
+        require(len(p.parts) == 7 and p.parts[:3] == RUNTIME.mount_root.parts
+                and p.parts[3] in RUNTIME.storage
+                and p.parts[4] == 'Movies' and p.parts[5] == row[category]
+                and p.parts[5] in {'Common', 'Rare', 'Library', 'Archive'}
+                and p.parts[3] == row[disk_field], 'Path/category/disk mismatch')
         result.append(Path(raw))
     src, dst = result
     require(src.name == dst.name and src != dst and row['source_disk'] == row['target_disk'],
             'Not a same-disk category rename')
-    return src, dst, layout().logical(MEDIA, row['current'], src.name), \
-        layout().logical(MEDIA, row['recommended'], dst.name)
+    return src, dst, '/media/Movies/' + row['current'] + '/' + src.name, \
+        '/media/Movies/' + row['recommended'] + '/' + dst.name
 
 
 def canonical_existing(p):

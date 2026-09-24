@@ -69,12 +69,12 @@ contract. Retain config snapshots when investigating old runs.
 
 - `config/legacy-storage.json` and `legacy-rules.json` remain independent
   planner/validation policy. No validation-engine cutover is included.
-- Category assignments, container-visible `/media/Movies` and `/media/TV`, and
-  relative layout are Phase One contracts. Local roots must still share a parent
-  and have shape `/component/component/<id>`; remote roots must still have two
-  components. This retains existing fixed-depth path checks instead of
-  generalizing them. A deployment needing a different path shape still requires
-  separately reviewed work.
+- Root depth, the shared local parent, category folder names and the
+  Radarr/Sonarr-visible root are no longer Phase One contracts: see
+  `docs/media-layout.md`. Roots must still be canonical absolute paths, and no
+  local root (nor remote root) may equal or contain another. The *shape* an
+  executor accepts (one disk root, one category folder, one item folder) is
+  unchanged.
 - Disk *count* is no longer a fixed Phase One contract (see
   `docs/storage-targets.md` gate 4): `runtime.json`'s `storage` block accepts
   any number of validly-shaped disk IDs, not only `media01`–`media04`, and the

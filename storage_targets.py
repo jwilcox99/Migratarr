@@ -67,6 +67,8 @@ class StorageTargets:
     targets: tuple[StorageTarget, ...]
     category_paths: dict
     placement: dict
+    # Radarr/Sonarr-visible root: an item is <arr_root>/<category path>/<name>.
+    arr_root: PurePosixPath = PurePosixPath('/media')
 
     @property
     def source_roots(self):
@@ -88,7 +90,7 @@ class StorageTargets:
 
 
 def parse_targets(data):
-    _fields(data, {'schema_version', 'defaults', 'targets', 'category_paths', 'placement'})
+    _fields(data, {'schema_version', 'defaults', 'targets', 'category_paths', 'placement'}, {'arr_root'})
     _require(type(data['schema_version']) is int and data['schema_version'] == 1,
              'unsupported schema_version')
     _fields(data['defaults'], {'minimum_free_space_gb'})
@@ -124,12 +126,9 @@ def parse_targets(data):
                      and other.path not in target.path.parents, 'overlapping target roots')
     remotes = [t.remote_path for t in targets if t.remote_path is not None]
     _require(len(remotes) == len(set(remotes)), 'duplicate remote roots')
-    if remotes:
-        # phase1-fixed-depth applies to the entire mixed configuration.
-        _require(all(len(t.path.parts) == 4 and t.path.name == t.id for t in targets),
-                 'phase1-fixed-depth local root must be /a/b/<id>')
-        _require(len({t.path.parent for t in targets}) == 1, 'local roots must share a parent')
-        _require(all(len(p.parts) == 3 for p in remotes), 'remote roots must have two components')
+    # Any depth; executors find an item's disk by the one root containing it.
+    _require(not any(a in b.parents or b in a.parents for i, a in enumerate(remotes) for b in remotes[i + 1:]),
+             'overlapping remote roots')
     paths, placement = {}, {}
     _fields(data['category_paths'], {'Movie', 'TV'})
     _fields(data['placement'], {'Movie', 'TV'})
@@ -152,7 +151,8 @@ def parse_targets(data):
             _require(all(i in by_id and by_id[i].enabled and media in by_id[i].media_types
                          for i in ids), 'unknown, disabled or incompatible destination')
             placement[media][category] = tuple(ids)
-    return StorageTargets(tuple(targets), paths, placement)
+    arr_root = _path(data.get('arr_root', '/media'))
+    return StorageTargets(tuple(targets), paths, placement, arr_root)
 
 
 def _unique(pairs):

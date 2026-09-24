@@ -73,22 +73,21 @@ class RuntimeConfig:
         require(isinstance(data['storage'], dict) and data['storage'], 'storage must be a nonempty object')
         self.storage = {}
         for disk, entry in data['storage'].items():
-            # Disk count is not a Phase One contract; shape and identity below still are.
+            # Disk count and root depth are configuration; canonical absolute roots are not.
             require(re.fullmatch(r'[a-z][a-z0-9_-]{0,31}', disk) is not None,
                     'invalid storage disk id: ' + str(disk))
             fields(entry, ('local_path', 'remote_path'), 'storage.' + disk)
             self.storage[disk] = {k: path(v, disk + '.' + k) for k, v in entry.items()}
-            local = PurePosixPath(self.storage[disk]['local_path'])
-            remote = PurePosixPath(self.storage[disk]['remote_path'])
-            # Retain Phase One path shape and disk identity checks, including remote helpers.
-            require(len(local.parts) == 4 and local.name == disk,
-                    disk + ' local_path must be /<component>/<component>/' + disk)
-            require(len(remote.parts) == 3, disk + ' remote_path must have two components')
+        # Executors identify an item's disk by which root contains it (media_layout.py),
+        # so no root may equal or contain another on either side.
+        for side in ('local_path', 'remote_path'):
+            roots = [PurePosixPath(v[side]) for v in self.storage.values()]
+            require(not any(a == b or a in b.parents for i, a in enumerate(roots) for b in roots[i + 1:])
+                    and not any(b in a.parents for i, a in enumerate(roots) for b in roots[i + 1:]),
+                    side.replace('_path', '') + ' disk roots must be distinct and must not contain each other')
         parents = {str(PurePosixPath(v['local_path']).parent) for v in self.storage.values()}
-        require(len(parents) == 1, 'local disk roots must share a parent')
-        require(len(set(self.remote_disks.values())) == len(self.remote_disks),
-                'remote disk roots must be distinct')
-        self.mount_root = PurePosixPath(parents.pop())
+        # Only the pinned pre-storage-targets planner baseline still reads this.
+        self.mount_root = PurePosixPath(parents.pop()) if len(parents) == 1 else None
 
     @property
     def remote_disks(self):

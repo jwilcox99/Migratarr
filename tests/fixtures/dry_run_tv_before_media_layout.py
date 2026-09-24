@@ -14,10 +14,8 @@ from statistics import mean
 
 from runtime_config import get_config
 from planner_settings import at_least, at_most, load_settings
-from media_layout import MediaLayout, get_targets
 RUNTIME = get_config()
 PLANNER_SETTINGS = load_settings()
-LAYOUT = MediaLayout(RUNTIME, get_targets())
 
 SONARR_URL = RUNTIME.urls["sonarr"]
 JELLYFIN_URL = RUNTIME.urls["jellyfin"]
@@ -629,8 +627,18 @@ def usage_score(tmdb_id):
 # ------------------------------------------------------------
 
 def current_bucket(path):
-    # Radarr/Sonarr paths are <arr_root>/<category folder>/<name> (storage-targets.json).
-    return LAYOUT.arr_category(path, 'TV') or "Unknown"
+    value = (path or "").lower()
+
+    if "/rare/" in value:
+        return "Rare"
+    if "/library/" in value:
+        return "Library"
+    if "/archive/" in value:
+        return "Archive"
+    if "/current/" in value:
+        return "Current"
+
+    return "Unknown"
 
 
 def series_episodes(series_id):

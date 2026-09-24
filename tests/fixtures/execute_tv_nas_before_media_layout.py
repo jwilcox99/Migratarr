@@ -1,11 +1,11 @@
-"""One approved same-disk movie rename. Python 3.9+, Linux host only."""
+"""One approved same-disk TV series rename. Python 3.9+, Linux host only."""
 import argparse
 import ctypes
 import hashlib
 import inspect
 import json
 import os
-from pathlib import Path, PurePath, PurePosixPath
+from pathlib import Path, PurePosixPath
 import re
 import stat
 import shlex
@@ -19,14 +19,12 @@ import xml.etree.ElementTree as ET
 
 from runtime_config import get_config
 from planner_settings import get_settings
-from media_layout import MediaLayout, canonical, get_targets, split_media_path
 from executor_manifest import digest, load_approved_plan
 from executor_nfs import verify_after_rename
 from executor_command import run_command
 from executor_inventory import scan_metadata, metadata_from_inventory
 RUNTIME = get_config()
 OVERRIDES = get_settings().overrides
-TARGETS = get_targets()
 
 
 class Refused(RuntimeError):
@@ -39,19 +37,7 @@ def require(ok, message):
 
 
 def load_plan(base, execution_id):
-    return load_approved_plan(base, execution_id, 'Movie', 'SAME_DISK_RENAME', require)
-
-
-MEDIA = 'Movie'
-
-
-def layout():
-    # Built per call from RUNTIME, so a patched or reloaded runtime is honored.
-    return MediaLayout(RUNTIME, TARGETS)
-
-
-def posix(path):
-    return path.as_posix() if isinstance(path, PurePath) else str(path)
+    return load_approved_plan(base, execution_id, 'TV', 'SAME_DISK_RENAME', require)
 
 
 def paths(row):
@@ -59,16 +45,19 @@ def paths(row):
     for field, category, disk_field in [('source_path', 'current', 'source_disk'),
                                          ('target_path', 'recommended', 'target_disk')]:
         raw = row[field]
-        require(canonical(raw), 'Noncanonical path')
-        found = layout().parse_local(raw, MEDIA)
-        require(found is not None and found[0] == row[disk_field] and found[1] == row[category],
-                'Path/category/disk mismatch')
+        p = PurePosixPath(raw)
+        require(str(p) == raw and '..' not in p.parts, 'Noncanonical path')
+        require(len(p.parts) == 7 and p.parts[:3] == RUNTIME.mount_root.parts
+                and p.parts[3] in RUNTIME.remote_disks
+                and p.parts[4] == 'TV' and p.parts[5] == row[category]
+                and p.parts[5] in {'Current', 'Rare', 'Library', 'Archive'}
+                and p.parts[3] == row[disk_field], 'Path/category/disk mismatch')
         result.append(Path(raw))
     src, dst = result
     require(src.name == dst.name and src != dst and row['source_disk'] == row['target_disk'],
             'Not a same-disk category rename')
-    return src, dst, layout().logical(MEDIA, row['current'], src.name), \
-        layout().logical(MEDIA, row['recommended'], dst.name)
+    return src, dst, '/media/TV/' + row['current'] + '/' + src.name, \
+        '/media/TV/' + row['recommended'] + '/' + dst.name
 
 
 def canonical_existing(p):
@@ -84,8 +73,7 @@ def filesystem_ready(src, dst):
 
 
 def progress(message):
-    print('[%s] %s' % (datetime.now().strftime('%H:%M:%S'), message),
-          file=sys.stderr, flush=True)
+    print('[%s] %s' % (datetime.now().strftime('%H:%M:%S'), message), file=sys.stderr, flush=True)
 
 
 def file_metadata(root):
@@ -132,10 +120,8 @@ def inventory(root):
                 found[key] = [s.st_size, h.hexdigest(), s.st_ino, s.st_mtime_ns]
     visit(root)
     require(any(len(v) == 4 and v[0] > 0 for v in found.values()), 'Source contains no media data')
-    require(inventory_metadata(found) == initial == file_metadata(root),
-            'Directory contents changed while hashing')
-    progress('Hash complete: %.2f GiB; elapsed %.0fs' %
-             (checked / 2**30, time.monotonic() - started))
+    require(inventory_metadata(found) == initial == file_metadata(root), 'Files changed while hashing')
+    progress('Hash complete: %.2f GiB; elapsed %.0fs' % (checked / 2**30, time.monotonic() - started))
     return found
 
 
@@ -164,11 +150,13 @@ def sync_parents(src, dst):
             os.close(fd)
 
 
-class Radarr:
+class Sonarr:
     def __init__(self):
-        xml = subprocess.check_output(['docker', 'exec', RUNTIME.containers['radarr'], 'cat', '/config/config.xml'], timeout=30)
-        self.key = ET.fromstring(xml).findtext('ApiKey')
-        require(self.key, 'Radarr API key missing')
+        xml = subprocess.check_output(['docker', 'exec', RUNTIME.containers['sonarr'], 'cat', '/config/config.xml'], timeout=30)
+        config = ET.fromstring(xml)
+        self.key = config.findtext('ApiKey')
+        self.url_base = (config.findtext('UrlBase') or '').rstrip('/')
+        require(self.key, 'Sonarr API key missing')
         # Disable redirects so an API key cannot be forwarded to another server.
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args, **kwargs):
@@ -176,7 +164,7 @@ class Radarr:
         self.opener = urllib.request.build_opener(NoRedirect, urllib.request.ProxyHandler({}))
 
     def api(self, path, body=None):
-        req = urllib.request.Request(RUNTIME.urls["radarr"] + "/api/v3/" + path,
+        req = urllib.request.Request(RUNTIME.urls["sonarr"] + self.url_base + '/api/v3/' + path,
                                      data=None if body is None else json.dumps(body).encode(),
                                      headers={'X-Api-Key': self.key, 'Content-Type': 'application/json'},
                                      method='GET' if body is None else 'PUT')
@@ -185,15 +173,15 @@ class Radarr:
             return json.loads(data) if data else None
 
     def visible(self, path, kind='-f'):
-        r = subprocess.run(['docker', 'exec', RUNTIME.containers['radarr'], 'test', kind, path], timeout=30,
+        r = subprocess.run(['docker', 'exec', RUNTIME.containers['sonarr'], 'test', kind, path], timeout=30,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        require(r.returncode == 0, 'Radarr container cannot see required path: ' + path)
+        require(r.returncode == 0, 'Sonarr container cannot see required path: ' + path)
 
     def verify_file(self, path, expected_hash):
         self.visible(path)
-        result = run_progress(
-            ['docker', 'exec', RUNTIME.containers['radarr'], 'sha256sum', '--', path], 'Radarr file-content verification')
-        require(result.split()[0] == expected_hash, 'Radarr-visible file content mismatch')
+        result = run_progress(['docker', 'exec', RUNTIME.containers['sonarr'], 'sha256sum', '--', path],
+                              'Sonarr file-content verification')
+        require(result.split()[0] == expected_hash, 'Sonarr-visible file content mismatch')
 
 
 def verify_nfs_after_rename(src, dst, expected, log, timeout=60, interval=2, metadata_only=False):
@@ -203,143 +191,158 @@ def verify_nfs_after_rename(src, dst, expected, log, timeout=60, interval=2, met
         timeout=timeout, interval=interval, metadata_only=metadata_only)
 
 
-def execute(base, execution_id, live, radarr, log, transport=None, recovery=None):
-    progress('Checking frozen manifest, approval, paths, and Radarr record')
+def episode_state(sonarr, series_id, logical_path, before):
+    files = sonarr.api(f'episodefile?seriesId={series_id}')
+    require(files, 'Series has no episode files')
+    records = {}
+    names = set()
+    for f in files:
+        relative = f.get('relativePath', '')
+        path = PurePosixPath(relative)
+        require(relative and str(path) == relative and not path.is_absolute()
+                and '..' not in path.parts and relative not in names, 'Invalid or duplicate episode path')
+        require(f.get('seriesId') == series_id and f['id'] not in records, 'Episode file identity mismatch')
+        require(f.get('path') == logical_path + '/' + relative, 'Sonarr episode path mismatch')
+        require(relative in before and len(before[relative]) == 4
+                and before[relative][0] > 0 and f.get('size') == before[relative][0],
+                'Episode file missing or size differs: ' + relative)
+        records[f['id']] = (relative, f['size'])
+        names.add(relative)
+    episodes = sonarr.api(f'episode?seriesId={series_id}')
+    associations = {}
+    for e in episodes:
+        require(e.get('seriesId') == series_id and e['id'] not in associations,
+                'Episode identity mismatch')
+        file_id = e.get('episodeFileId', 0)
+        require(not file_id or file_id in records, 'Episode references unknown file')
+        require(bool(e.get('hasFile')) == bool(file_id), 'Inconsistent episode file association')
+        associations[e['id']] = (e.get('seasonNumber'), e.get('episodeNumber'), file_id,
+                                  e.get('monitored'))
+    require({v[2] for v in associations.values() if v[2]} == set(records),
+            'Episode file is not linked to any episode')
+    return records, associations
+
+
+def verify_episode_contents(sonarr, logical_path, records, before):
+    for index, (relative, size) in enumerate(sorted(records.values()), 1):
+        progress('Sonarr file %d/%d: %s (%.2f GiB)' %
+                 (index, len(records), relative, size / 2**30))
+        sonarr.verify_file(logical_path + '/' + relative, before[relative][1])
+
+
+def execute(base, execution_id, live, sonarr, log, transport=None):
+    progress('Checking manifest, approval, and Sonarr series')
     row, manifest_hash = load_plan(base, execution_id)
-    system = radarr.api('system/status')
-    require(system.get('version'), 'Radarr system status is invalid')
     src, dst, logical_src, logical_dst = paths(row)
+    # Validate the configured NAS mapping even for a check-only run.
+    remote_path(src)
+    remote_path(dst)
     filesystem_ready(src, dst)
-    movies = radarr.api('movie')
-    matches = [m for m in movies if m.get('path') == logical_src]
-    require(len(matches) == 1, 'Expected exactly one Radarr movie at source path')
-    movie_id = matches[0]['id']
-    movie = radarr.api(f'movie/{movie_id}')
-    require(movie['path'] == logical_src and movie.get('hasFile'), 'Radarr source changed or has no file')
-    for field in ('radarr_id', 'item_id'):
+    system = sonarr.api('system/status')
+    require(str(system.get('version', '')).startswith('4.'), 'Only Sonarr v4 is supported')
+    all_series = sonarr.api('series')
+    matches = [x for x in all_series if x.get('path') == logical_src]
+    require(len(matches) == 1, 'Expected exactly one Sonarr series at source')
+    series_id = matches[0]['id']
+    series = sonarr.api(f'series/{series_id}')
+    require(series.get('id') == series_id and series.get('path') == logical_src,
+            'Sonarr source changed')
+    for field in ('sonarr_id', 'item_id'):
         if row.get(field):
-            require(int(row[field]) == movie_id, 'Radarr ID mismatch')
-    require(not any(m.get('path') == logical_dst for m in movies), 'Radarr destination already assigned')
-    roots = radarr.api('rootfolder')
+            require(int(row[field]) == series_id, 'Sonarr ID mismatch')
+    require(not any(x.get('path') == logical_dst for x in all_series), 'Destination already assigned')
     target_root = str(PurePosixPath(logical_dst).parent)
-    require(any(r.get('path') == target_root and r.get('accessible') is True for r in roots),
-            'Destination is not an accessible Radarr root')
-    labels = {t['id']: t['label'].lower() for t in radarr.api('tag')}
-    tags = {labels.get(t, '') for t in movie.get('tags', [])}
-    require(not OVERRIDES.locked(tags), 'Movie now has ' + OVERRIDES.lock_tag)
+    require(any(x.get('path') == target_root and x.get('accessible') is True
+                for x in sonarr.api('rootfolder')), 'Destination root unavailable')
+    labels = {x['id']: x['label'].lower() for x in sonarr.api('tag')}
+    tags = {labels.get(x, '') for x in series.get('tags', [])}
+    require(not OVERRIDES.locked(tags), 'Series has ' + OVERRIDES.lock_tag)
     require(OVERRIDES.agrees(tags, row['recommended']), 'Current override conflicts')
-    relative = movie.get('movieFile', {}).get('relativePath', '')
-    rp = PurePosixPath(relative)
-    require(relative and not rp.is_absolute() and '..' not in rp.parts, 'Invalid Radarr movie file')
-    progress('Verifying source contents on the media host')
     before = inventory(src)
-    if recovery is not None:
-        old, intent = recovery
-        require(old['manifest_sha256'] == manifest_hash and old['source'] == str(src)
-                and old['destination'] == str(dst) and intent['inventory'] == before,
-                'Failed-attempt manifest, paths, or source contents have changed')
-    require(relative in before and len(before[relative]) == 4 and before[relative][0] > 0, 'Radarr media file missing')
-    radarr.verify_file(logical_src + '/' + relative, before[relative][1])
-    radarr.visible(target_root, '-d')
+    records, associations = episode_state(sonarr, series_id, logical_src, before)
+    verify_episode_contents(sonarr, logical_src, records, before)
+    sonarr.visible(target_root, '-d')
     require(transport is not None, 'NAS transport required')
     transport.call('check', src, dst, before)
-    if recovery is not None:
-        log('NFS_RECOVERY_VERIFIED', manifest_sha256=manifest_hash)
     log('PREFLIGHT_OK', manifest_sha256=manifest_hash, source=str(src), destination=str(dst),
-        radarr_id=movie_id, radarr_version=system['version'],
-        logical_source=logical_src, logical_destination=logical_dst)
+        sonarr_id=series_id, sonarr_version=system['version'], logical_source=logical_src,
+        logical_destination=logical_dst, episode_file_count=len(records),
+        linked_episode_count=sum(bool(v[2]) for v in associations.values()))
     if not live:
         log('CHECK_ONLY', manifest_sha256=manifest_hash)
         return 'CHECK_ONLY'
-    # Revalidate authorization and mutable inputs immediately before durable intent.
-    require(load_plan(base, execution_id) == (row, manifest_hash), 'Plan/approval changed')
-    require(radarr.api(f'movie/{movie_id}') == movie, 'Radarr record changed during preflight')
+    require(load_plan(base, execution_id) == (row, manifest_hash), 'Plan or approval changed')
+    require(sonarr.api(f'series/{series_id}') == series, 'Sonarr series changed during preflight')
+    require(episode_state(sonarr, series_id, logical_src, before) == (records, associations),
+            'Episode files or associations changed during preflight')
     filesystem_ready(src, dst)
     require(file_metadata(src) == inventory_metadata(before), 'Source changed during preflight')
-    log('RENAME_INTENT', inventory=before)
+    log('RENAME_INTENT', inventory=before, episode_files=records, episode_associations=associations)
     transport.call('rename', src, dst, before)
     log('RENAMED')
     verify_nfs_after_rename(src, dst, before, log)
-    radarr.visible(logical_dst + '/' + relative)
-    updated = dict(movie, path=logical_dst, rootFolderPath=target_root)
-    log('RADARR_UPDATE_INTENT')
-    radarr.api(f'movie/{movie_id}?moveFiles=false', updated)
-    after = radarr.api(f'movie/{movie_id}')
-    require(after.get('id') == movie_id and after.get('path') == logical_dst
-            and after.get('rootFolderPath') == target_root
-            and after.get('hasFile') and after.get('movieFile', {}).get('id') == movie['movieFile']['id']
-            and after.get('movieFile', {}).get('relativePath') == relative,
-            'Radarr post-update verification failed')
-    radarr.verify_file(logical_dst + '/' + relative, before[relative][1])
+    for relative, size in records.values():
+        sonarr.visible(logical_dst + '/' + relative)
+    # Do not overwrite a Sonarr edit made while the NAS was verifying the rename.
+    require(sonarr.api(f'series/{series_id}') == series, 'Sonarr changed before path update')
+    require(episode_state(sonarr, series_id, logical_src, before) == (records, associations),
+            'Episode associations changed before path update')
+    log('SONARR_UPDATE_INTENT')
+    sonarr.api(f'series/{series_id}?moveFiles=false', dict(series, path=logical_dst,
+                                                        rootFolderPath=target_root))
+    after = sonarr.api(f'series/{series_id}')
+    require(after.get('id') == series_id and after.get('path') == logical_dst
+            and after.get('rootFolderPath') == target_root, 'Sonarr path verification failed')
+    for field in ('seriesType', 'seasonFolder', 'monitored', 'qualityProfileId', 'tags'):
+        require(after.get(field) == series.get(field), 'Sonarr setting changed: ' + field)
+    require(episode_state(sonarr, series_id, logical_dst, before) == (records, associations),
+            'Episode files or associations changed after update')
+    verify_episode_contents(sonarr, logical_dst, records, before)
     verify_nfs_after_rename(src, dst, before, log, metadata_only=True)
-    log('SUCCESS', manifest_sha256=manifest_hash)
+    require(episode_state(sonarr, series_id, logical_dst, before) == (records, associations),
+            'Episode associations changed during final verification')
+    final = sonarr.api(f'series/{series_id}')
+    require(final.get('path') == logical_dst and final.get('rootFolderPath') == target_root,
+            'Sonarr path changed during final verification')
+    log('SUCCESS', manifest_sha256=manifest_hash, episode_file_count=len(records),
+        linked_episode_count=sum(bool(v[2]) for v in associations.values()))
     return 'SUCCESS'
 
 
-def check_journal(journal, resume=False):
+def check_journal(journal):
     if journal.exists():
         events = [json.loads(line) for line in journal.read_text().splitlines()]
-        if resume:
-            intents = [i for i, e in enumerate(events) if e['event'] == 'RENAME_INTENT']
-            require(len(intents) == 1, 'Recovery requires exactly one previous rename intent')
-            index = intents[0]
-            require(index > 0 and index + 1 < len(events), 'Incomplete failed-attempt journal')
-            failure = events[index + 1]
-            require(failure.get('event') == 'STOPPED' and failure.get('error_type') == 'OSError'
-                    and failure.get('reason') == '[Errno 22] Invalid argument',
-                    'Recovery only supports the diagnosed NFS EINVAL refusal')
-            require(not any(e['event'] in {'RENAMED', 'RADARR_UPDATE_INTENT', 'SUCCESS'} for e in events),
-                    'Journal indicates a completed or uncertain mutation')
-            # Only successful check-only recovery runs may follow the original failure.
-            tail = events[index + 2:]
-            allowed = {'START', 'NFS_RECOVERY_VERIFIED', 'PREFLIGHT_OK', 'CHECK_ONLY'}
-            require(all(e['event'] in allowed for e in tail)
-                    and (not tail or tail[-1]['event'] == 'CHECK_ONLY')
-                    and not any(e['event'] == 'START' and e.get('live') is not False for e in tail),
-                    'A later attempt needs manual reconciliation')
-            prior = [e for e in events[:index] if e['event'] == 'PREFLIGHT_OK']
-            require(prior, 'Missing failed-attempt preflight')
-            return prior[-1], events[index]
-        require(not any(e['event'] in {'RENAME_INTENT', 'SUCCESS'} for e in events),
-                'Previous live attempt exists; inspect journal and reconcile manually before retrying')
-    require(not resume, 'No failed journal to recover')
+        require(not any(e['event'] in {'RENAME_INTENT', 'RENAMED', 'SONARR_UPDATE_INTENT', 'SUCCESS'}
+                        for e in events), 'Previous live attempt exists; reconcile manually before retrying')
 
 
 def remote_path(path):
-    raw = posix(path)
-    require(layout().parse_local(raw, MEDIA) is not None, 'Invalid NAS mapping')
-    return layout().to_remote(raw, MEDIA)
-
-
-def remote_layout(disk):
-    """One disk's NAS root and the Movie category folders; shipped with the program."""
-    return {disk: layout().remote_roots[disk]}, layout().category_dirs[MEDIA]
-
-
-def nas_pair(source, destination, nas_layout):
-    roots, category_dirs = nas_layout
-    for p in (source, destination):
-        require(split_media_path(p, roots, category_dirs) is not None, 'Invalid NAS movie path')
-    src, dst = Path(source), Path(destination)
-    require(src != dst and src.name == dst.name, 'Invalid rename pair')
-    return src, dst
+    p = PurePosixPath(str(path))
+    require(len(p.parts) == 7 and p.parts[:3] == RUNTIME.mount_root.parts
+            and p.parts[3] in RUNTIME.remote_disks and p.parts[4] == 'TV' and '..' not in p.parts,
+            'Invalid NAS mapping')
+    return RUNTIME.remote_disks[p.parts[3]] + '/' + '/'.join(p.parts[4:])
 
 
 def remote_program(disk):
     # Send fixed Python code as a shell-quoted command; paths and inventories travel
     # separately as JSON on stdin, never as interpolated shell syntax.
-    imports = 'import ctypes, hashlib, json, os, stat, sys, fcntl, time\nfrom pathlib import Path, PurePosixPath\nfrom datetime import datetime\n'
-    functions = [scan_metadata, metadata_from_inventory, Refused, require, progress, split_media_path, nas_pair,
-                 file_metadata, inventory_metadata,
+    imports = 'import ctypes, hashlib, json, os, stat, sys, fcntl, time\nfrom pathlib import Path\nfrom datetime import datetime\n'
+    functions = [scan_metadata, metadata_from_inventory, Refused, require, progress, file_metadata, inventory_metadata,
                  canonical_existing, filesystem_ready, inventory,
                  rename_noreplace, sync_parents]
-    return imports + 'NAS_LAYOUT = ' + repr(remote_layout(disk)) + '\n' + '\n\n'.join(inspect.getsource(f) for f in functions) + '''
+    return imports + 'REMOTE_ROOT = ' + repr(RUNTIME.remote_disks[disk]) + '\n' + '\n\n'.join(inspect.getsource(f) for f in functions) + '''
 def content_only(items):
     return {k: v if len(v) == 1 else v[:2] for k, v in items.items()}
 
 data = json.load(sys.stdin)
 require(data['operation'] in {'check', 'rename'}, 'Unknown operation')
-src, dst = nas_pair(data['source'], data['destination'], NAS_LAYOUT)
+src, dst = Path(data['source']), Path(data['destination'])
+for p in (src, dst):
+    require(len(p.parts) == 6 and p.parts[:4] == (Path(REMOTE_ROOT) / 'TV').parts
+            and p.parts[4] in {'Current', 'Rare', 'Library', 'Archive'}
+            and '..' not in p.parts, 'Invalid NAS TV path')
+require(src != dst and src.name == dst.name, 'Invalid rename pair')
 lockfd = os.open('/tmp/migratarr-movie-' + str(os.getuid()) + '.lock',
                  os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
 with os.fdopen(lockfd, 'a') as lock:
@@ -347,7 +350,6 @@ with os.fdopen(lockfd, 'a') as lock:
     filesystem_ready(src, dst)
     metadata = file_metadata(src)
     expected_metadata = inventory_metadata(data['inventory'])
-    # Inodes differ between NFS and local views: compare names/types/sizes here.
     require({k: v[:1] for k, v in metadata.items()} ==
             {k: v[:1] for k, v in expected_metadata.items()}, 'NAS source layout mismatch')
     # Check directory syncing on the actual parents before any rename.
@@ -373,7 +375,7 @@ class NasTransport:
                         '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3',
                         '-o', 'ControlPath=' + self.temp.name + '/socket']
         try:
-            # Dedicated key only; never wait for a terminal password prompt.
+            # Prompt once through the terminal; no credentials are stored by Python.
             subprocess.run(['ssh', *self.options, '-M', '-N', '-f',
                             '-o', 'ControlPersist=yes', RUNTIME.ssh_target], check=True, timeout=120)
         except BaseException:
@@ -389,9 +391,8 @@ class NasTransport:
             self.temp.cleanup()
 
     def call(self, operation, src, dst, before):
-        found = [layout().parse_local(posix(p), MEDIA) for p in (src, dst)]
-        require(None not in found and found[0][0] == found[1][0], 'Source and destination disks differ')
-        disk = found[0][0]
+        disk = PurePosixPath(str(src)).parts[3]
+        require(PurePosixPath(str(dst)).parts[3] == disk, 'Source and destination disks differ')
         payload = dict(operation=operation, source=remote_path(src), destination=remote_path(dst),
                        inventory=before)
         result = run_progress(['ssh', *self.options, '-o', 'BatchMode=yes', RUNTIME.ssh_target,
@@ -406,8 +407,6 @@ def main():
     parser.add_argument('execution_id')
     parser.add_argument('--base', type=Path, default=RUNTIME.base_path)
     parser.add_argument('--execute', action='store_true', help='Perform the approved move; default is check only')
-    parser.add_argument('--resume-nfs-refusal', action='store_true',
-                        help='Reconcile the single diagnosed NFS EINVAL attempt; retain its journal')
     args = parser.parse_args()
     require(sys.platform.startswith('linux'), 'Run on the Linux media host')
     import fcntl
@@ -417,7 +416,7 @@ def main():
     with (logs / 'executor.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         journal = logs / (args.execution_id + '.jsonl')
-        recovery = check_journal(journal, args.resume_nfs_refusal)
+        check_journal(journal)
         with journal.open('a', encoding='utf-8') as stream:
             def log(event, **details):
                 progress(event.replace('_', ' '))
@@ -434,8 +433,8 @@ def main():
             try:
                 log('START', live=args.execute)
                 with NasTransport() as transport:
-                    result = execute(args.base, args.execution_id, args.execute, Radarr(), log,
-                                     transport, recovery)
+                    result = execute(args.base, args.execution_id, args.execute, Sonarr(), log,
+                                     transport)
                 print(result + ': ' + args.execution_id)
             except BaseException as exc:
                 log('STOPPED', error_type=type(exc).__name__, reason=str(exc))

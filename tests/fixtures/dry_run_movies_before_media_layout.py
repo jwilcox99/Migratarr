@@ -14,10 +14,8 @@ from pathlib import Path
 
 from runtime_config import get_config
 from planner_settings import at_least, at_most, load_settings
-from media_layout import MediaLayout, get_targets
 RUNTIME = get_config()
 PLANNER_SETTINGS = load_settings()
-LAYOUT = MediaLayout(RUNTIME, get_targets())
 
 # ============================================================
 # CONFIG
@@ -517,8 +515,21 @@ def collection_info(movie):
 # ============================================================
 
 def current_bucket(path):
-    # Radarr/Sonarr paths are <arr_root>/<category folder>/<name> (storage-targets.json).
-    return LAYOUT.arr_category(path, 'Movie') or "Unknown"
+    p = (path or "").lower()
+
+    if "/rare/" in p:
+        return "Rare"
+
+    if "/library/" in p:
+        return "Library"
+
+    if "/archive/" in p:
+        return "Archive"
+
+    if "/common/" in p:
+        return "Common"
+
+    return "Unknown"
 
 
 def movie_age_years(movie):

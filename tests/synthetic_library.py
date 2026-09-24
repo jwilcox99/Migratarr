@@ -164,7 +164,8 @@ def offline_world(network=True):
     config = load_config(ROOT / 'config/runtime.example.json', environ={})
     stack.enter_context(patch('runtime_config.get_config', return_value=config))
     stack.enter_context(patch.dict('os.environ', {
-        'TMDB_TOKEN': 'fake', 'MIGRATARR_PLANNER_CONFIG': str(ROOT / 'config/planner.example.json')}))
+        'TMDB_TOKEN': 'fake', 'MIGRATARR_PLANNER_CONFIG': str(ROOT / 'config/planner.example.json'),
+        'MIGRATARR_STORAGE_TARGETS': str(ROOT / 'config/storage-targets.example.json')}))
     if network:
         stack.enter_context(patch('urllib.request.urlopen', fake_urlopen))
         stack.enter_context(patch('subprocess.check_output', return_value='fake-key\n'))

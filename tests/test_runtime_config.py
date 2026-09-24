@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch, Mock
 
 from planner_settings import load_settings
+from storage_targets import load_targets
 from runtime_config import ConfigError, RuntimeConfig, get_config, load_config
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,6 +63,18 @@ class RuntimeConfigTests(unittest.TestCase):
         self.assertEqual(c.local('media05'), Path('/mnt/nas/media05'))
         self.assertEqual(c.remote_disks['media05'], '/volume5/media05')
 
+    def test_root_depth_and_parent_are_configuration(self):
+        # Formerly Phase One contracts (/component/component/<id> local roots with a
+        # shared parent, two-component remote roots); media_layout.py made them config.
+        data = copy.deepcopy(self.data)
+        data['storage']['media01'] = dict(local_path='/srv/pool/disk-a', remote_path='/mnt/disk-a')
+        data['storage']['media02'] = dict(local_path='/data', remote_path='/share/deep/nested/media02')
+        c = RuntimeConfig(data)
+        self.assertEqual(c.local('media01'), Path('/srv/pool/disk-a'))
+        self.assertEqual(c.remote_disks['media02'], '/share/deep/nested/media02')
+        self.assertIsNone(c.mount_root)
+        self.assertEqual(RuntimeConfig(self.data).mount_root, PurePosixPath('/mnt/nas'))
+
     def test_malformed_and_unknown_fields(self):
         mutations = [lambda d: d.update(extra=True), lambda d: d.update(schema_version=True),
                      lambda d: d.update(base_path='/a/../b'), lambda d: d.update(base_path='relative'),
@@ -71,8 +84,12 @@ class RuntimeConfigTests(unittest.TestCase):
                      lambda d: d['containers'].update(radarr=''),
                      lambda d: d['urls'].update(radarr='http://user:secret@host'),
                      lambda d: d['urls'].update(sonarr='http://host:bad'),
-                     lambda d: d['storage']['media01'].update(local_path='/different/root'),
-                     lambda d: d['storage']['media01'].update(remote_path='/volume3/media04')]
+                     lambda d: d['storage']['media01'].update(local_path='/mnt/nas/media02'),
+                     lambda d: d['storage']['media01'].update(local_path='/mnt/nas/media02/inner'),
+                     lambda d: d['storage']['media01'].update(local_path='/mnt/nas'),
+                     lambda d: d['storage']['media01'].update(remote_path='/volume3/media04'),
+                     lambda d: d['storage']['media01'].update(remote_path='/volume3'),
+                     lambda d: d['storage']['media01'].update(remote_path='/volume3/media04/x')]
         for mutate in mutations:
             data = copy.deepcopy(self.data)
             mutate(data)
@@ -112,7 +129,11 @@ class RuntimeWiringTests(unittest.TestCase):
     def setUpClass(cls):
         cls.config = load_config(EXAMPLE, environ={})
         # Importing executors must not invoke NAS, Docker, or HTTP.
-        with patch('runtime_config.get_config', return_value=cls.config),                 patch('planner_settings.get_settings', return_value=load_settings(ROOT / 'config/planner.example.json')), \
+        with patch('runtime_config.get_config', return_value=cls.config), \
+                patch('planner_settings.get_settings',
+                      return_value=load_settings(ROOT / 'config/planner.example.json')), \
+                patch('media_layout.get_targets',
+                      return_value=load_targets(ROOT / 'config/storage-targets.example.json')), \
                 patch('subprocess.run', side_effect=AssertionError('external command')), \
                 patch('subprocess.check_output', side_effect=AssertionError('external command')):
             cls.modules = {name: importlib.import_module(name) for name in
@@ -128,7 +149,7 @@ class RuntimeWiringTests(unittest.TestCase):
         c = RuntimeConfig(data)
         for name, folder in (('execute_cross_movie', 'Movies'), ('execute_cross_tv', 'TV')):
             cross = self.modules[name]
-            with patch.object(cross, 'RUNTIME', c), patch.object(cross, 'DISKS', c.remote_disks):
+            with patch.object(cross, 'RUNTIME', c):
                 self.assertEqual(cross.remote_path(f'/srv/storage/media02/{folder}/Rare/Title'),
                                  f'/newvol/media02/{folder}/Rare/Title')
                 for p in (f'/mnt/nas/media02/{folder}/Rare/Title', f'/srv/storage/media99/{folder}/Rare/Title',

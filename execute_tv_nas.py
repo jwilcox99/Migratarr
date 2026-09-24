@@ -5,7 +5,7 @@ import hashlib
 import inspect
 import json
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePath, PurePosixPath
 import re
 import stat
 import shlex
@@ -19,12 +19,14 @@ import xml.etree.ElementTree as ET
 
 from runtime_config import get_config
 from planner_settings import get_settings
+from media_layout import MediaLayout, canonical, get_targets, split_media_path
 from executor_manifest import digest, load_approved_plan
 from executor_nfs import verify_after_rename
 from executor_command import run_command
 from executor_inventory import scan_metadata, metadata_from_inventory
 RUNTIME = get_config()
 OVERRIDES = get_settings().overrides
+TARGETS = get_targets()
 
 
 class Refused(RuntimeError):
@@ -40,24 +42,33 @@ def load_plan(base, execution_id):
     return load_approved_plan(base, execution_id, 'TV', 'SAME_DISK_RENAME', require)
 
 
+MEDIA = 'TV'
+
+
+def layout():
+    # Built per call from RUNTIME, so a patched or reloaded runtime is honored.
+    return MediaLayout(RUNTIME, TARGETS)
+
+
+def posix(path):
+    return path.as_posix() if isinstance(path, PurePath) else str(path)
+
+
 def paths(row):
     result = []
     for field, category, disk_field in [('source_path', 'current', 'source_disk'),
                                          ('target_path', 'recommended', 'target_disk')]:
         raw = row[field]
-        p = PurePosixPath(raw)
-        require(str(p) == raw and '..' not in p.parts, 'Noncanonical path')
-        require(len(p.parts) == 7 and p.parts[:3] == RUNTIME.mount_root.parts
-                and p.parts[3] in RUNTIME.remote_disks
-                and p.parts[4] == 'TV' and p.parts[5] == row[category]
-                and p.parts[5] in {'Current', 'Rare', 'Library', 'Archive'}
-                and p.parts[3] == row[disk_field], 'Path/category/disk mismatch')
+        require(canonical(raw), 'Noncanonical path')
+        found = layout().parse_local(raw, MEDIA)
+        require(found is not None and found[0] == row[disk_field] and found[1] == row[category],
+                'Path/category/disk mismatch')
         result.append(Path(raw))
     src, dst = result
     require(src.name == dst.name and src != dst and row['source_disk'] == row['target_disk'],
             'Not a same-disk category rename')
-    return src, dst, '/media/TV/' + row['current'] + '/' + src.name, \
-        '/media/TV/' + row['recommended'] + '/' + dst.name
+    return src, dst, layout().logical(MEDIA, row['current'], src.name), \
+        layout().logical(MEDIA, row['recommended'], dst.name)
 
 
 def canonical_existing(p):
@@ -317,32 +328,40 @@ def check_journal(journal):
 
 
 def remote_path(path):
-    p = PurePosixPath(str(path))
-    require(len(p.parts) == 7 and p.parts[:3] == RUNTIME.mount_root.parts
-            and p.parts[3] in RUNTIME.remote_disks and p.parts[4] == 'TV' and '..' not in p.parts,
-            'Invalid NAS mapping')
-    return RUNTIME.remote_disks[p.parts[3]] + '/' + '/'.join(p.parts[4:])
+    raw = posix(path)
+    require(layout().parse_local(raw, MEDIA) is not None, 'Invalid NAS mapping')
+    return layout().to_remote(raw, MEDIA)
+
+
+def remote_layout(disk):
+    """One disk's NAS root and the TV category folders; shipped with the program."""
+    return {disk: layout().remote_roots[disk]}, layout().category_dirs[MEDIA]
+
+
+def nas_pair(source, destination, nas_layout):
+    roots, category_dirs = nas_layout
+    for p in (source, destination):
+        require(split_media_path(p, roots, category_dirs) is not None, 'Invalid NAS TV path')
+    src, dst = Path(source), Path(destination)
+    require(src != dst and src.name == dst.name, 'Invalid rename pair')
+    return src, dst
 
 
 def remote_program(disk):
     # Send fixed Python code as a shell-quoted command; paths and inventories travel
     # separately as JSON on stdin, never as interpolated shell syntax.
-    imports = 'import ctypes, hashlib, json, os, stat, sys, fcntl, time\nfrom pathlib import Path\nfrom datetime import datetime\n'
-    functions = [scan_metadata, metadata_from_inventory, Refused, require, progress, file_metadata, inventory_metadata,
+    imports = 'import ctypes, hashlib, json, os, stat, sys, fcntl, time\nfrom pathlib import Path, PurePosixPath\nfrom datetime import datetime\n'
+    functions = [scan_metadata, metadata_from_inventory, Refused, require, progress, split_media_path, nas_pair,
+                 file_metadata, inventory_metadata,
                  canonical_existing, filesystem_ready, inventory,
                  rename_noreplace, sync_parents]
-    return imports + 'REMOTE_ROOT = ' + repr(RUNTIME.remote_disks[disk]) + '\n' + '\n\n'.join(inspect.getsource(f) for f in functions) + '''
+    return imports + 'NAS_LAYOUT = ' + repr(remote_layout(disk)) + '\n' + '\n\n'.join(inspect.getsource(f) for f in functions) + '''
 def content_only(items):
     return {k: v if len(v) == 1 else v[:2] for k, v in items.items()}
 
 data = json.load(sys.stdin)
 require(data['operation'] in {'check', 'rename'}, 'Unknown operation')
-src, dst = Path(data['source']), Path(data['destination'])
-for p in (src, dst):
-    require(len(p.parts) == 6 and p.parts[:4] == (Path(REMOTE_ROOT) / 'TV').parts
-            and p.parts[4] in {'Current', 'Rare', 'Library', 'Archive'}
-            and '..' not in p.parts, 'Invalid NAS TV path')
-require(src != dst and src.name == dst.name, 'Invalid rename pair')
+src, dst = nas_pair(data['source'], data['destination'], NAS_LAYOUT)
 lockfd = os.open('/tmp/migratarr-movie-' + str(os.getuid()) + '.lock',
                  os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
 with os.fdopen(lockfd, 'a') as lock:
@@ -391,8 +410,9 @@ class NasTransport:
             self.temp.cleanup()
 
     def call(self, operation, src, dst, before):
-        disk = PurePosixPath(str(src)).parts[3]
-        require(PurePosixPath(str(dst)).parts[3] == disk, 'Source and destination disks differ')
+        found = [layout().parse_local(posix(p), MEDIA) for p in (src, dst)]
+        require(None not in found and found[0][0] == found[1][0], 'Source and destination disks differ')
+        disk = found[0][0]
         payload = dict(operation=operation, source=remote_path(src), destination=remote_path(dst),
                        inventory=before)
         result = run_progress(['ssh', *self.options, '-o', 'BatchMode=yes', RUNTIME.ssh_target,

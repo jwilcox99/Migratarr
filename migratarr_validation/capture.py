@@ -17,11 +17,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-# Reviewed for planner settings (streaming, then scoring): the scripts also read
-# config/planner.json via planner_settings; their only writes remain OUTPUT and CACHE_DIR.
+# Reviewed for planner settings (streaming, scoring) and media layout: the scripts also
+# read config/planner.json and config/storage-targets.json; their only writes remain
+# OUTPUT and CACHE_DIR.
 SCRIPTS = {
-    "movie": ("dry_run_movies.py", "822461408bdc3fe1a2f9ff7bf06d62d1189eced9bcd9548eca08e9677a1148bf"),
-    "tv": ("dry_run_tv.py", "6d772ac8d183eb49d972dd78c67e0ea5716926f3b9d5c9600f644be31cc37be2"),
+    "movie": ("dry_run_movies.py", "0648413889f227cf549bf97f1d98e6c2463adf40823c5316fb5d7c1c53d77bdb"),
+    "tv": ("dry_run_tv.py", "8bbcf8721005a91157eed08afcaba0ba8c0ebcdebc71c34f493db493a2f4c27b"),
 }
 
 

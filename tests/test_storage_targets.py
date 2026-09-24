@@ -66,8 +66,8 @@ class StorageTargetTests(unittest.TestCase):
     def test_invalid_target_fields(self):
         cases = {'id': ['UPPER', 'x'*33, 3], 'name': ['', None],
                  'enabled': [1, 'yes'], 'path': ['/mnt/nas/../media01', '/mnt//nas/media01',
-                 '/mnt/nas/media01/', '/mnt/nas/media01\n', 'relative', '/a/b/wrong'],
-                 'remote_path': [None, '/too/deep/root'], 'media_types': [['Movie', 'Movie'], ['Music'], 'Movie', [{}]],
+                 '/mnt/nas/media01/', '/mnt/nas/media01\n', 'relative'],
+                 'remote_path': [None, 'relative', '/volume1/media02', '/volume1/media02/inner', '/volume1'], 'media_types': [['Movie', 'Movie'], ['Music'], 'Movie', [{}]],
                  'minimum_free_space_gb': [-1, True, 1.5], 'storage_class': ['OTHER', []],
                  'priority': [True, '100'], 'tags': [['a', 'a'], [None], 'a']}
         for field, values in cases.items():
@@ -78,12 +78,27 @@ class StorageTargetTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         parse_targets(data)
 
+    def test_any_root_depth_and_parent(self):
+        # Formerly phase1-fixed-depth: /a/b/<id> local roots sharing a parent and
+        # two-component remote roots. Only canonical, non-overlapping roots remain required.
+        data = copy.deepcopy(self.data)
+        data['targets'][0].update(path='/srv/pool/disk-a', remote_path='/mnt/disk-a')
+        data['targets'][1].update(path='/data', remote_path='/share/deep/nested/media02')
+        targets = parse_targets(data)
+        self.assertEqual(str(targets.targets[0].path), '/srv/pool/disk-a')
+        self.assertEqual(str(targets.arr_root), '/media')
+        data['arr_root'] = '/library'
+        self.assertEqual(str(parse_targets(data).arr_root), '/library')
+        for bad in ('library', '/library/', '/a/../b'):
+            data['arr_root'] = bad
+            with self.subTest(arr_root=bad), self.assertRaises(ValueError):
+                parse_targets(data)
+
     def test_invalid_relationships(self):
         for change in (
             lambda d: d['targets'].append(copy.deepcopy(d['targets'][0])),
             lambda d: d['targets'][1].update(path=d['targets'][0]['path']),
             lambda d: d['targets'][1].update(path='/mnt/nas/media01/nested'),
-            lambda d: d['targets'][1].update(path='/other/nas/media02'),
             lambda d: d['targets'][1].update(remote_path=d['targets'][0]['remote_path']),
             lambda d: d['targets'][0].update(enabled=False),
             lambda d: d['targets'][0].update(media_types=['TV']),

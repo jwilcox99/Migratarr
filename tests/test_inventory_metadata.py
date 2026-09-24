@@ -120,7 +120,7 @@ class InventoryMetadataTests(OfflineTest):
             elif isinstance(node, (ast.FunctionDef, ast.ClassDef)):
                 nodes.append(node)
             elif isinstance(node, ast.Assign) and all(
-                    isinstance(t, ast.Name) and t.id in {'DISKS', 'REMOTE_ROOT'} for t in node.targets):
+                    isinstance(t, ast.Name) and t.id == 'NAS_LAYOUT' for t in node.targets):
                 nodes.append(node)
         namespace = {'__name__': 'isolated_nas_helper'}
         exec(compile(ast.Module(body=nodes, type_ignores=[]), '<NAS definitions>', 'exec'), namespace)
@@ -161,7 +161,7 @@ class InventoryMetadataTests(OfflineTest):
         for name, folder in (('execute_cross_movie', 'Movies'), ('execute_cross_tv', 'TV')):
             with self.subTest(executor=name):
                 ns = self.helper_namespace(name)
-                disks = list(ns['DISKS'].values())
+                disks = list(ns['NAS_LAYOUT'][0].values())
                 data = dict(operation='check', execution_id='20260101T000000Z-0001',
                            source=disks[0] + '/' + folder + '/Library/Example',
                            destination=disks[1] + '/' + folder + '/Library/Example',
