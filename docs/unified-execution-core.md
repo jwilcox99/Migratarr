@@ -116,12 +116,19 @@ Live progress for a running execution comes from `progress` events (D3). The UI 
 | Step | Change | Gate before merging |
 | --- | --- | --- |
 | 0 | Merge `codex/host-verification` first. It edits all five executors (about 16 changed lines each, plus new `arr_files.py`); merging it after the refactor means porting it by hand. | Its own tests, and CI on 3.10–3.13 |
-| 1 | Characterization only: golden-journal tests for all four pairings, recording the exact event sequence and detail keys for check-only, success and each existing failure case in `test_executor_safety*.py`; stdout/exit-code tests for each wrapper; a test that the generated NAS programs compile and reject operations outside their set. | New tests pass against **unchanged** executors |
+| 1 | Characterization only: golden-journal tests for all four pairings, recording the exact event sequence and detail keys for check-only, success and each existing failure case in `test_executor_safety*.py`; stdout/exit-code tests for each wrapper; a test that the generated NAS programs compile and reject operations outside their set. **Done 2026-09-24:** `tests/test_executor_golden.py`, `tests/golden/executor_sequences.json` (70 records; mutation-checked). | New tests pass against **unchanged** executors |
 | 2 | `migratarr/engine/primitives.py` + `nas_side.py`; executors import from them, with no behavior change. | Step 1 golden tests byte-identical; `NasReceiptTests` pass against the new NAS program |
 | 3 | Adapters, strategies, `run()`; the four scripts become wrappers (D6). | All existing safety tests and Step 1 golden tests pass unmodified |
 | 4 | **Live parity:** for one approved row of each pairing, run old and new in check-only mode and compare the journals, which must be identical except for `utc`. This is the same bar as `docs/executor-refactor.md` / `docs/validation-engine.md`. Then one watched `--execute` per pairing on the smallest eligible item. | Evidence recorded in this doc, as `docs/storage-targets.md` does |
 | 5 | One `batch_cross.py --media {Movie,TV}` replaces both batch scripts; retire `execute_movie.py`; move recovery scripts (D7). | Existing batch tests ported; `--limit` behavior unchanged |
 | 6 | Separate reviewed changes for each D8 item, then the lock rename (D5). | One PR each |
+
+### Recorded by gate 1
+
+The golden records made two existing behaviors explicit. Both are preserved as they are, not judged here:
+
+- **Same-disk executors don't re-check approval once the rename intent is logged.** Revoking an approval after the NAS rename still ends in `SUCCESS`, because the Arr update goes ahead. That arguably finishes the only safe state, since the media has already moved. Cross-disk re-checks approval after the copy and again before deleting the source, where stopping still leaves a complete source.
+- **Lock-tag refusal text differs between executors.** Same-disk says "Movie now has migratarr-lock" / "Series has migratarr-lock"; cross-disk says "Movie is locked" / "Series is locked". Both honor the configured lock tag. The goldens keep each message as it is today (D8).
 
 ## 6. Decisions needed from Josh
 
