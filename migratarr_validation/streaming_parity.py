@@ -21,7 +21,7 @@ FUNCTIONS = {
     'movies': {'provider_family', 'streaming_score'},
     'tv': {'family', 'provider_score', 'series_streaming'},
 }
-CONSTANTS = {'SUBSCRIBED', 'USER_FREE_ACCESS', 'STREAMING_REGION', 'SCORING'}
+CONSTANTS = {'SUBSCRIBED', 'USER_FREE_ACCESS', 'STREAMING_REGION', 'STREAMING_FAMILIES', 'SCORING'}
 FETCHERS = ('tmdb_movie_providers', 'tmdb_series_providers', 'tmdb_season_providers')
 
 
@@ -39,7 +39,8 @@ def load_streaming(kind, planner=None, settings=None):
     if settings is None:
         from planner_settings import load_settings
         settings = load_settings(ROOT / 'config' / 'planner.example.json')
-    namespace = {'PLANNER_SETTINGS': settings, 'mean': mean}
+    from planner_settings import family_of
+    namespace = {'PLANNER_SETTINGS': settings, 'mean': mean, 'family_of': family_of}
     nodes = [n for n in tree.body
              if (isinstance(n, ast.FunctionDef) and n.name in FUNCTIONS[kind])
              or _assigned_name(n) in CONSTANTS]
