@@ -71,4 +71,20 @@ Baselines: the executors and planners at `e11681b`, pinned in
    `migratarr_validation.dry_run_parity compare` replays the item #3
    recordings through the pinned and current planners.
 
-Real-data result on the media host: *pending.*
+Real-data result on the media host (2026-09-24, candidate `902f5e4`):
+
+- `layout_parity`: 3 manifests, 285 rows, 311 executor checks, all handled
+  identically by old and new code (`"identical": true`, no differences).
+  Every historical row was valid, so refusals are covered by the offline
+  tests only.
+- `dry_run_parity compare` against the item #3 recordings, which were made
+  with the pinned baseline: movies (173 rows) and TV (44 rows) byte-identical
+  to the recording runs' own CSVs, with no replay misses. No real Radarr or
+  Sonarr path changed category under the stricter detection.
+- A check-only preflight of pending cross-disk TV row
+  `20260923T013125Z-0013` (Doug, 5.66 GiB, `media01` -> Library): source
+  hashing, Sonarr file-content verification of all 13 files and the new
+  NAS-side program's `check` operation on the Synology all passed
+  (`PREFLIGHT OK`, `CHECK_ONLY`). No media moved; the approval was revoked
+  afterwards.
+- The full offline suite passed on the media host.
