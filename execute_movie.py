@@ -12,11 +12,11 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 import urllib.request
-import xml.etree.ElementTree as ET
 
 from runtime_config import get_config
 from planner_settings import get_settings
 from media_layout import MediaLayout, canonical, get_targets, split_media_path
+from service_keys import SecretError, read_credential
 from executor_manifest import digest, load_approved_plan
 RUNTIME = get_config()
 OVERRIDES = get_settings().overrides
@@ -127,8 +127,11 @@ def sync_parents(src, dst):
 
 class Radarr:
     def __init__(self):
-        xml = subprocess.check_output(['docker', 'exec', RUNTIME.containers['radarr'], 'cat', '/config/config.xml'], timeout=30)
-        self.key = ET.fromstring(xml).findtext('ApiKey')
+        # Source is runtime.json "secrets" (default: ApiKey from the container's config.xml).
+        try:
+            self.key = read_credential('radarr', RUNTIME)[0]
+        except SecretError as exc:
+            require(False, str(exc))
         require(self.key, 'Radarr API key missing')
         # Disable redirects so an API key cannot be forwarded to another server.
         class NoRedirect(urllib.request.HTTPRedirectHandler):

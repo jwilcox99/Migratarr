@@ -17,12 +17,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-# Reviewed for planner settings (streaming, scoring) and media layout: the scripts also
-# read config/planner.json and config/storage-targets.json; their only writes remain
-# OUTPUT and CACHE_DIR.
+# Reviewed for planner settings (streaming, scoring), media layout and service keys: the
+# scripts also read config/planner.json, config/storage-targets.json and credentials via
+# service_keys (docker exec cat, no shell); their only writes remain OUTPUT and CACHE_DIR.
 SCRIPTS = {
-    "movie": ("dry_run_movies.py", "0648413889f227cf549bf97f1d98e6c2463adf40823c5316fb5d7c1c53d77bdb"),
-    "tv": ("dry_run_tv.py", "8bbcf8721005a91157eed08afcaba0ba8c0ebcdebc71c34f493db493a2f4c27b"),
+    "movie": ("dry_run_movies.py", "dcd9e4b45f970f36ee6d291ff6a7c6f997a8f37af9dc272a6951c8216bbf935e"),
+    "tv": ("dry_run_tv.py", "7803cd969a75dd27309484146eca12f20c1e5b230759794d029695c202b10548"),
 }
 
 
@@ -86,8 +86,8 @@ def run_one(kind, directory):
 
 
 def capture(directory):
-    if not os.environ.get("TMDB_TOKEN"):
-        raise ValueError("TMDB_TOKEN is required by the placement scripts")
+    from service_keys import read_key
+    read_key("tmdb")  # SecretError (a ValueError) before any work if unavailable
     for kind in SCRIPTS:
         checked_tree(kind)
     directory = directory.resolve()

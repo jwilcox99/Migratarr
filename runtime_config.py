@@ -16,9 +16,11 @@ def require(ok, message):
         raise ConfigError('Runtime configuration: ' + message)
 
 
-def fields(value, expected, label):
+def fields(value, expected, label, optional=()):
     require(isinstance(value, dict), label + ' must be an object')
-    require(set(value) == set(expected), label + ' requires exactly: ' + ', '.join(expected))
+    require(set(expected) <= set(value) <= set(expected) | set(optional),
+            label + ' requires exactly: ' + ', '.join(expected)
+            + (' (optional: ' + ', '.join(optional) + ')' if optional else ''))
 
 
 def path(value, label):
@@ -33,10 +35,12 @@ def path(value, label):
 
 class RuntimeConfig:
     def __init__(self, data):
-        fields(data, ('schema_version', 'base_path', 'containers', 'urls', 'nas', 'storage'), 'root')
+        fields(data, ('schema_version', 'base_path', 'containers', 'urls', 'nas', 'storage'), 'root',
+               optional=('secrets',))
         require(type(data['schema_version']) is int and data['schema_version'] == 1, 'unsupported schema_version')
         self.base_path = Path(path(data['base_path'], 'base_path'))
-        fields(data['containers'], ('radarr', 'sonarr', 'homepage'), 'containers')
+        # homepage only serves the default Jellyfin key source (see service_keys.py).
+        fields(data['containers'], ('radarr', 'sonarr'), 'containers', optional=('homepage',))
         for name, value in data['containers'].items():
             require(isinstance(value, str) and re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.-]*', value),
                     'invalid container: ' + name)
@@ -88,6 +92,12 @@ class RuntimeConfig:
         parents = {str(PurePosixPath(v['local_path']).parent) for v in self.storage.values()}
         # Only the pinned pre-storage-targets planner baseline still reads this.
         self.mount_root = PurePosixPath(parents.pop()) if len(parents) == 1 else None
+        from service_keys import SecretError, parse_secrets
+        self.secrets_config = data.get('secrets', {})
+        try:
+            self.secrets = parse_secrets(self.secrets_config, self.containers)
+        except SecretError as exc:
+            raise ConfigError('Runtime configuration: ' + str(exc)) from None
 
     @property
     def remote_disks(self):
@@ -102,7 +112,8 @@ class RuntimeConfig:
         return dict(schema_version=1, base_path=self.base_path.as_posix(),
                     containers=dict(self.containers), urls=dict(self.urls),
                     nas=dict(host=host, user=user, ssh_key=self.ssh_key, python=self.remote_python),
-                    storage={disk: dict(entry) for disk, entry in self.storage.items()})
+                    storage={disk: dict(entry) for disk, entry in self.storage.items()},
+                    **({'secrets': dict(self.secrets_config)} if self.secrets_config else {}))
 
 
 def unique_object(pairs):

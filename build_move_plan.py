@@ -3,13 +3,13 @@
 import csv
 import os
 import json
-import subprocess
 import urllib.request
 from pathlib import Path
 from collections import Counter
 
 from storage_targets import load_targets, check_runtime_consistency
 from runtime_config import get_config
+from service_keys import read_key
 from planner_settings import get_settings
 RUNTIME = get_config()
 PLANNER_SETTINGS = get_settings()
@@ -367,14 +367,9 @@ OVERRIDE_TAGS = dict(PLANNER_SETTINGS.overrides.category_tags)
 LOCK_TAG = PLANNER_SETTINGS.overrides.lock_tag
 
 
-def docker_key(container):
-    return subprocess.check_output(
-        [
-            "docker", "exec", container, "sh", "-c",
-            r"""sed -n 's:.*<ApiKey>\(.*\)</ApiKey>.*:\1:p' /config/config.xml"""
-        ],
-        text=True
-    ).strip()
+def arr_key(service):
+    # Source is runtime.json "secrets" (see service_keys.py).
+    return read_key(service, RUNTIME)
 
 
 def api_json(url, key):
@@ -394,8 +389,8 @@ def load_arr_overrides():
     }
 
     systems = [
-        ("Movie", RADARR_URL, docker_key(RUNTIME.containers["radarr"]), "movie"),
-        ("TV", SONARR_URL, docker_key(RUNTIME.containers["sonarr"]), "series"),
+        ("Movie", RADARR_URL, arr_key("radarr"), "movie"),
+        ("TV", SONARR_URL, arr_key("sonarr"), "series"),
     ]
 
     for media_type, base, key, endpoint in systems:

@@ -20,8 +20,9 @@ roots, malformed URLs and unsafe SSH/container identifiers raise
 `Runtime configuration: ...` errors before runtime scripts contact services or
 write records. Validation does not prove that mounts, services, keys or files
 exist. Keys expand `~` for the account running Python; environment variables
-inside JSON strings are not interpolated. API keys retain their existing Docker
-secret/config lookup and TMDB retains `TMDB_TOKEN`; never put credentials in this file.
+inside JSON strings are not interpolated. Credentials never go in this file: the
+optional `secrets` section only says where each one is read from (see
+[Service credentials](#service-credentials)).
 
 ## Extracted values and production mapping
 
@@ -30,7 +31,7 @@ secret/config lookup and TMDB retains `TMDB_TOKEN`; never put credentials in thi
 | `base_path` | `/opt/media-stack/migratarr` |
 | `nas.host`, `nas.user` | `nas.example`, `migratarr` |
 | `nas.ssh_key`, `nas.python` | `~/.ssh/migratarr_nas`, `/usr/bin/python3` |
-| `containers.radarr`, `.sonarr`, `.homepage` | `radarr`, `sonarr`, `homepage` |
+| `containers.radarr`, `.sonarr`, `.homepage` (optional) | `radarr`, `sonarr`, `homepage` |
 | `urls.radarr`, `.sonarr`, `.jellyfin` | `http://localhost:7878`, `http://localhost:8989`, `http://localhost:8096` |
 | `storage.media01` | `/mnt/nas/media01` → `/volume4/media01` |
 | `storage.media02` | `/mnt/nas/media02` → `/volume1/media02` |
@@ -41,6 +42,75 @@ All of these settings are deployment-specific. URL settings are origins only,
 without credentials or a path. Existing per-executor UrlBase behavior is
 unchanged: cross-disk Movies and TV read it from Arr config; older same-disk
 Movie executors continue using `/api/v3/` directly.
+
+## Service credentials
+
+`service_keys.py` reads every API key and the TMDB token, for the planners,
+`build_move_plan.py`, `audit_overrides.py` and all executors. Without a
+`secrets` section each service uses the source it always has:
+
+```json
+"secrets": {
+  "radarr":   {"source": "docker_config_xml"},
+  "sonarr":   {"source": "docker_config_xml"},
+  "jellyfin": {"source": "docker_file",
+               "paths": ["/run/secrets/jellyfin_api_key", "/run/secrets/jellyfin_key"]},
+  "tmdb":     {"source": "env", "variable": "TMDB_TOKEN"}
+}
+```
+
+List only the services you want to change. Sources:
+
+| `source` | Fields | Reads |
+|---|---|---|
+| `docker_config_xml` | `container`, `path` (both optional) | `ApiKey` and `UrlBase` from `docker exec <container> cat <path>`; container defaults to `containers.radarr`/`.sonarr`, path to `/config/config.xml`. Radarr/Sonarr only. |
+| `config_xml` | `path` | The same from a host-side `config.xml`, for non-Docker installs. Radarr/Sonarr only. |
+| `docker_file` | `paths`, `container` (optional) | The first nonempty file of `paths` in the container; defaults to `containers.homepage` for Jellyfin. |
+| `file` | `path`, `url_base` (optional) | A file you provision. Refused unless it is owner-only (`chmod 600`) and outside the repository. |
+| `env` | `variable`, `url_base` (optional) | An environment variable. |
+
+`url_base` applies to Radarr/Sonarr sources that don't read `config.xml`.
+Lookups run `docker exec ... cat` without a shell. A missing or empty
+credential stops the script before it contacts any service, and error messages
+name the source, never the value. `containers.homepage` is only required when
+Jellyfin uses the default source.
+
+For example, to keep the TMDB token in a file instead of the environment:
+
+```sh
+install -m 600 /dev/null ~/.config/migratarr/tmdb_token
+$EDITOR ~/.config/migratarr/tmdb_token
+```
+
+```json
+"secrets": {"tmdb": {"source": "file", "path": "~/.config/migratarr/tmdb_token"}}
+```
+
+### Migration evidence
+
+Before `service_keys.py`, the planners, `build_move_plan.py` and
+`audit_overrides.py` ran `docker exec <c> sh -c "sed ... /config/config.xml"`,
+the executors ran `docker exec <c> cat /config/config.xml` and parsed the XML
+(three of them also reading `UrlBase`), the movie planner tried two Jellyfin
+secret paths and the TV planner one. `migratarr_validation/secrets_parity.py`
+holds those lookups verbatim (cited at `260746d`).
+
+- `tests/test_service_keys.py` runs old and new side by side against a fake
+  `docker exec` (which also emulates the planners' `sed`): identical keys and
+  `UrlBase` for standard, URL-base, single-line and CRLF `config.xml`, and
+  identical Jellyfin keys. Two deliberate differences are pinned: a
+  `config.xml` without `ApiKey` now stops the planners up front (they used to
+  send an empty key), and the TV planner now falls back to
+  `/run/secrets/jellyfin_key` as the movie planner always did. The same file
+  covers every source type, owner-only and outside-repository file rules,
+  schema validation, and that errors never contain a secret value.
+- `dry_run_parity` replays substitute key lookups on both sides, so the item
+  #3 recordings still compare the planners' scoring.
+- Real data on the media host: `python3 -m migratarr_validation.secrets_parity`
+  compares the real old and new lookups for every service and prints only
+  booleans.
+
+Real-data result on the media host: *pending.*
 
 ## Environment and command-line precedence
 
@@ -87,9 +157,8 @@ contract. Retain config snapshots when investigating old runs.
 - Frozen `movie_placement_v1.py` / `tv_placement_v1.py` and their checksum files
   remain byte-for-byte historical references. Use `dry_run_movies.py` and
   `dry_run_tv.py` for configured runtime operation.
-- Timeouts, retries, SSH keepalive/strict-host-key options, lock filenames,
-  `/config/config.xml`, `/run/secrets/...`, reserve space and scoring constants
-  remain fixed protocol/safety/policy values. In particular, changing an operation
+- Timeouts, retries, SSH keepalive/strict-host-key options, lock filenames
+  and reserve space remain fixed protocol/safety/policy values. In particular, changing an operation
   timeout can change uncertain-execution behavior; it is deliberately excluded.
 
 Offline parity continues to characterize the example production layout, explicitly
