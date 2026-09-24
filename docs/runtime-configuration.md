@@ -61,6 +61,13 @@ Before this, only `execute_cross_movie.py`, `execute_cross_tv.py` and
 it, and `urls` refused any path. With no base path anywhere (this deployment),
 every URL is unchanged.
 
+Real-data result on the media host (2026-09-24, candidate `ab32449`):
+`secrets_parity` reported every service's new API root identical to the URL
+each old call site built (`endpoint_identical_to_urls` and, for Radarr/Sonarr,
+`endpoint_identical_to_url_base_executors`), so no `UrlBase` is set there; the
+item #3 recordings replayed byte-identically for movies and TV with no misses;
+the offline suite passed.
+
 ## Service credentials
 
 `service_keys.py` reads every API key and the TMDB token, for the planners,
