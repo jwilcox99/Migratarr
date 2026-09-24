@@ -178,7 +178,13 @@ host mode (translated and native), refusals, validation and a mutation check.
 --sonarr-host-root <dir>` compares docker and host checks on the smallest real
 files each Arr reports, read-only.
 
-Real-data result on the media host: *pending.*
+Real-data result on the media host (2026-09-24, candidate `e80cb4a`, run from a
+separate worktree while a live batch used the main checkout): Radarr and
+Sonarr both mount `/mnt/media` at `/media`, so `arr_files_parity` ran with
+`--radarr-host-root /mnt/media --sonarr-host-root /mnt/media --sample 5`. All
+10 files (7.9 MB to 471 MB) were visible both ways and hashed identically
+(`"identical": true`); the offline suite passed. the media host itself stays on
+`docker`, the stronger check.
 
 ## Environment and command-line precedence
 
