@@ -37,6 +37,10 @@ def _families(value, label):
 # identities, not settings; only the Arr tags that select them are configurable.
 CATEGORIES = ('Common', 'Current', 'Library', 'Rare', 'Archive')
 
+# Prefix of Migratarr's own tag names. audit_overrides.py flags labels carrying
+# it that aren't configured overrides (e.g. defaults left behind by a rename).
+TAG_NAMESPACE = 'migratarr-'
+
 # Migratarr's own tag namespace, used when planner.json has no "overrides".
 DEFAULT_OVERRIDES = {
     'lock_tag': 'migratarr-lock',

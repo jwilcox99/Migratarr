@@ -66,6 +66,9 @@ may have at most one tag, and the lock tag can't also be a category tag.
 configured when *they* run against the manifest the planner wrote earlier.
 If you rename a tag in Radarr/Sonarr, rename it here at the same time;
 otherwise items carrying the renamed tag are neither locked nor pinned.
+`audit_overrides.py` reports exactly the configured tags, and lists any other
+`migratarr-*` tag (such as a default left behind after switching to custom
+tags) as unrecognized, since nothing acts on it.
 
 `config/legacy-rules.json` (the read-only validation layer's policy) carries
 its own copy of these tags; keep it in step unless you are deliberately
