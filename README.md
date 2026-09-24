@@ -118,8 +118,8 @@ unchanged. Safe unit tests run in GitHub Actions and locally with
 `python3 -m unittest discover -s tests -v`.
 
 **These config files do not cover everything deployment-specific.**
-Category folder names, NAS mount-layout shape, and Docker secret extraction are still
-Python literals in the source, not settings. See [SETUP.md](SETUP.md) for
+Docker secret extraction is still a Python literal in the source, not a
+setting. See [SETUP.md](SETUP.md) for
 exactly what and where, before running this against a library you care about.
 
 ## Usage
@@ -250,10 +250,10 @@ pre-execution gate.
   `docs/phase-one-closeout.md` states this explicitly.
 - `migratarr_validation/` is read-only and not yet the live gate for
   planning or execution.
-- Runtime configuration supports one host/NAS pairing. Disk IDs are no
-  longer fixed to exactly four (`docs/storage-targets.md`, gate 4), but
-  local/remote path layout is still fixed-depth and single-host; the
-  executor topology itself isn't otherwise generalized.
+- Runtime configuration supports one host/NAS pairing. Disk count, root
+  depth and category folder names are configuration (`docs/media-layout.md`),
+  but the executor topology itself (one media host, one NAS reached
+  over SSH) isn't otherwise generalized.
 - Streaming subscriptions, TMDB region, override tags and every scoring
   weight, tier and threshold are settings (`config/planner.json`, see
   `docs/planner-settings.md`).

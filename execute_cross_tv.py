@@ -13,7 +13,7 @@ import json
 
 import os
 
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePath, PurePosixPath
 
 import re
 
@@ -38,11 +38,13 @@ import xml.etree.ElementTree as ET
 
 from runtime_config import get_config
 from planner_settings import get_settings
+from media_layout import MediaLayout, canonical, get_targets, split_media_path
 from executor_manifest import digest, load_approved_plan
 from executor_command import run_command
 from executor_inventory import scan_metadata, metadata_from_inventory
 RUNTIME = get_config()
 OVERRIDES = get_settings().overrides
+TARGETS = get_targets()
 
 class Refused(RuntimeError):
     pass
@@ -280,7 +282,16 @@ def main():
     return 0
 
 
-DISKS = RUNTIME.remote_disks
+MEDIA = 'TV'
+
+
+def layout():
+    # Built per call from RUNTIME, so a patched or reloaded runtime is honored.
+    return MediaLayout(RUNTIME, TARGETS)
+
+
+def posix(path):
+    return path.as_posix() if isinstance(path, PurePath) else str(path)
 
 
 def paths(row):
@@ -288,26 +299,39 @@ def paths(row):
     for field, category, disk in [('source_path', 'current', 'source_disk'),
                                   ('target_path', 'recommended', 'target_disk')]:
         raw = row[field]
-        p = PurePosixPath(raw)
-        require(str(p) == raw and '..' not in p.parts and len(p.parts) == 7
-                and p.parts[:3] == RUNTIME.mount_root.parts and p.parts[3] in DISKS
-                and p.parts[3] == row[disk] and p.parts[4] == 'TV'
-                and p.parts[5] == row[category]
-                and row[category] in {'Current', 'Rare', 'Library', 'Archive'}, 'Invalid manifest path')
+        found = layout().parse_local(raw, MEDIA) if canonical(raw) else None
+        require(found is not None and found[0] == row[disk] and found[1] == row[category],
+                'Invalid manifest path')
         result.append(Path(raw))
     src, dst = result
     require(src.name == dst.name and row['source_disk'] != row['target_disk'],
             'Expected distinct disks and unchanged series folder name')
-    return src, dst, '/media/TV/' + row['current'] + '/' + src.name, \
-        '/media/TV/' + row['recommended'] + '/' + dst.name
+    return src, dst, layout().logical(MEDIA, row['current'], src.name), \
+        layout().logical(MEDIA, row['recommended'], dst.name)
 
 
 def remote_path(path):
-    p = PurePosixPath(str(path))
-    require(len(p.parts) == 7 and p.parts[:3] == RUNTIME.mount_root.parts
-            and p.parts[3] in DISKS and p.parts[4] == 'TV' and '..' not in p.parts,
-            'Invalid NAS mapping')
-    return DISKS[p.parts[3]] + '/' + '/'.join(p.parts[4:])
+    raw = posix(path)
+    require(layout().parse_local(raw, MEDIA) is not None, 'Invalid NAS mapping')
+    return layout().to_remote(raw, MEDIA)
+
+
+def remote_layout():
+    """Disk roots and TV category folders as the NAS sees them; shipped with the program."""
+    return layout().remote_roots, layout().category_dirs[MEDIA]
+
+
+# In-process view of what remote_program() ships (bound at import, as DISKS was).
+NAS_LAYOUT = remote_layout()
+
+
+def nas_pair(source, destination, nas_layout):
+    roots, category_dirs = nas_layout
+    found = [split_media_path(p, roots, category_dirs) for p in (source, destination)]
+    for item in found:
+        require(item is not None, 'Invalid NAS TV path')
+    require(found[0][2] == found[1][2] and found[0][0] != found[1][0], 'Not a cross-disk pair')
+    return Path(source), Path(destination)
 
 
 def content_only(items):
@@ -487,12 +511,7 @@ def nas_operation(data):
     require(operation in {'check', 'copy', 'delete'}, 'Unknown operation')
     execution_id = data['execution_id']
     require(re.fullmatch(r'\d{8}T\d{6}Z-\d{4,}', execution_id), 'Invalid execution ID')
-    src, dst = Path(data['source']), Path(data['destination'])
-    for p in (src, dst):
-        require(len(p.parts) == 6 and str(Path(*p.parts[:3])) in DISKS.values()
-                and p.parts[3] == 'TV' and p.parts[4] in {'Current', 'Rare', 'Library', 'Archive'}
-                and '..' not in p.parts, 'Invalid NAS TV path')
-    require(src.name == dst.name and src.parts[:3] != dst.parts[:3], 'Not a cross-disk pair')
+    src, dst = nas_pair(data['source'], data['destination'], NAS_LAYOUT)
     canonical_existing(src)
     canonical_existing(dst.parent)
     require(src.is_dir() and dst.parent.is_dir(), 'Missing source or target parent')
@@ -537,10 +556,11 @@ def nas_operation(data):
 def remote_program():
     imports = ('import ctypes, hashlib, json, os, stat, sys, fcntl, time, shutil, re\n'
                'from pathlib import Path, PurePosixPath\nfrom datetime import datetime\n')
-    functions = [scan_metadata, metadata_from_inventory, Refused, require, progress, canonical_existing,
+    functions = [scan_metadata, metadata_from_inventory, Refused, require, progress, split_media_path,
+                 nas_pair, canonical_existing,
                  file_metadata, inventory_metadata, inventory, rename_noreplace, sync_parents, content_only,
                  copy_tree, remove_verified_tree, nas_operation]
-    code = imports + 'DISKS = ' + repr(DISKS) + '\n\n'
+    code = imports + 'NAS_LAYOUT = ' + repr(remote_layout()) + '\n\n'
     code += '\n\n'.join(inspect.getsource(f) for f in functions)
     return code + '''
 data = json.load(sys.stdin)

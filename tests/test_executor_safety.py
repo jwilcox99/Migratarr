@@ -16,6 +16,7 @@ import unittest
 from unittest.mock import patch
 
 from planner_settings import load_settings, parse_settings
+from storage_targets import load_targets
 from runtime_config import load_config
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,7 +35,10 @@ class OfflineTest(unittest.TestCase):
             self.stack.enter_context(patch(target, side_effect=AssertionError('External I/O forbidden')))
         self.config = load_config(ROOT / 'config/runtime.example.json', environ={})
         self.settings = load_settings(ROOT / 'config/planner.example.json')
-        with patch('runtime_config.get_config', return_value=self.config),                 patch('planner_settings.get_settings', return_value=self.settings):
+        self.targets = load_targets(ROOT / 'config/storage-targets.example.json')
+        with patch('runtime_config.get_config', return_value=self.config), \
+                patch('planner_settings.get_settings', return_value=self.settings), \
+                patch('media_layout.get_targets', return_value=self.targets):
             self.modules = {name: importlib.import_module(name) for name in EXECUTORS}
         self.base = Path(self.stack.enter_context(tempfile.TemporaryDirectory())).resolve()
         for module in self.modules.values():

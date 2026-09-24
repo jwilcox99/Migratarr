@@ -24,8 +24,8 @@ python3 -c 'from planner_settings import load_settings; load_settings(); print("
 ```
 
 That covers: base path, NAS host/user/SSH key, Docker container names,
-Radarr/Sonarr/Jellyfin URLs, and disk IDs/local+remote paths (disk *count* is
-no longer fixed to four — see `docs/storage-targets.md` gate 4). Keep
+Radarr/Sonarr/Jellyfin URLs, disk IDs and local+remote roots of any depth,
+and category folder names (see [Media layout](docs/media-layout.md)). Keep
 `runtime.json`'s `storage` block and `storage-targets.json`'s targets in
 agreement; `storage_targets.check_runtime_consistency()` refuses a deployment
 where they disagree.
@@ -47,33 +47,6 @@ Token](https://www.themoviedb.org/settings/api) exported as `TMDB_TOKEN`.
 None of the following are read from `runtime.json` or any other config file.
 They're Python literals, and the planner will silently apply *this*
 deployment's values to yours unless you change them.
-
-### Category folder names
-
-The planners and executors identify an item's category from fixed folder
-names under each disk: Movies in `Movies/{Common,Library,Rare,Archive}`, TV
-in `TV/{Current,Library,Rare,Archive}`. `storage-targets.json` declares
-these paths in `category_paths`, but the planners' path detection
-(`current_bucket()` in `dry_run_movies.py` / `dry_run_tv.py`) and the
-executors' path safety checks, including the checks run on the NAS itself,
-still match the literal names. Renaming those folders means editing code in
-all of those places.
-
-The category IDs themselves (`Common`, `Current`, `Library`, `Rare`,
-`Archive`) are code identities the scoring logic branches on, not settings.
-The Arr tags that pin or lock a category *are* settings; see
-[Planner settings](docs/planner-settings.md#override-tags).
-
-### NAS mount-layout shape
-
-`runtime_config.py` accepts any disk *IDs* and *paths* you give it, but the
-path *shape* is still fixed (`docs/runtime-configuration.md`, "Deliberately
-unchanged boundaries"): local roots need a shared parent in the form
-`/component/component/<id>`, and remote roots need exactly two path
-components. That's this deployment's Synology-style
-`/mnt/nas/media0N` → `/volumeN/media0N` pattern. A NAS with a different
-mount depth or a non-Synology remote-path convention needs a reviewed code
-change to `runtime_config.py`'s path validation, not a config edit.
 
 ### Docker-exec secret extraction
 
