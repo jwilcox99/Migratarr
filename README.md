@@ -99,7 +99,7 @@ cp config/runtime.example.json config/runtime.json
 python3 -c 'from runtime_config import get_config; get_config(); print("Runtime config valid")'
 ```
 
-Review the example's media host/NAS values before use. See
+Replace the example's host, NAS and disk values with your own before use. See
 [Runtime configuration](docs/runtime-configuration.md) for all fields, environment
 overrides, retained layout restrictions, validation errors and migration steps.
 No credentials belong in the config. The deployment file is ignored by Git.
@@ -242,21 +242,21 @@ pre-execution gate.
   not enforced by any single command. `batch_cross_movies.py` /
   `batch_cross_tv.py` sequence one media type's cross-disk moves, but
   nothing drives the whole dry-run → plan → snapshot → manifest pipeline.
-- Significant duplication between `execute_movie_nas.py`,
-  `execute_tv_nas.py`, `execute_cross_movie.py`, and `execute_cross_tv.py`
-  — changes to the shared safety logic currently have to be ported by hand
-  across all four (see the Phase Two handoff in `docs/phase-one-closeout.md`).
-- **No CI.** `tests/` exists on `main` but nothing runs it automatically —
-  `docs/phase-one-closeout.md` states this explicitly.
+- Five separate executors (`execute_movie.py`, `execute_movie_nas.py`,
+  `execute_tv_nas.py`, `execute_cross_movie.py`, `execute_cross_tv.py`).
+  Low-level safety primitives are shared (`executor_command.py`,
+  `executor_inventory.py`, `executor_manifest.py`, `executor_nfs.py`), but
+  each executor's preflight/move/verify flow is still its own copy (see the
+  Phase Two handoff in `docs/phase-one-closeout.md`).
+- CI (`.github/workflows/tests.yml`) runs only the safe unit tests in `tests/`.
+  Nothing that touches a real Radarr/Sonarr/Jellyfin/NAS stack runs
+  automatically; live behavior is validated by hand and recorded in `docs/`.
 - `migratarr_validation/` is read-only and not yet the live gate for
   planning or execution.
 - Runtime configuration supports one host/NAS pairing. Disk count, root
   depth and category folder names are configuration (`docs/media-layout.md`),
   but the executor topology itself (one media host, one NAS reached
   over SSH) isn't otherwise generalized.
-- Streaming subscriptions, TMDB region, override tags and every scoring
-  weight, tier and threshold are settings (`config/planner.json`, see
-  `docs/planner-settings.md`).
 
 ## Contributing
 

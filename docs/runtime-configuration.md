@@ -26,10 +26,10 @@ optional `secrets` section only says where each one is read from (see
 
 ## Extracted values and production mapping
 
-| Setting | Existing deployment value |
+| Setting | Example value |
 | --- | --- |
 | `base_path` | `/opt/media-stack/migratarr` |
-| `nas.host`, `nas.user` | `nas.example`, `migratarr` |
+| `nas.host`, `nas.user` | `nas.example`, `migratarr` (placeholders; replace with your NAS host and SSH user) |
 | `nas.ssh_key`, `nas.python` | `~/.ssh/migratarr_nas`, `/usr/bin/python3` |
 | `containers.radarr`, `.sonarr`, `.homepage` (optional) | `radarr`, `sonarr`, `homepage` |
 | `urls.radarr`, `.sonarr`, `.jellyfin` | `http://localhost:7878`, `http://localhost:8989`, `http://localhost:8096` |
