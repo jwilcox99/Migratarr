@@ -128,6 +128,9 @@ def compare(movie_csv, tv_csv, overrides, policy=None, rules=None):
             namespace["DESTINATION_ROOTS"],
             tuple(namespace["disk_roots"].values()),
             reserves.pop() * 1024**3,
+            # Same source categories as the planner, so unconfigured ones
+            # (dry-run "Unknown") block identically on both sides.
+            namespace['TARGETS'].category_paths,
         )
     if rules is not None:
         policy = replace(policy, rules=rules)

@@ -186,6 +186,62 @@ def choose_destination_root(
     return valid[0][1]
 
 
+def unknown_source_category_plan(
+    media_type,
+    title,
+    source_path,
+    current,
+    original_recommended,
+    recommended,
+    override_type,
+    override_tag,
+    final_score,
+    replacement,
+    confidence,
+    decision_reason,
+):
+    blockers = ["SOURCE_CATEGORY_UNKNOWN"]
+    warnings = []
+
+    if override_type == "CONFLICT":
+        blockers.insert(0, "CONFLICTING_MANUAL_OVERRIDES")
+
+    if override_type == "LOCK":
+        warnings.append("MANUAL_LOCK")
+
+    if override_type == "CATEGORY":
+        warnings.append("MANUAL_CATEGORY_OVERRIDE")
+
+    return {
+        "media_type": media_type,
+        "title": title,
+        "current": current,
+        "scored_recommendation": original_recommended,
+        "recommended": recommended,
+        "override_type": override_type,
+        "override_tag": override_tag,
+        # Unresolved: report the logical Arr path, never a host guess.
+        "source_path": source_path,
+        "target_path": "",
+        "size_gb": "",
+        "destination_free_gb": "",
+        "free_after_move_gb": "",
+        "source_disk": "",
+        "target_disk": "",
+        "transfer_type": "",
+        "final_score": final_score,
+        "replacement": replacement,
+        "replacement_confidence": confidence,
+        "decision_reason": decision_reason,
+        "arr_path_update_required": (
+            "YES" if current != recommended else ""
+        ),
+        "status": "BLOCKED",
+        "blockers": ";".join(blockers),
+        "warnings": ";".join(warnings),
+    }
+
+
 def evaluate_move(
     media_type,
     item_id,
@@ -207,6 +263,17 @@ def evaluate_move(
         recommended,
         ARR_OVERRIDES,
     )
+
+    if current not in TARGETS.category_paths[media_type]:
+        # dry_run_*.py current_bucket() reports "Unknown" when the Arr path
+        # is not <arr_root>/<category folder>/<item>. With no category
+        # folder to search there is no host source to resolve, so block
+        # before probing any disk rather than guess where the item lives.
+        return unknown_source_category_plan(
+            media_type, title, source_path, current, original_recommended,
+            recommended, override_type, override_tag, final_score,
+            replacement, confidence, decision_reason,
+        )
 
     source = resolve_host_source(
         media_type,

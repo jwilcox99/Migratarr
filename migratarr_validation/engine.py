@@ -82,6 +82,15 @@ class ValidationEngine:
                 return root.name
         return ""
 
+    def source_category_known(self, request: MoveRequest) -> bool:
+        """False for dry-run "Unknown" (or any unconfigured) source categories.
+
+        Without category_paths the engine keeps the pre-storage-targets
+        Movies/<current> search, which reports such rows as SOURCE_MISSING.
+        """
+        return (self.policy.category_paths is None
+                or request.current in self.policy.category_paths[request.media_type])
+
     def resolve_source(self, request: MoveRequest) -> Path:
         """Ported candidate search and ambiguous/missing sentinels."""
         arr = Path(request.source_path)
@@ -150,9 +159,6 @@ class ValidationEngine:
             self.overrides,
             self.policy.rules,
         )
-        source = self.resolve_source(request)
-        size = self.size_bytes(source) if self.exists(source) else None
-        dest_root = self.choose_destination_root(request.media_type, recommended, source)
         blockers: list[str] = []
         warnings: list[str] = []
         if override_type == "CONFLICT":
@@ -161,6 +167,38 @@ class ValidationEngine:
             self.policy.rules.emit("MANUAL_LOCK", blockers, warnings)
         if override_type == "CATEGORY":
             self.policy.rules.emit("MANUAL_CATEGORY_OVERRIDE", blockers, warnings)
+        if not self.source_category_known(request):
+            # Ported from build_move_plan.py unknown_source_category_plan():
+            # no category folder to search, so no disk is probed.
+            blockers.append("SOURCE_CATEGORY_UNKNOWN")
+            return {
+                "media_type": request.media_type,
+                "title": request.title,
+                "current": request.current,
+                "scored_recommendation": original_recommended,
+                "recommended": recommended,
+                "override_type": override_type,
+                "override_tag": override_tag,
+                "source_path": request.source_path,
+                "target_path": "",
+                "size_gb": "",
+                "destination_free_gb": "",
+                "free_after_move_gb": "",
+                "source_disk": "",
+                "target_disk": "",
+                "transfer_type": "",
+                "final_score": request.final_score,
+                "replacement": request.replacement,
+                "replacement_confidence": request.confidence,
+                "decision_reason": request.decision_reason,
+                "arr_path_update_required": "YES" if request.current != recommended else "",
+                "status": "BLOCKED",
+                "blockers": ";".join(blockers),
+                "warnings": ";".join(warnings),
+            }
+        source = self.resolve_source(request)
+        size = self.size_bytes(source) if self.exists(source) else None
+        dest_root = self.choose_destination_root(request.media_type, recommended, source)
         if dest_root is None:
             blockers.append("NO_ELIGIBLE_DESTINATION")
             target = Path(
