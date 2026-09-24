@@ -127,8 +127,7 @@ class RulePolicyTests(unittest.TestCase):
         }
         namespace = {
             "RUNTIME": load_legacy()[1]["RUNTIME"],
-            "RADARR_URL": "http://radarr", "SONARR_URL": "http://sonarr",
-            "arr_key": lambda _: "test-key",
+            "arr_endpoint": lambda service: ("http://" + service, "test-key"),
             "api_json": lambda url, _: responses[url],
         }
         self.assertEqual(_load_custom_overrides(namespace, rules), {

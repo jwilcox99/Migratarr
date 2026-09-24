@@ -13,13 +13,11 @@ from statistics import mean
 from runtime_config import get_config
 from planner_settings import at_least, at_most, load_settings
 from media_layout import MediaLayout, get_targets
-from service_keys import read_key
+from service_keys import read_key, service_endpoint
 RUNTIME = get_config()
 PLANNER_SETTINGS = load_settings()
 LAYOUT = MediaLayout(RUNTIME, get_targets())
 
-SONARR_URL = RUNTIME.urls["sonarr"]
-JELLYFIN_URL = RUNTIME.urls["jellyfin"]
 
 SAMPLE_SIZE = 999999
 RANDOM_SEED = 420
@@ -38,9 +36,9 @@ STREAMING_REGION = PLANNER_SETTINGS.region
 SCORING = PLANNER_SETTINGS.scoring
 
 
-# Credential sources: runtime.json "secrets" (see service_keys.py).
-SONARR_KEY = read_key("sonarr")
-JELLYFIN_KEY = read_key("jellyfin")
+# API roots and keys: runtime.json urls + "secrets" (see service_keys.py).
+SONARR_URL, SONARR_KEY = service_endpoint("sonarr")
+JELLYFIN_URL, JELLYFIN_KEY = service_endpoint("jellyfin")
 TMDB_TOKEN = read_key("tmdb")
 
 

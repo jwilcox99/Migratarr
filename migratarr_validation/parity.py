@@ -50,8 +50,8 @@ def load_legacy(runtime=None, targets=None, planner=None, settings=None):
     runtime = runtime or load_config(PLANNER.parent / 'config' / 'runtime.example.json', environ={})
     from planner_settings import load_settings
     settings = settings or load_settings(PLANNER.parent / 'config' / 'planner.example.json')
-    from service_keys import read_key
-    namespace = {"RUNTIME": runtime, "PLANNER_SETTINGS": settings, "read_key": read_key, "Path": Path, "os": os, "csv": csv, "json": json,
+    from service_keys import service_endpoint
+    namespace = {"RUNTIME": runtime, "PLANNER_SETTINGS": settings, "service_endpoint": service_endpoint, "Path": Path, "os": os, "csv": csv, "json": json,
                  "subprocess": subprocess, "urllib": urllib}
     if any(_assigned_name(node) == 'TARGETS' for node in tree.body):
         from storage_targets import load_targets
@@ -194,11 +194,11 @@ def _load_custom_overrides(namespace, rules):
     """Read Arr tags matching a custom rule policy without changing Arr."""
     result = {"Movie": {}, "TV": {}}
     systems = (
-        ("Movie", namespace["RADARR_URL"], "radarr", "movie"),
-        ("TV", namespace["SONARR_URL"], "sonarr", "series"),
+        ("Movie", "radarr", "movie"),
+        ("TV", "sonarr", "series"),
     )
-    for media, base, service, endpoint in systems:
-        key = namespace["arr_key"](service)
+    for media, service, endpoint in systems:
+        base, key = namespace["arr_endpoint"](service)
         tags = namespace["api_json"](f"{base}/api/v3/tag", key)
         tag_map = {tag["id"]: tag["label"].lower() for tag in tags}
         items = namespace["api_json"](f"{base}/api/v3/{endpoint}", key)
@@ -249,7 +249,7 @@ def main(argv=None):
                         help="Read current Arr tags and create this snapshot file only")
     args = parser.parse_args(argv)
     if os.name != "posix":
-        parser.error("Run on a POSIX host with the planner's /mnt/nas mounts")
+        parser.error("Run on the POSIX host that mounts the configured storage roots")
     if args.snapshot_overrides:
         if args.movie_csv or args.tv_csv or args.overrides_json or args.config:
             parser.error("--snapshot-overrides cannot be combined with comparison inputs")

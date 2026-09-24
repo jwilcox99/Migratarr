@@ -19,6 +19,7 @@ from pathlib import Path, PurePosixPath
 import re
 import stat
 import subprocess
+from urllib.parse import urlsplit
 import xml.etree.ElementTree as ET
 
 SERVICES = ('radarr', 'sonarr', 'jellyfin', 'tmdb')
@@ -175,3 +176,19 @@ def read_credential(service, runtime=None):
 
 def read_key(service, runtime=None):
     return read_credential(service, runtime)[0]
+
+
+def service_endpoint(service, runtime=None):
+    """Return (api_root, key) for radarr, sonarr or jellyfin; API paths go after api_root.
+
+    api_root is runtime.json urls[service]. When that URL has no base path of
+    its own, Radarr/Sonarr append their UrlBase (config.xml, or url_base on an
+    env/file source); a path written in urls wins.
+    """
+    if runtime is None:
+        from runtime_config import get_config
+        runtime = get_config()
+    _require(service in runtime.urls, service + ' has no URL in runtime.json urls')
+    key, url_base = read_credential(service, runtime)
+    url = runtime.urls[service]
+    return (url if urlsplit(url).path else url + url_base), key

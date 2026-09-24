@@ -1,14 +1,13 @@
 # Setup
 
-Migratarr is not yet a "clone it and it adapts to you" tool. Deployment
-location, NAS/SSH details, container names, service URLs, and disk layout are
-config-driven (see [Configuration](README.md#configuration) and
-[Runtime configuration](docs/runtime-configuration.md)). Everything in this
-doc is what's *left over* after that config: assumptions still baked into
-Python source rather than exposed as a setting, and the deployment-specific
-quirks of the one real environment this has ever run against. Read this
-before deciding whether to run it against a library you care about, and
-expect to edit code, not just JSON, to adapt some of these.
+Migratarr has run against one real environment. Everything deployment-specific
+about it is configuration: see [Configuration](README.md#configuration),
+[Runtime configuration](docs/runtime-configuration.md),
+[Planner settings](docs/planner-settings.md) and
+[Media layout](docs/media-layout.md). This doc covers what to configure, then
+the topology the code still assumes (section 2), which is the part you can't
+change with JSON. Read both before running it against a library you care
+about.
 
 ## 1. What config already covers
 
@@ -24,7 +23,9 @@ python3 -c 'from planner_settings import load_settings; load_settings(); print("
 ```
 
 That covers: base path, NAS host/user/SSH key, Docker container names,
-Radarr/Sonarr/Jellyfin URLs, disk IDs and local+remote roots of any depth,
+Radarr/Sonarr/Jellyfin URLs (with base paths, see
+[Service URLs](docs/runtime-configuration.md#service-urls)), disk IDs and
+local+remote roots of any depth,
 and category folder names (see [Media layout](docs/media-layout.md)). Keep
 `runtime.json`'s `storage` block and `storage-targets.json`'s targets in
 agreement; `storage_targets.check_runtime_consistency()` refuses a deployment
@@ -50,8 +51,8 @@ survives new shells); see
 
 Every value SETUP.md used to list as a Python literal (streaming
 subscriptions and region, override tags, scoring, NAS layout and category
-folders, where API keys come from) is now configuration. What remains is
-topology rather than values:
+folders, where API keys come from, service base URLs) is now configuration.
+What remains is topology rather than values:
 
 - **One host, one NAS.** Planning and execution run on one host (here
   "the media host") that sees the NAS disks locally and reaches the NAS over SSH
@@ -60,10 +61,6 @@ topology rather than values:
   sources, the executors run `docker exec <container> test` / `sha256sum` to
   verify media as Radarr/Sonarr see it, so both must be containers named in
   `runtime.json` `containers`.
-- **Arr URL base.** `execute_cross_movie.py`, `execute_cross_tv.py` and
-  `execute_tv_nas.py` honor a Radarr/Sonarr `UrlBase`; `execute_movie.py`,
-  `execute_movie_nas.py` and the planners assume none. Serve Radarr/Sonarr at
-  the root of their `urls` origin.
 
 ## 3. Recommended first run
 

@@ -51,12 +51,17 @@ class RuntimeConfig:
             try:
                 u = urlsplit(value)
                 port = u.port
+                # An optional base path (e.g. /radarr behind a reverse proxy) must be canonical.
+                segments = u.path.split('/')[1:] if u.path else []
                 valid = (u.scheme in {'http', 'https'} and u.hostname and not u.username
-                         and not u.password and not u.query and not u.fragment and not u.path
-                         and not any(c.isspace() for c in value))
+                         and not u.password and not u.query and not u.fragment
+                         and (not u.path or (u.path.startswith('/') and all(
+                             s not in {'', '.', '..'} for s in segments)))
+                         and not any(c.isspace() for c in value) and not value.endswith('/'))
             except ValueError:
                 valid = False
-            require(valid, 'URL must be an HTTP(S) origin without credentials/path: ' + name)
+            require(valid, 'URL must be HTTP(S) with an optional base path, no credentials, query, '
+                    'fragment or trailing slash: ' + name)
         self.urls = dict(data['urls'])
         fields(data['nas'], ('host', 'user', 'ssh_key', 'python'), 'nas')
         nas = data['nas']

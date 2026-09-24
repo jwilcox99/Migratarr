@@ -95,6 +95,9 @@ class ValidationEngine:
         """Ported candidate search and ambiguous/missing sentinels."""
         arr = Path(request.source_path)
         if self.policy.category_paths is None:
+            # Legacy policies (config/legacy-storage.json) predate category_paths and
+            # describe only this deployment's Movies/<category>, TV/<category> folders;
+            # policies with category_paths follow storage-targets.json (media_layout.py).
             category = Path("Movies" if request.media_type == "Movie" else "TV") / request.current
         else:
             category = self.policy.category_paths[request.media_type][request.current]

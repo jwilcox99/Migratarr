@@ -13,7 +13,7 @@ from pathlib import Path
 from runtime_config import get_config
 from planner_settings import at_least, at_most, load_settings
 from media_layout import MediaLayout, get_targets
-from service_keys import read_key
+from service_keys import read_key, service_endpoint
 RUNTIME = get_config()
 PLANNER_SETTINGS = load_settings()
 LAYOUT = MediaLayout(RUNTIME, get_targets())
@@ -22,8 +22,6 @@ LAYOUT = MediaLayout(RUNTIME, get_targets())
 # CONFIG
 # ============================================================
 
-RADARR_URL = RUNTIME.urls["radarr"]
-JELLYFIN_URL = RUNTIME.urls["jellyfin"]
 
 SAMPLE_SIZE = 999999
 RANDOM_SEED = 420
@@ -46,9 +44,9 @@ SCORING = PLANNER_SETTINGS.scoring
 # HELPERS
 # ============================================================
 
-# Credential sources: runtime.json "secrets" (see service_keys.py).
-RADARR_KEY = read_key("radarr")
-JELLYFIN_KEY = read_key("jellyfin")
+# API roots and keys: runtime.json urls + "secrets" (see service_keys.py).
+RADARR_URL, RADARR_KEY = service_endpoint("radarr")
+JELLYFIN_URL, JELLYFIN_KEY = service_endpoint("jellyfin")
 TMDB_TOKEN = read_key("tmdb")
 
 

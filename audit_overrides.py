@@ -5,11 +5,9 @@ import urllib.request
 
 from planner_settings import TAG_NAMESPACE, get_settings
 from runtime_config import get_config
-from service_keys import read_key
+from service_keys import service_endpoint
 RUNTIME = get_config()
 
-RADARR_URL = RUNTIME.urls["radarr"]
-SONARR_URL = RUNTIME.urls["sonarr"]
 
 # Arr tag labels from config/planner.json "overrides" (default: migratarr-*),
 # compared lowercased as build_move_plan.py and the executors do.
@@ -120,20 +118,20 @@ def audit(name, url, key, endpoint):
 
 
 def main():
-    # Credential sources: runtime.json "secrets" (see service_keys.py).
-    radarr_key = read_key("radarr", RUNTIME)
-    sonarr_key = read_key("sonarr", RUNTIME)
+    # API roots and keys: runtime.json urls + "secrets" (see service_keys.py).
+    radarr_url, radarr_key = service_endpoint("radarr", RUNTIME)
+    sonarr_url, sonarr_key = service_endpoint("sonarr", RUNTIME)
 
     audit(
         "RADARR",
-        RADARR_URL,
+        radarr_url,
         radarr_key,
         "movie"
     )
 
     audit(
         "SONARR",
-        SONARR_URL,
+        sonarr_url,
         sonarr_key,
         "series"
     )

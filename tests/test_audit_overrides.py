@@ -27,7 +27,7 @@ def import_audit(settings):
     # Importing must not read credentials or call Radarr/Sonarr.
     with patch('runtime_config.get_config', return_value=RUNTIME), \
             patch('planner_settings.get_settings', return_value=settings), \
-            patch('service_keys.read_key', side_effect=AssertionError('credential read at import')), \
+            patch('service_keys.service_endpoint', side_effect=AssertionError('credential read at import')), \
             patch('urllib.request.urlopen', side_effect=AssertionError('HTTP at import')):
         return importlib.reload(importlib.import_module('audit_overrides'))
 
@@ -49,7 +49,8 @@ class AuditOverridesTests(unittest.TestCase):
 
         out = io.StringIO()
         with patch.object(module, 'get_json', side_effect=get_json), \
-                patch.object(module, 'read_key', side_effect=lambda service, runtime: service + '-key'), \
+                patch.object(module, 'service_endpoint',
+                             side_effect=lambda service, runtime: (RUNTIME.urls[service], service + '-key')), \
                 redirect_stdout(out):
             module.main()
         return out.getvalue(), calls
