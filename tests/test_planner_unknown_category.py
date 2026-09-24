@@ -16,7 +16,7 @@ from unittest.mock import patch
 from runtime_config import load_config
 from storage_targets import load_targets
 from migratarr_validation import MoveRequest, ValidationEngine, ValidationPolicy
-from migratarr_validation.parity import load_legacy, run_legacy
+from migratarr_validation.parity import _csv_requests, load_legacy, run_legacy
 from migratarr_validation.planner_parity import compare_planners, csv_bytes
 
 
@@ -114,6 +114,12 @@ class PlannerUnknownCategoryTests(unittest.TestCase):
         namespace['free_bytes'] = lambda p: self.free.get(native(p), 500 * GIB)
         return namespace
 
+    def destination_roots(self):
+        # Native paths, as build_move_plan.py DESTINATION_ROOTS builds them.
+        return {media: {category: tuple(Path(str(root)) for root in roots)
+                        for category, roots in categories.items()}
+                for media, categories in self.targets.destination_roots.items()}
+
     def filesystem(self):
         return patch.object(Path, 'exists', lambda p: str(p) in self.existing)
 
@@ -161,13 +167,80 @@ class PlannerUnknownCategoryTests(unittest.TestCase):
              'CROSS_DISK_TRANSFER', '/mnt/nas/media03/TV/Library/Show Two'),
         ])
 
-    def test_unknown_source_category_currently_raises_key_error(self):
-        # Characterization only: resolve_host_source() indexes
-        # TARGETS.category_paths[media_type]["Unknown"].
-        movie_csv, tv_csv = self.write_inputs(WELL_FORMED_MOVIES + UNKNOWN_MOVIES,
-                                              WELL_FORMED_TV)
-        with self.assertRaisesRegex(KeyError, 'Unknown'):
-            self.plans(movie_csv, tv_csv)
+    def test_unknown_source_category_is_blocked_without_probing_disks(self):
+        movie_csv, tv_csv = self.write_inputs(UNKNOWN_MOVIES, UNKNOWN_TV)
+        probed = []
+        real = lambda p: str(p) in self.existing
+        with patch.object(Path, 'exists', lambda p: probed.append(str(p)) or real(p)):
+            tree, namespace = load_legacy(self.runtime, targets=self.targets)
+            rows = run_legacy(tree, self.stub(namespace), movie_csv, tv_csv, {})
+        self.assertEqual(rows[0], {
+            'media_type': 'Movie', 'title': 'Echo (2007)', 'current': 'Unknown',
+            'scored_recommendation': 'Library', 'recommended': 'Library',
+            'override_type': '', 'override_tag': '',
+            'source_path': '/media/Echo', 'target_path': '',
+            'size_gb': '', 'destination_free_gb': '', 'free_after_move_gb': '',
+            'source_disk': '', 'target_disk': '', 'transfer_type': '',
+            'final_score': '50', 'replacement': 'yes', 'replacement_confidence': 'high',
+            'decision_reason': 'score', 'arr_path_update_required': 'YES',
+            'status': 'BLOCKED', 'blockers': 'SOURCE_CATEGORY_UNKNOWN', 'warnings': '',
+        })
+        self.assertEqual([(r['title'], r['status'], r['blockers']) for r in rows], [
+            ('Echo (2007)', 'BLOCKED', 'SOURCE_CATEGORY_UNKNOWN'),
+            ('Show Three', 'BLOCKED', 'SOURCE_CATEGORY_UNKNOWN'),
+        ])
+        self.assertFalse([p for p in probed if 'Echo' in p or 'Show Three' in p])
+        # Blocked rows reserve nothing and sample no free space.
+        self.assertEqual(namespace['PROJECTED_FREE'], {})
+
+    def test_non_unknown_rows_stay_byte_identical_with_unknown_rows_present(self):
+        movie_csv, tv_csv = self.write_inputs(
+            WELL_FORMED_MOVIES[:2] + UNKNOWN_MOVIES + WELL_FORMED_MOVIES[2:],
+            UNKNOWN_TV + WELL_FORMED_TV)
+        old_tree, old_rows = self.plans(movie_csv, tv_csv, planner=BASELINE)
+        new_tree, new_rows = self.plans(movie_csv, tv_csv)
+        known = lambda rows: [r for r in rows if r['current'] != 'Unknown']
+        self.assertEqual(len(known(new_rows)), 6)
+        self.assertEqual(csv_bytes(old_tree, known(old_rows)),
+                         csv_bytes(new_tree, known(new_rows)))
+        self.assertEqual([r['blockers'] for r in new_rows if r['current'] == 'Unknown'],
+                         ['SOURCE_CATEGORY_UNKNOWN'] * 2)
+
+    def test_overrides_on_unknown_source_category(self):
+        movie_csv, tv_csv = self.write_inputs(UNKNOWN_MOVIES, UNKNOWN_TV)
+        overrides = {'Movie': {7: {'migratarr-lock'}},
+                     'TV': {13: {'migratarr-rare', 'migratarr-archive'}}}
+        _, rows = self.plans(movie_csv, tv_csv, overrides)
+        # A lock keeps current == recommended, so the loop drops the row
+        # (the baseline raised KeyError on DESTINATION_ROOTS["Unknown"]).
+        self.assertEqual([(r['title'], r['blockers']) for r in rows], [
+            ('Show Three', 'CONFLICTING_MANUAL_OVERRIDES;SOURCE_CATEGORY_UNKNOWN'),
+        ])
+        _, rows = self.plans(movie_csv, tv_csv, {'Movie': {7: {'migratarr-rare'}}})
+        self.assertEqual((rows[0]['recommended'], rows[0]['override_type'],
+                          rows[0]['blockers'], rows[0]['warnings']),
+                         ('Rare', 'CATEGORY', 'SOURCE_CATEGORY_UNKNOWN',
+                          'MANUAL_CATEGORY_OVERRIDE'))
+
+    def test_engine_matches_planner_including_unknown_rows(self):
+        movie_csv, tv_csv = self.write_inputs(
+            WELL_FORMED_MOVIES + UNKNOWN_MOVIES, UNKNOWN_TV + WELL_FORMED_TV)
+        overrides = {'TV': {13: {'migratarr-rare', 'migratarr-archive'}}}
+        _, planner_rows = self.plans(movie_csv, tv_csv, overrides)
+        policy = ValidationPolicy(
+            self.destination_roots(),
+            tuple(Path(str(t.path)) for t in self.targets.targets),
+            category_paths=self.targets.category_paths)
+        engine = ValidationEngine(policy, exists=lambda p: str(p) in self.existing,
+                                  size_bytes=lambda p: 2 * GIB,
+                                  free_bytes=lambda p: self.free.get(native(p), 500 * GIB),
+                                  overrides=overrides)
+        with self.filesystem():
+            engine_rows = engine.evaluate_candidates(
+                _csv_requests(movie_csv, tv_csv, policy.destination_roots))
+            engine.apply_cumulative_capacity(engine_rows)
+        self.assertEqual(engine_rows, planner_rows)
+        self.assertEqual(sum(r['current'] == 'Unknown' for r in engine_rows), 2)
 
     def test_baseline_blocked_unknown_rows_as_source_missing(self):
         # The pre-storage-targets planner searched <disk>/Movies/Unknown/<name>,
@@ -180,16 +253,17 @@ class PlannerUnknownCategoryTests(unittest.TestCase):
             ('Show Three', 'BLOCKED', 'SOURCE_MISSING', '/media/TV/Show Three'),
         ])
 
-    def test_engine_with_category_paths_currently_raises_key_error(self):
+    def test_engine_without_category_paths_keeps_legacy_source_missing(self):
+        # No configured categories: the engine's Movies/<current> search is
+        # the baseline's, so an Unknown row still falls through to the Arr path.
         policy = ValidationPolicy(
-            self.targets.destination_roots,
-            tuple(Path(str(t.path)) for t in self.targets.targets),
-            category_paths=self.targets.category_paths)
+            self.destination_roots(),
+            tuple(Path(str(t.path)) for t in self.targets.targets))
         engine = ValidationEngine(policy, exists=lambda p: str(p) in self.existing,
                                   size_bytes=lambda p: GIB, free_bytes=lambda p: 500 * GIB)
-        request = MoveRequest('Movie', 7, 'Echo (2007)', '/media/Echo', 'Unknown', 'Library')
-        with self.assertRaisesRegex(KeyError, 'Unknown'):
-            engine.evaluate(request)
+        plan = engine.evaluate(MoveRequest('Movie', 7, 'Echo (2007)', '/media/Echo',
+                                           'Unknown', 'Library'))
+        self.assertEqual(plan['blockers'], 'SOURCE_MISSING')
 
 
 if __name__ == '__main__':

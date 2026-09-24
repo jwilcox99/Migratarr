@@ -42,6 +42,16 @@ layout: a Radarr/Sonarr path that isn't `<arr_root>/<category dir>/<item>` is
 etc. anywhere in the path, which could name a category for a path no executor
 would accept).
 
+`build_move_plan.py` blocks a proposed move whose `current` is `Unknown` (or
+any category missing from `category_paths`) with `SOURCE_CATEGORY_UNKNOWN`,
+before probing any disk: there is no category folder to search, so the row
+keeps the Arr path as `source_path` and leaves target, size and disk columns
+empty. The validation engine does the same when its policy has
+`category_paths`. Before this, `resolve_host_source()` raised `KeyError` on
+such rows; the pinned pre-storage-targets planner had reported them as
+`SOURCE_MISSING`. Every other row is byte-identical to that baseline
+(`tests/test_planner_unknown_category.py`).
+
 The recovery scripts' literal incident paths stay fixed on purpose
 (`docs/runtime-configuration.md`).
 

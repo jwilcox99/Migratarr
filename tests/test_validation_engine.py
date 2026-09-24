@@ -37,8 +37,10 @@ def isolated_legacy():
     namespace = {"Path": Path, "os": __import__("os"),
                  "RUNTIME": load_config(ROOT / "config/runtime.example.json", environ={})}
     exec(compile(ast.Module(body=definitions, type_ignores=[]), str(PLANNER), "exec"), namespace)
+    targets = load_targets(ROOT / 'config/storage-targets.example.json')
     namespace.update(
-        TARGET_BY_ID={t.id: t for t in load_targets(ROOT / 'config/storage-targets.example.json').targets},
+        TARGETS=targets,
+        TARGET_BY_ID={t.id: t for t in targets.targets},
         minimum_free_bytes=lambda disk: 50 * 1024**3,
         MIN_FREE_AFTER_GB=50,
         OVERRIDE_TAGS={
