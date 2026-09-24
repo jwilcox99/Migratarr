@@ -33,6 +33,51 @@ def _families(value, label):
     return frozenset(value)
 
 
+# How TMDB provider names group into the families SUBSCRIBED, USER_FREE_ACCESS
+# and the "N subscription families" scores count: the first entry with any
+# `match` substring in the lowercased provider name wins; anything unmatched
+# is its own family under its raw TMDB name. The planners' order at f49052d.
+DEFAULT_FAMILIES = [
+    {'family': 'Paramount+', 'match': ['paramount']},
+    {'family': 'Prime Video', 'match': ['amazon prime video']},
+    {'family': 'Apple TV', 'match': ['apple tv']},
+    {'family': 'Disney+', 'match': ['disney']},
+    {'family': 'Hulu', 'match': ['hulu']},
+    {'family': 'MGM+', 'match': ['mgm']},
+    {'family': 'Peacock', 'match': ['peacock']},
+    {'family': 'Starz', 'match': ['starz']},
+    {'family': 'Max', 'match': ['max', 'hbo']},
+]
+
+
+def family_of(name, families):
+    """The family a TMDB provider name belongs to (see DEFAULT_FAMILIES)."""
+    lowered = name.lower()
+    for family, patterns in families:
+        if any(pattern in lowered for pattern in patterns):
+            return family
+    return name
+
+
+def _family_rules(value):
+    label = 'streaming.families'
+    _require(isinstance(value, list) and value, label + ' must be a nonempty list')
+    rules, seen = [], set()
+    for entry in value:
+        _fields(entry, ('family', 'match'), label + ' entry')
+        family, patterns = entry['family'], entry['match']
+        _require(isinstance(family, str) and family == family.strip() and family
+                 and not any(ord(c) < 32 for c in family), label + '.family must be a name')
+        _require(family not in seen, label + ' repeats family ' + family)
+        seen.add(family)
+        # Provider names are lowercased before matching, so an uppercase pattern never matches.
+        _require(isinstance(patterns, list) and patterns and all(
+            isinstance(p, str) and p and p == p.lower() and not any(ord(c) < 32 for c in p)
+            for p in patterns), label + '.match must be a nonempty list of lowercase substrings')
+        rules.append((family, tuple(patterns)))
+    return tuple(rules)
+
+
 # Logical category IDs the planners' decision logic branches on. They are code
 # identities, not settings; only the Arr tags that select them are configurable.
 CATEGORIES = ('Common', 'Current', 'Library', 'Rare', 'Archive')
@@ -209,6 +254,8 @@ class PlannerSettings:
     user_free_access: frozenset
     overrides: OverrideTags
     scoring: Section
+    # (family, match substrings) in match order; see DEFAULT_FAMILIES.
+    families: tuple = ()
 
 
 def _tag(value, label):
@@ -237,14 +284,15 @@ def parse_settings(data):
     _require(type(data['schema_version']) is int and data['schema_version'] == 1,
              'unsupported schema_version')
     streaming = data['streaming']
-    _fields(streaming, ('region', 'subscribed', 'user_free_access'), 'streaming')
+    _fields(streaming, ('region', 'subscribed', 'user_free_access'), 'streaming', optional=('families',))
     _require(isinstance(streaming['region'], str) and re.fullmatch(r'[A-Z]{2}', streaming['region']),
              'streaming.region must be a two-letter uppercase TMDB region code')
     return PlannerSettings(streaming['region'],
                            _families(streaming['subscribed'], 'streaming.subscribed'),
                            _families(streaming['user_free_access'], 'streaming.user_free_access'),
                            _overrides(data.get('overrides', DEFAULT_OVERRIDES)),
-                           _scoring(data.get('scoring', {})))
+                           _scoring(data.get('scoring', {})),
+                           _family_rules(streaming.get('families', DEFAULT_FAMILIES)))
 
 
 def _unique_object(pairs):

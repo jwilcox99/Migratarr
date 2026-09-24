@@ -11,7 +11,7 @@ from pathlib import Path
 from statistics import mean
 
 from runtime_config import get_config
-from planner_settings import at_least, at_most, load_settings
+from planner_settings import at_least, at_most, family_of, load_settings
 from media_layout import MediaLayout, get_targets
 from service_keys import read_key, service_endpoint
 RUNTIME = get_config()
@@ -32,6 +32,7 @@ OUTPUT = (RUNTIME.base_path / "tv_dry_run.csv")
 SUBSCRIBED = set(PLANNER_SETTINGS.subscribed)
 USER_FREE_ACCESS = set(PLANNER_SETTINGS.user_free_access)
 STREAMING_REGION = PLANNER_SETTINGS.region
+STREAMING_FAMILIES = PLANNER_SETTINGS.families
 # Every scoring weight, tier and threshold (config/planner.json "scoring").
 SCORING = PLANNER_SETTINGS.scoring
 
@@ -305,28 +306,8 @@ def series_replacement(series):
 # ------------------------------------------------------------
 
 def family(name):
-    n = name.lower()
-
-    if "paramount" in n:
-        return "Paramount+"
-    if "amazon prime video" in n:
-        return "Prime Video"
-    if "apple tv" in n:
-        return "Apple TV"
-    if "disney" in n:
-        return "Disney+"
-    if "hulu" in n:
-        return "Hulu"
-    if "mgm" in n:
-        return "MGM+"
-    if "peacock" in n:
-        return "Peacock"
-    if "starz" in n:
-        return "Starz"
-    if "max" in n or "hbo" in n:
-        return "Max"
-
-    return name
+    # Grouping comes from planner.json streaming.families (default: planner_settings.DEFAULT_FAMILIES).
+    return family_of(name, STREAMING_FAMILIES)
 
 
 def tmdb_season_providers(tmdb_id, season):

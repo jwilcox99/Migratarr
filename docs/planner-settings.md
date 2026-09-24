@@ -36,11 +36,40 @@ contacts any service.
 | `streaming.region` | Two-letter uppercase TMDB watch-provider region (ISO 3166-1), e.g. `US`, `GB`, `CA`. Only this key of TMDB's `results` object is scored; a title with no entry for it scores 100 (`No <region> availability found`), and a TV season without it falls back to series-level data. |
 | `streaming.subscribed` | Provider families you pay for. A title streaming on any of them scores 0. |
 | `streaming.user_free_access` | Providers TMDB lists as conditionally `free` that you actually have (a library card service, a bundled perk). Leave empty unless confirmed. |
+| `streaming.families` | Optional. How TMDB provider names group into families (below). |
 
-Family names must be what `provider_family()` (movies) / `family()` (TV)
-return: `Paramount+`, `Prime Video`, `Apple TV`, `Disney+`, `Hulu`, `MGM+`,
-`Peacock`, `Starz`, `Max`, or otherwise the raw TMDB `provider_name`. A name
-that matches nothing is not an error; it simply never matches.
+### Provider families
+
+TMDB lists every storefront and channel separately ("Paramount Plus",
+"Paramount+ Amazon Channel", "Paramount+ with Showtime"). The planners group
+them into families before scoring, so `subscribed` and `user_free_access`
+name families, and "N subscription families" counts families, not listings.
+A provider name is lowercased and belongs to the first family with any
+`match` substring in it; a name matching none is its own family under its raw
+TMDB name. Without `families`, the planners use this list, in this order:
+
+```json
+"families": [
+  {"family": "Paramount+", "match": ["paramount"]},
+  {"family": "Prime Video", "match": ["amazon prime video"]},
+  {"family": "Apple TV", "match": ["apple tv"]},
+  {"family": "Disney+", "match": ["disney"]},
+  {"family": "Hulu", "match": ["hulu"]},
+  {"family": "MGM+", "match": ["mgm"]},
+  {"family": "Peacock", "match": ["peacock"]},
+  {"family": "Starz", "match": ["starz"]},
+  {"family": "Max", "match": ["max", "hbo"]}
+]
+```
+
+It was written for the US: outside it, most services stay separate families
+under their raw names, and substrings can catch more than intended (`"max"`
+also matches "Cinemax Amazon Channel"). A `families` list replaces the default
+whole, so copy it and edit: add your region's services (for example
+`{"family": "Sky", "match": ["sky go", "now"]}`), put more specific entries
+first, and name those families in `subscribed`. Patterns must be lowercase;
+family names must be unique. `subscribed` names that match no family still
+work as raw TMDB names.
 
 Set `MIGRATARR_PLANNER_CONFIG` to use a file elsewhere. Validation refuses
 unknown or missing fields, duplicate JSON keys, duplicate names, lowercase or
@@ -348,3 +377,21 @@ reproduced the recording run's own CSV exactly, with no replay misses:
 
 Both `compare` runs reported `"byte_identical": true`, and the full offline
 suite passed on the media host.
+
+### Provider families
+
+The grouping was `provider_family()` in `dry_run_movies.py` and `family()` in
+`dry_run_tv.py`: nine substring checks, in the order `DEFAULT_FAMILIES` keeps.
+`tests/test_provider_families.py` runs the pinned planners' own functions and
+the configured ones over about 80 TMDB provider names (US and elsewhere, plus
+order and substring edge cases such as "Cinemax Amazon Channel"): identical
+for every name. Dropping `"hbo"` from the default Max entry fails it.
+Real data: `streaming_parity` replays every cached TMDB provider response
+through the `6dc21bd` planners and the candidate, and `dry_run_parity`
+replays the item #3 recordings.
+
+Real-data result on the media host (2026-09-24, candidate `f7f4c54`):
+`streaming_parity` replayed 173 movie and 213 TV provider responses (44
+series) byte-identically against the `6dc21bd` planners, and both recordings
+replayed byte-identically (movies 173 rows, TV 44) with no misses; the offline
+suite passed.

@@ -36,9 +36,10 @@ region, and optionally your override tag names and scoring tuning (see
 [Planner settings](docs/planner-settings.md)). The example's
 values (Hulu, Peacock, `US`) are this deployment's, not defaults: change them,
 or streaming scarcity will be scored against someone else's subscriptions.
-Family names must match what the planners' `provider_family()`/`family()`
-return (e.g. `"Max"`, `"Disney+"`, `"Prime Video"`); anything else is the raw
-TMDB provider name.
+Subscriptions name provider *families*, which group TMDB's separate listings
+(e.g. `"Max"`, `"Disney+"`, `"Prime Video"`); the default grouping is written
+for the US, so outside it add your region's services to `streaming.families`
+(see [Provider families](docs/planner-settings.md#provider-families)).
 
 You'll also need a [TMDB Read Access
 Token](https://www.themoviedb.org/settings/api), by default exported as

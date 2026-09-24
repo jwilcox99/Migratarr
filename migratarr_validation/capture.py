@@ -22,8 +22,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # service_keys (docker exec cat, no shell), incl. service base URLs; their only writes
 # remain OUTPUT and CACHE_DIR.
 SCRIPTS = {
-    "movie": ("dry_run_movies.py", "8edf5cd68b2deb36de2acc5bdb31a8b2b240c146fa2a8811b97d18455602eefe"),
-    "tv": ("dry_run_tv.py", "115087671b6e3076b13b048e2035786f21c8acf388a4dc784eddaceadd09e5b8"),
+    "movie": ("dry_run_movies.py", "1630fdd3053910e88fe5b56722cff9128110be9a53708735aabd0f0e6426f1eb"),
+    "tv": ("dry_run_tv.py", "e688f3f0caed673b9ec8d5756476be79e808a2c61958bb12e8404b285c72ccb3"),
 }
 
 
