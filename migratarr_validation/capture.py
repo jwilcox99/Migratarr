@@ -19,10 +19,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 # Reviewed for planner settings (streaming, scoring), media layout and service keys: the
 # scripts also read config/planner.json, config/storage-targets.json and credentials via
-# service_keys (docker exec cat, no shell); their only writes remain OUTPUT and CACHE_DIR.
+# service_keys (docker exec cat, no shell), incl. service base URLs; their only writes
+# remain OUTPUT and CACHE_DIR.
 SCRIPTS = {
-    "movie": ("dry_run_movies.py", "dcd9e4b45f970f36ee6d291ff6a7c6f997a8f37af9dc272a6951c8216bbf935e"),
-    "tv": ("dry_run_tv.py", "7803cd969a75dd27309484146eca12f20c1e5b230759794d029695c202b10548"),
+    "movie": ("dry_run_movies.py", "8edf5cd68b2deb36de2acc5bdb31a8b2b240c146fa2a8811b97d18455602eefe"),
+    "tv": ("dry_run_tv.py", "115087671b6e3076b13b048e2035786f21c8acf388a4dc784eddaceadd09e5b8"),
 }
 
 

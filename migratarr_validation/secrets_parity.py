@@ -102,6 +102,20 @@ def compare(runtime):
     else:
         report['tmdb'] = {'skipped': 'TMDB_TOKEN not set, so there is no old value to compare',
                           'new_ok': new['tmdb'][0]}
+    # API roots (service_endpoint) vs the URL each old call site built: the planners,
+    # build_move_plan, audit_overrides, execute_movie and execute_movie_nas used
+    # urls[service] as-is; the other three executors appended the config.xml UrlBase.
+    from service_keys import service_endpoint
+    for service in ('radarr', 'sonarr', 'jellyfin'):
+        endpoint = attempt(service_endpoint, service, runtime)
+        url = runtime.urls[service]
+        entry = report[service]
+        entry['endpoint_ok'] = endpoint[0]
+        entry['endpoint_identical_to_urls'] = endpoint[0] and endpoint[1][0] == url
+        if service != 'jellyfin':
+            executor = attempt(old_executor_arr, runtime.containers[service])
+            entry['endpoint_identical_to_url_base_executors'] = (
+                endpoint[0] and executor[0] and endpoint[1][0] == url + executor[1][1])
     report['identical'] = all(v for service in report.values() for k, v in service.items() if 'identical' in k)
     return report
 

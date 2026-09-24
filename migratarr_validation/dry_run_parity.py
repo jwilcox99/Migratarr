@@ -6,8 +6,9 @@ dry run) and saves every response it received, plus the instant it started.
 `compare` replays that recording through a baseline and a candidate planner
 with no network, Docker, cache or sleep, the clock frozen at the recorded
 instant, and compares their CSVs byte for byte. API keys are never recorded:
-key lookups (docker_output in older planners, service_keys.read_key in newer
-ones) pass through while recording and return a placeholder on replay.
+key lookups (docker_output in older planners, service_keys in newer ones) pass
+through while recording and return a placeholder on replay. Each service's API
+root is recorded ("endpoints") and replayed, so a changed URL is a replay miss.
 """
 import argparse
 import ast
@@ -52,8 +53,15 @@ class Recorder:
     replay = False
 
     def __init__(self, instant):
-        self.data = {'now': instant.isoformat(), 'requests': {}, 'cached': {}}
+        self.data = {'now': instant.isoformat(), 'requests': {}, 'cached': {}, 'endpoints': {}}
         self.datetime = frozen_datetime(instant)
+
+    def endpoint(self, real):
+        def lookup(service, runtime=None):
+            api_root, key = real(service, runtime)
+            self.data['endpoints'][service] = api_root  # a URL, never the key
+            return api_root, key
+        return lookup
 
     def _remember(self, table, key, call):
         if key not in table:
@@ -82,6 +90,16 @@ class Replayer:
         self.data = recording
         self.misses = []
         self.datetime = frozen_datetime(_dt.datetime.fromisoformat(recording['now']))
+
+    def endpoint(self, real):
+        def lookup(service, runtime=None):
+            if runtime is None:
+                from runtime_config import get_config
+                runtime = get_config()
+            # Recordings made before endpoints were recorded used runtime.json urls as-is.
+            return (self.data.get('endpoints', {}).get(service, runtime.urls[service]),
+                    'replay-placeholder-key')
+        return lookup
 
     def _lookup(self, table, key):
         if key not in self.data[table]:
@@ -122,7 +140,10 @@ def run_planner(path, io_layer, output, cache_dir):
     code = instrument(Path(path).read_text(encoding='utf-8'), str(path), output, cache_dir)
     namespace = {'__name__': '__main__', '__file__': str(path), IO_NAME: io_layer}
     stdout = io.StringIO()
+    import service_keys
     with contextlib.ExitStack() as stack:
+        stack.enter_context(patch.object(service_keys, 'service_endpoint',
+                                         io_layer.endpoint(service_keys.service_endpoint)))
         # A live recording keeps the planner's progress output on stderr.
         stack.enter_context(contextlib.redirect_stdout(stdout if io_layer.replay else sys.stderr))
         if io_layer.replay:

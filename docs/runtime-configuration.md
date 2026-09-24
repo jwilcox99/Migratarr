@@ -38,10 +38,28 @@ optional `secrets` section only says where each one is read from (see
 | `storage.media03` | `/mnt/nas/media03` → `/volume2/media03` |
 | `storage.media04` | `/mnt/nas/media04` → `/volume3/media04` |
 
-All of these settings are deployment-specific. URL settings are origins only,
-without credentials or a path. Existing per-executor UrlBase behavior is
-unchanged: cross-disk Movies and TV read it from Arr config; older same-disk
-Movie executors continue using `/api/v3/` directly.
+All of these settings are deployment-specific.
+
+### Service URLs
+
+`urls.radarr`, `.sonarr` and `.jellyfin` are HTTP(S) URLs with an optional
+base path, for services served under a prefix (for example behind a reverse
+proxy): `http://localhost:7878` or `https://proxy.example/radarr`. No
+credentials, query, fragment or trailing slash. Every script builds its API
+calls from one API root per service (`service_keys.service_endpoint`):
+
+- A base path written in `urls` is used as-is.
+- Otherwise Radarr and Sonarr append their `UrlBase`, read from `config.xml`
+  (or the `url_base` of an `env`/`file` credential source), so a Radarr
+  configured with URL base `/radarr` works with `urls.radarr` left at
+  `http://localhost:7878`.
+- Jellyfin uses its URL as given; put a Jellyfin base URL in `urls.jellyfin`.
+
+Before this, only `execute_cross_movie.py`, `execute_cross_tv.py` and
+`execute_tv_nas.py` applied `UrlBase`; the planners, `build_move_plan.py`,
+`audit_overrides.py`, `execute_movie.py` and `execute_movie_nas.py` ignored
+it, and `urls` refused any path. With no base path anywhere (this deployment),
+every URL is unchanged.
 
 ## Service credentials
 

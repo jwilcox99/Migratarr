@@ -9,7 +9,7 @@ from collections import Counter
 
 from storage_targets import load_targets, check_runtime_consistency
 from runtime_config import get_config
-from service_keys import read_key
+from service_keys import service_endpoint
 from planner_settings import get_settings
 RUNTIME = get_config()
 PLANNER_SETTINGS = get_settings()
@@ -425,8 +425,6 @@ def evaluate_move(
 
 
 
-RADARR_URL = RUNTIME.urls["radarr"]
-SONARR_URL = RUNTIME.urls["sonarr"]
 
 # Arr tag labels from config/planner.json "overrides" (default: migratarr-*).
 OVERRIDE_TAGS = dict(PLANNER_SETTINGS.overrides.category_tags)
@@ -434,9 +432,9 @@ OVERRIDE_TAGS = dict(PLANNER_SETTINGS.overrides.category_tags)
 LOCK_TAG = PLANNER_SETTINGS.overrides.lock_tag
 
 
-def arr_key(service):
-    # Source is runtime.json "secrets" (see service_keys.py).
-    return read_key(service, RUNTIME)
+def arr_endpoint(service):
+    # (api_root, key) from runtime.json urls + "secrets" (see service_keys.py).
+    return service_endpoint(service, RUNTIME)
 
 
 def api_json(url, key):
@@ -456,8 +454,8 @@ def load_arr_overrides():
     }
 
     systems = [
-        ("Movie", RADARR_URL, arr_key("radarr"), "movie"),
-        ("TV", SONARR_URL, arr_key("sonarr"), "series"),
+        ("Movie", *arr_endpoint("radarr"), "movie"),
+        ("TV", *arr_endpoint("sonarr"), "series"),
     ]
 
     for media_type, base, key, endpoint in systems:

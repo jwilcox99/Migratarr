@@ -19,7 +19,7 @@ import urllib.request
 from runtime_config import get_config
 from planner_settings import get_settings
 from media_layout import MediaLayout, canonical, get_targets, split_media_path
-from service_keys import SecretError, read_credential
+from service_keys import SecretError, service_endpoint
 from executor_manifest import digest, load_approved_plan
 from executor_nfs import verify_after_rename
 from executor_command import run_command
@@ -163,9 +163,9 @@ def sync_parents(src, dst):
 
 class Sonarr:
     def __init__(self):
-        # Source is runtime.json "secrets" (default: ApiKey/UrlBase from the container's config.xml).
+        # runtime.json urls + "secrets" (default: ApiKey/UrlBase from the container's config.xml).
         try:
-            self.key, self.url_base = read_credential('sonarr', RUNTIME)
+            self.api_root, self.key = service_endpoint('sonarr', RUNTIME)
         except SecretError as exc:
             require(False, str(exc))
         require(self.key, 'Sonarr API key missing')
@@ -176,7 +176,7 @@ class Sonarr:
         self.opener = urllib.request.build_opener(NoRedirect, urllib.request.ProxyHandler({}))
 
     def api(self, path, body=None):
-        req = urllib.request.Request(RUNTIME.urls["sonarr"] + self.url_base + '/api/v3/' + path,
+        req = urllib.request.Request(self.api_root + '/api/v3/' + path,
                                      data=None if body is None else json.dumps(body).encode(),
                                      headers={'X-Api-Key': self.key, 'Content-Type': 'application/json'},
                                      method='GET' if body is None else 'PUT')
