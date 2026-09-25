@@ -1,6 +1,6 @@
 # Read-only UI: data contract
 
-**Status:** Design, not implemented. Written 2026-09-24 against `chore/release-housekeeping` @ `711b309`.
+**Status:** Read layer implemented 2026-09-25 as `read_api.py` + `migratarr_status.py` (tests: `tests/test_read_api.py`); the web UI itself is not built yet. Written 2026-09-24.
 **Plan reference:** UI milestone 1 (read-only web UI) in `2026-09-24-release-path-plan`, and §4 of `docs/unified-execution-core.md`.
 **Goal:** pin down exactly which files the first UI reads, what each field means, and how the UI works out a move's status. The UI can then be built against formats that already exist, without waiting for new storage.
 
@@ -117,9 +117,9 @@ The `executed` column is still load-bearing: executors refuse any row where it i
 
 1. **Succeeded:** the last event is `SUCCESS` and its `manifest_sha256` matches the manifest. Mark it *recovered* if the journal contains `RECOVERY_STARTED`.
 2. **Journal unreadable:** any line fails to parse.
-3. **Running (likely):** the last event is not terminal (`SUCCESS`, `CHECK_ONLY`, `STOPPED`) and the journal was modified within the last few minutes.
-   - This is a heuristic, because the lock can't be read safely (rule 1). The engine should add a readable status sidecar (see §5).
-4. **Needs reconciliation:** the journal contains any mutation event (`RENAME_INTENT`, `RENAMED`, `COPY_INTENT`, `COPIED`, `*_UPDATE_INTENT`, `DELETE_INTENT`, `SOURCE_REMOVED`, `RECOVERY_STARTED`) and no later `SUCCESS`. This also catches an attempt killed mid-run.
+3. **Unfinished:** the last event is not terminal (`SUCCESS`, `CHECK_ONLY`, `STOPPED`). The move is either running right now or was interrupted without writing `STOPPED`, and only the media host can tell which.
+   - *Changed 2026-09-25 from "running if the journal changed in the last few minutes".* That heuristic was wrong: nothing is written to the journal during a long copy or hash (hours for a large series), so an old file time doesn't mean the process died. The engine's status sidecar (§5, gap 2) will separate the two cases.
+4. **Needs reconciliation:** the journal contains any mutation event (`RENAME_INTENT`, `RENAMED`, `COPY_INTENT`, `COPIED`, `*_UPDATE_INTENT`, `DELETE_INTENT`, `SOURCE_REMOVED`, `RECOVERY_STARTED`) and no later `SUCCESS`, or it ends in a `SUCCESS` bound to a different manifest hash.
 5. **Stopped safely:** the last event is `STOPPED` and there is no mutation event. The refusal came before anything changed, so fixing the cause and retrying is safe.
 6. **Checked:** the last event is `CHECK_ONLY`.
 7. **Not started:** no journal, or an empty one.
@@ -127,7 +127,7 @@ The `executed` column is still load-bearing: executors refuse any row where it i
 This matches what `batch_cross_*.py` `pending_*()` computes ad hoc today, minus their Movie/TV and cross-disk filters.
 
 **Row display status:**
-- Execution state wins whenever it is *succeeded*, *needs reconciliation* or *running*.
+- Execution state wins whenever it is *succeeded*, *needs reconciliation* or *unfinished*.
 - Otherwise combine the two, e.g. "Approved · Checked" or "Unapproved · Not started".
 
 Blocked plan rows (`runs/*/move_plan.csv` `status=BLOCKED`) show as "Blocked" with their blocker codes; they have no `execution_id`.
@@ -152,7 +152,7 @@ Blocked plan rows (`runs/*/move_plan.csv` `status=BLOCKED`) show as "Blocked" wi
 | `status(execution_id)` / `run_status(run_id)` | §4 states; per-run counts and GB by state |
 | `events(execution_id)` | Parsed journal, with `inventory`/`receipt` details collapsed by default |
 
-All of these are pure reads of the files above, so they can ship before the executor refactor, and the web UI can use them unchanged.
+All of these are pure reads of the files above, so they can ship before the executor refactor, and the web UI can use them unchanged. **Implemented** in `read_api.py` as `list_runs`, `get_plan`, `get_manifest`, `get_approvals`, `execution_state`, `events` and `run_status`. `migratarr_status.py` is the CLI over them: no arguments lists runs, `--run` shows the per-row status table, `--execution` shows a timeline, and `--json` gives machine-readable output.
 
 ## Sources
 
