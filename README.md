@@ -77,12 +77,13 @@ reproducing past decisions. They are not part of the pipeline you run.
 - Linux host with **Python 3.10+** — standard library only, nothing to
   `pip install`. (`migratarr_validation/` uses PEP 604 `X | None` union
   annotations, evaluated at import time; 3.9 will fail to import it.)
-- Docker, with `docker exec` access to your Radarr and Sonarr containers
-  (the executors verify files as Radarr/Sonarr see them). By default API keys
-  are read straight out of each service's config (Radarr/Sonarr
-  `config.xml`, a Jellyfin secret in a `homepage` container) rather than
-  stored anywhere; see [Service credentials](docs/runtime-configuration.md#service-credentials)
-  for other sources.
+- By default, Docker with `docker exec` access to your Radarr and Sonarr
+  containers: the executors verify files as Radarr/Sonarr see them from inside
+  the container, and API keys are read straight out of each service's config
+  (Radarr/Sonarr `config.xml`, a Jellyfin secret in a `homepage` container)
+  rather than stored anywhere. Non-Docker installs choose other sources in
+  `runtime.json`: [Service credentials](docs/runtime-configuration.md#service-credentials)
+  and [Arr file checks](docs/runtime-configuration.md#arr-file-checks).
 - A [TMDB](https://www.themoviedb.org/settings/api) API **Read Access
   Token**, by default exported as `TMDB_TOKEN` (see [Usage](#usage)).
 - SSH access to your NAS with a dedicated key, if you want the executors
