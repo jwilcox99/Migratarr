@@ -236,3 +236,18 @@ Ten cross-disk TV series remain pending in that same run's manifest as of
 this writing, ranging from *Doug* (5.66 GB) up to *Supernatural* (785.59 GB);
 `batch_cross_tv.py --run 20260923T013125Z` (no `--execute`) lists the current
 pending/completed counts at any time.
+
+**Update 2026-09-25.** A further `batch_cross_tv.py --execute` session on the
+production host (still the earlier approve-and-run code) finished with
+`BATCH COMPLETE`. Its last item was `20260923T013125Z-0009` (`SUCCESS`). Status
+listing afterwards (`batch_cross_tv.py --run 20260923T013125Z`, read-only):
+
+- Completed: 12 cross-disk TV series, each with a `SUCCESS` journal bound to
+  the manifest hash.
+- Remaining: 2, the two largest: *Friday Night Lights*
+  (`20260923T013125Z-0014`, 160.06 GB) and *Supernatural*
+  (`20260923T013125Z-0015`, 785.59 GB).
+
+Completed plus remaining is 14, but the paragraph above implies 13 (3 done plus
+10 pending). That count has not been reconciled yet, and the per-item journals
+are the record to check it against.
