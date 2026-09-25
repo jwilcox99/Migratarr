@@ -1,0 +1,3623 @@
+{
+ "cli/execute_cross_movie/check_only": {
+  "execute_calls": [
+   {
+    "extra_args": 0,
+    "live": false
+   }
+  ],
+  "journal": [
+   {
+    "event": "START",
+    "execution_id": "20260915T192959Z-0001",
+    "live": false
+   },
+   {
+    "event": "PREFLIGHT_OK",
+    "execution_id": "20260915T192959Z-0001",
+    "manifest_sha256": "m"
+   }
+  ],
+  "raised": null,
+  "rc": 0,
+  "stderr": "",
+  "stdout": "CHECK_ONLY: 20260915T192959Z-0001\n"
+ },
+ "cli/execute_cross_movie/prior_uncertain_attempt": {
+  "execute_calls": [],
+  "journal": [
+   {
+    "event": "START",
+    "execution_id": "20260915T192959Z-0001",
+    "live": true
+   },
+   {
+    "event": "COPY_INTENT",
+    "execution_id": "20260915T192959Z-0001"
+   },
+   {
+    "event": "RENAME_INTENT",
+    "execution_id": "20260915T192959Z-0001"
+   }
+  ],
+  "raised": [
+   "Refused",
+   "Previous live attempt exists; reconcile manually before retrying"
+  ],
+  "rc": null,
+  "stderr": "",
+  "stdout": ""
+ },
+ "cli/execute_cross_movie/refused": {
+  "execute_calls": [
+   {
+    "extra_args": 0,
+    "live": true
+   }
+  ],
+  "journal": [
+   {
+    "event": "START",
+    "execution_id": "20260915T192959Z-0001",
+    "live": true
+   },
+   {
+    "event": "PREFLIGHT_OK",
+    "execution_id": "20260915T192959Z-0001",
+    "manifest_sha256": "m"
+   },
+   {
+    "error_type": "Refused",
+    "event": "STOPPED",
+    "execution_id": "20260915T192959Z-0001",
+    "reason": "simulated refusal"
+   }
+  ],
+  "raised": null,
+  "rc": 1,
+  "stderr": "STOPPED: simulated refusal\nInspect journal: <BASE>/execution_logs/20260915T192959Z-0001.jsonl. No automatic rollback or retry.\n",
+  "stdout": ""
+ },
+ "cli/execute_cross_movie/success": {
+  "execute_calls": [
+   {
+    "extra_args": 0,
+    "live": true
+   }
+  ],
+  "journal": [
+   {
+    "event": "START",
+    "execution_id": "20260915T192959Z-0001",
+    "live": true
+   },
+   {
+    "event": "PREFLIGHT_OK",
+    "execution_id": "20260915T192959Z-0001",
+    "manifest_sha256": "m"
+   }
+  ],
+  "raised": null,
+  "rc": 0,
+  "stderr": "",
+  "stdout": "SUCCESS: 20260915T192959Z-0001\n"
+ },
+ "cli/execute_cross_tv/check_only": {
+  "execute_calls": [
+   {
+    "extra_args": 0,
+    "live": false
+   }
+  ],
+  "journal": [
+   {
+    "event": "START",
+    "execution_id": "20260915T192959Z-0001",
+    "live": false
+   },
+   {
+    "event": "PREFLIGHT_OK",
+    "execution_id": "20260915T192959Z-0001",
+    "manifest_sha256": "m"
+   }
+  ],
+  "raised": null,
+  "rc": 0,
+  "stderr": "",
+  "stdout": "CHECK_ONLY: 20260915T192959Z-0001\n"
+ },
+ "cli/execute_cross_tv/prior_uncertain_attempt": {
+  "execute_calls": [],
+  "journal": [
+   {
+    "event": "START",
+    "execution_id": "20260915T192959Z-0001",
+    "live": true
+   },
+   {
+    "event": "COPY_INTENT",
+    "execution_id": "20260915T192959Z-0001"
+   },
+   {
+    "event": "RENAME_INTENT",
+    "execution_id": "20260915T192959Z-0001"
+   }
+  ],
+  "raised": [
+   "Refused",
+   "Previous live attempt exists; reconcile manually before retrying"
+  ],
+  "rc": null,
+  "stderr": "",
+  "stdout": ""
+ },
+ "cli/execute_cross_tv/refused": {
+  "execute_calls": [
+   {
+    "extra_args": 0,
+    "live": true
+   }
+  ],
+  "journal": [
+   {
+    "event": "START",
+    "execution_id": "20260915T192959Z-0001",
+    "live": true
+   },
+   {
+    "event": "PREFLIGHT_OK",
+    "execution_id": "20260915T192959Z-0001",
+    "manifest_sha256": "m"
+   },
+   {
+    "error_type": "Refused",
+    "event": "STOPPED",
+    "execution_id": "20260915T192959Z-0001",
+    "reason": "simulated refusal"
+   }
+  ],
+  "raised": null,
+  "rc": 1,
+  "stderr": "STOPPED: simulated refusal\nInspect journal: <BASE>/execution_logs/20260915T192959Z-0001.jsonl. No automatic rollback or retry.\n",
+  "stdout": ""
+ },
+ "cli/execute_cross_tv/success": {
+  "execute_calls": [
+   {
+    "extra_args": 0,
+    "live": true
+   }
+  ],
+  "journal": [
+   {
+    "event": "START",
+    "execution_id": "20260915T192959Z-0001",
+    "live": true
+   },
+   {
+    "event": "PREFLIGHT_OK",
+    "execution_id": "20260915T192959Z-0001",
+    "manifest_sha256": "m"
+   }
+  ],
+  "raised": null,
+  "rc": 0,
+  "stderr": "",
+  "stdout": "SUCCESS: 20260915T192959Z-0001\n"
+ },
+ "cli/execute_movie_nas/check_only": {
+  "execute_calls": [
+   {
+    "extra_args": 1,
+    "live": false
+   }
+  ],
+  "journal": [
+   {
+    "event": "START",
+    "execution_id": "20260915T192959Z-0001",
+    "live": false
+   },
+   {
+    "event": "PREFLIGHT_OK",
+    "execution_id": "20260915T192959Z-0001",
+    "manifest_sha256": "m"
+   }
+  ],
+  "raised": null,
+  "rc": 0,
+  "stderr": "",
+  "stdout": "CHECK_ONLY: 20260915T192959Z-0001\n"
+ },
+ "cli/execute_movie_nas/prior_uncertain_attempt": {
+  "execute_calls": [],
+  "journal": [
+   {
+    "event": "START",
+    "execution_id": "20260915T192959Z-0001",
+    "live": true
+   },
+   {
+    "event": "COPY_INTENT",
+    "execution_id": "20260915T192959Z-0001"
+   },
+   {
+    "event": "RENAME_INTENT",
+    "execution_id": "20260915T192959Z-0001"
+   }
+  ],
+  "raised": [
+   "Refused",
+   "Previous live attempt exists; inspect journal and reconcile manually before retrying"
+  ],
+  "rc": null,
+  "stderr": "",
+  "stdout": ""
+ },
+ "cli/execute_movie_nas/refused": {
+  "execute_calls": [
+   {
+    "extra_args": 1,
+    "live": true
+   }
+  ],
+  "journal": [
+   {
+    "event": "START",
+    "execution_id": "20260915T192959Z-0001",
+    "live": true
+   },
+   {
+    "event": "PREFLIGHT_OK",
+    "execution_id": "20260915T192959Z-0001",
+    "manifest_sha256": "m"
+   },
+   {
+    "error_type": "Refused",
+    "event": "STOPPED",
+    "execution_id": "20260915T192959Z-0001",
+    "reason": "simulated refusal"
+   }
+  ],
+  "raised": null,
+  "rc": 1,
+  "stderr": "STOPPED: simulated refusal\nInspect journal: <BASE>/execution_logs/20260915T192959Z-0001.jsonl. No automatic rollback or retry.\n",
+  "stdout": ""
+ },
+ "cli/execute_movie_nas/resume_without_failed_journal": {
+  "execute_calls": [],
+  "journal": [],
+  "raised": [
+   "Refused",
+   "No failed journal to recover"
+  ],
+  "rc": null,
+  "stderr": "",
+  "stdout": ""
+ },
+ "cli/execute_movie_nas/success": {
+  "execute_calls": [
+   {
+    "extra_args": 1,
+    "live": true
+   }
+  ],
+  "journal": [
+   {
+    "event": "START",
+    "execution_id": "20260915T192959Z-0001",
+    "live": true
+   },
+   {
+    "event": "PREFLIGHT_OK",
+    "execution_id": "20260915T192959Z-0001",
+    "manifest_sha256": "m"
+   }
+  ],
+  "raised": null,
+  "rc": 0,
+  "stderr": "",
+  "stdout": "SUCCESS: 20260915T192959Z-0001\n"
+ },
+ "cli/execute_tv_nas/check_only": {
+  "execute_calls": [
+   {
+    "extra_args": 0,
+    "live": false
+   }
+  ],
+  "journal": [
+   {
+    "event": "START",
+    "execution_id": "20260915T192959Z-0001",
+    "live": false
+   },
+   {
+    "event": "PREFLIGHT_OK",
+    "execution_id": "20260915T192959Z-0001",
+    "manifest_sha256": "m"
+   }
+  ],
+  "raised": null,
+  "rc": 0,
+  "stderr": "",
+  "stdout": "CHECK_ONLY: 20260915T192959Z-0001\n"
+ },
+ "cli/execute_tv_nas/prior_uncertain_attempt": {
+  "execute_calls": [],
+  "journal": [
+   {
+    "event": "START",
+    "execution_id": "20260915T192959Z-0001",
+    "live": true
+   },
+   {
+    "event": "COPY_INTENT",
+    "execution_id": "20260915T192959Z-0001"
+   },
+   {
+    "event": "RENAME_INTENT",
+    "execution_id": "20260915T192959Z-0001"
+   }
+  ],
+  "raised": [
+   "Refused",
+   "Previous live attempt exists; reconcile manually before retrying"
+  ],
+  "rc": null,
+  "stderr": "",
+  "stdout": ""
+ },
+ "cli/execute_tv_nas/refused": {
+  "execute_calls": [
+   {
+    "extra_args": 0,
+    "live": true
+   }
+  ],
+  "journal": [
+   {
+    "event": "START",
+    "execution_id": "20260915T192959Z-0001",
+    "live": true
+   },
+   {
+    "event": "PREFLIGHT_OK",
+    "execution_id": "20260915T192959Z-0001",
+    "manifest_sha256": "m"
+   },
+   {
+    "error_type": "Refused",
+    "event": "STOPPED",
+    "execution_id": "20260915T192959Z-0001",
+    "reason": "simulated refusal"
+   }
+  ],
+  "raised": null,
+  "rc": 1,
+  "stderr": "STOPPED: simulated refusal\nInspect journal: <BASE>/execution_logs/20260915T192959Z-0001.jsonl. No automatic rollback or retry.\n",
+  "stdout": ""
+ },
+ "cli/execute_tv_nas/success": {
+  "execute_calls": [
+   {
+    "extra_args": 0,
+    "live": true
+   }
+  ],
+  "journal": [
+   {
+    "event": "START",
+    "execution_id": "20260915T192959Z-0001",
+    "live": true
+   },
+   {
+    "event": "PREFLIGHT_OK",
+    "execution_id": "20260915T192959Z-0001",
+    "manifest_sha256": "m"
+   }
+  ],
+  "raised": null,
+  "rc": 0,
+  "stderr": "",
+  "stdout": "SUCCESS: 20260915T192959Z-0001\n"
+ },
+ "execute_cross_movie/approval_revoked_after_arr_update": {
+  "error": [
+   "Refused",
+   "Row is unapproved"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "5794c4589be8bb869e564524459d5ba99201ff79effac92cc4b145f55027cd4c",
+     "movie_file_id": 9,
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "inventory": {
+      "movie.mkv": [
+       29,
+       "71eb6441975b8935beaa67df80b5d885ae11056c6240870dd0f07461c083282e",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "COPIED",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ],
+   [
+    "RADARR_UPDATE_INTENT",
+    {}
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:movie/7",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy",
+   "log:COPIED",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:destination",
+   "plan:load",
+   "arr:get:movie/7",
+   "log:RADARR_UPDATE_INTENT",
+   "arr:update",
+   "arr:get:movie/7",
+   "arr:verify:destination",
+   "fs:metadata:destination",
+   "plan:load"
+  ]
+ },
+ "execute_cross_movie/approval_revoked_after_copy": {
+  "error": [
+   "Refused",
+   "Latest approval does not approve this exact manifest hash"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "5794c4589be8bb869e564524459d5ba99201ff79effac92cc4b145f55027cd4c",
+     "movie_file_id": 9,
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "inventory": {
+      "movie.mkv": [
+       29,
+       "71eb6441975b8935beaa67df80b5d885ae11056c6240870dd0f07461c083282e",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "COPIED",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:movie/7",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy",
+   "log:COPIED",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:destination",
+   "plan:load"
+  ]
+ },
+ "execute_cross_movie/approval_revoked_after_preflight": {
+  "error": [
+   "Refused",
+   "Latest approval does not approve this exact manifest hash"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "5794c4589be8bb869e564524459d5ba99201ff79effac92cc4b145f55027cd4c",
+     "movie_file_id": 9,
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/source/Example"
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load"
+  ]
+ },
+ "execute_cross_movie/arr_update_failure": {
+  "error": [
+   "RuntimeError",
+   "simulated Arr failure"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "5794c4589be8bb869e564524459d5ba99201ff79effac92cc4b145f55027cd4c",
+     "movie_file_id": 9,
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "inventory": {
+      "movie.mkv": [
+       29,
+       "71eb6441975b8935beaa67df80b5d885ae11056c6240870dd0f07461c083282e",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "COPIED",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ],
+   [
+    "RADARR_UPDATE_INTENT",
+    {}
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:movie/7",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy",
+   "log:COPIED",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:destination",
+   "plan:load",
+   "arr:get:movie/7",
+   "log:RADARR_UPDATE_INTENT",
+   "arr:update"
+  ]
+ },
+ "execute_cross_movie/check_only": {
+  "error": null,
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "5794c4589be8bb869e564524459d5ba99201ff79effac92cc4b145f55027cd4c",
+     "movie_file_id": 9,
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "CHECK_ONLY",
+    {
+     "manifest_sha256": "5794c4589be8bb869e564524459d5ba99201ff79effac92cc4b145f55027cd4c"
+    }
+   ]
+  ],
+  "result": "CHECK_ONLY",
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "log:CHECK_ONLY"
+  ]
+ },
+ "execute_cross_movie/copy_timeout": {
+  "error": [
+   "TimeoutError",
+   "simulated uncertain copy response"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "5794c4589be8bb869e564524459d5ba99201ff79effac92cc4b145f55027cd4c",
+     "movie_file_id": 9,
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "inventory": {
+      "movie.mkv": [
+       29,
+       "71eb6441975b8935beaa67df80b5d885ae11056c6240870dd0f07461c083282e",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:movie/7",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy"
+  ]
+ },
+ "execute_cross_movie/corrupt_destination": {
+  "error": [
+   "Refused",
+   "Destination content mismatch"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "5794c4589be8bb869e564524459d5ba99201ff79effac92cc4b145f55027cd4c",
+     "movie_file_id": 9,
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "inventory": {
+      "movie.mkv": [
+       29,
+       "71eb6441975b8935beaa67df80b5d885ae11056c6240870dd0f07461c083282e",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "COPIED",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:movie/7",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy",
+   "log:COPIED",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination"
+  ]
+ },
+ "execute_cross_movie/delete_failure": {
+  "error": [
+   "TimeoutError",
+   "simulated uncertain delete response"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "5794c4589be8bb869e564524459d5ba99201ff79effac92cc4b145f55027cd4c",
+     "movie_file_id": 9,
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "inventory": {
+      "movie.mkv": [
+       29,
+       "71eb6441975b8935beaa67df80b5d885ae11056c6240870dd0f07461c083282e",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "COPIED",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ],
+   [
+    "RADARR_UPDATE_INTENT",
+    {}
+   ],
+   [
+    "DELETE_INTENT",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:movie/7",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy",
+   "log:COPIED",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:destination",
+   "plan:load",
+   "arr:get:movie/7",
+   "log:RADARR_UPDATE_INTENT",
+   "arr:update",
+   "arr:get:movie/7",
+   "arr:verify:destination",
+   "fs:metadata:destination",
+   "plan:load",
+   "arr:get:movie/7",
+   "log:DELETE_INTENT",
+   "nas:delete"
+  ]
+ },
+ "execute_cross_movie/existing_destination": {
+  "error": [
+   "Refused",
+   "Source/destination not ready"
+  ],
+  "journal": [],
+  "result": null,
+  "trace": [
+   "plan:load"
+  ]
+ },
+ "execute_cross_movie/lock_tag": {
+  "error": [
+   "Refused",
+   "Movie is locked"
+  ],
+  "journal": [],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag"
+  ]
+ },
+ "execute_cross_movie/source_change_after_copy": {
+  "error": [
+   "Refused",
+   "Source changed while copying; retain both copies"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "5794c4589be8bb869e564524459d5ba99201ff79effac92cc4b145f55027cd4c",
+     "movie_file_id": 9,
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "inventory": {
+      "movie.mkv": [
+       29,
+       "71eb6441975b8935beaa67df80b5d885ae11056c6240870dd0f07461c083282e",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "COPIED",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:movie/7",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy",
+   "log:COPIED",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source"
+  ]
+ },
+ "execute_cross_movie/source_change_after_preflight": {
+  "error": [
+   "Refused",
+   "Source changed during preflight"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "5794c4589be8bb869e564524459d5ba99201ff79effac92cc4b145f55027cd4c",
+     "movie_file_id": 9,
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/source/Example"
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:movie/7",
+   "fs:metadata:source"
+  ]
+ },
+ "execute_cross_movie/success": {
+  "error": null,
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "5794c4589be8bb869e564524459d5ba99201ff79effac92cc4b145f55027cd4c",
+     "movie_file_id": 9,
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "inventory": {
+      "movie.mkv": [
+       29,
+       "71eb6441975b8935beaa67df80b5d885ae11056c6240870dd0f07461c083282e",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "COPIED",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ],
+   [
+    "RADARR_UPDATE_INTENT",
+    {}
+   ],
+   [
+    "DELETE_INTENT",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ],
+   [
+    "SOURCE_REMOVED",
+    {}
+   ],
+   [
+    "SUCCESS",
+    {
+     "manifest_sha256": "5794c4589be8bb869e564524459d5ba99201ff79effac92cc4b145f55027cd4c"
+    }
+   ]
+  ],
+  "result": "SUCCESS",
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:movie/7",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy",
+   "log:COPIED",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:destination",
+   "plan:load",
+   "arr:get:movie/7",
+   "log:RADARR_UPDATE_INTENT",
+   "arr:update",
+   "arr:get:movie/7",
+   "arr:verify:destination",
+   "fs:metadata:destination",
+   "plan:load",
+   "arr:get:movie/7",
+   "log:DELETE_INTENT",
+   "nas:delete",
+   "log:SOURCE_REMOVED",
+   "fs:metadata:destination",
+   "arr:get:movie/7",
+   "arr:visible",
+   "log:SUCCESS"
+  ]
+ },
+ "execute_cross_movie/wrong_arr_path_after_update": {
+  "error": [
+   "Refused",
+   "Radarr path verification failed"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "5794c4589be8bb869e564524459d5ba99201ff79effac92cc4b145f55027cd4c",
+     "movie_file_id": 9,
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "inventory": {
+      "movie.mkv": [
+       29,
+       "71eb6441975b8935beaa67df80b5d885ae11056c6240870dd0f07461c083282e",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "COPIED",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ],
+   [
+    "RADARR_UPDATE_INTENT",
+    {}
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:movie/7",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy",
+   "log:COPIED",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:destination",
+   "plan:load",
+   "arr:get:movie/7",
+   "log:RADARR_UPDATE_INTENT",
+   "arr:update",
+   "arr:get:movie/7"
+  ]
+ },
+ "execute_cross_tv/approval_revoked_after_arr_update": {
+  "error": [
+   "Refused",
+   "Row is unapproved"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "9f62285e7542afcdd958bfa23d24b885c647cf62208a11bd3e45ebedc8c616b1",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "episode_associations": {
+      "31": [
+       1,
+       1,
+       21,
+       true
+      ]
+     },
+     "episode_files": {
+      "21": [
+       "episode.mkv",
+       31
+      ]
+     },
+     "inventory": {
+      "episode.mkv": [
+       31,
+       "4c62fb002c8bdf578e6e2d26bc66c1acf9e03f5ad4ced9086bdca3029ee13946",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "COPIED",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ],
+   [
+    "SONARR_UPDATE_INTENT",
+    {}
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy",
+   "log:COPIED",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:destination",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "log:SONARR_UPDATE_INTENT",
+   "arr:update",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:destination",
+   "fs:metadata:destination",
+   "plan:load"
+  ]
+ },
+ "execute_cross_tv/approval_revoked_after_copy": {
+  "error": [
+   "Refused",
+   "Latest approval does not approve this exact manifest hash"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "9f62285e7542afcdd958bfa23d24b885c647cf62208a11bd3e45ebedc8c616b1",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "episode_associations": {
+      "31": [
+       1,
+       1,
+       21,
+       true
+      ]
+     },
+     "episode_files": {
+      "21": [
+       "episode.mkv",
+       31
+      ]
+     },
+     "inventory": {
+      "episode.mkv": [
+       31,
+       "4c62fb002c8bdf578e6e2d26bc66c1acf9e03f5ad4ced9086bdca3029ee13946",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "COPIED",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy",
+   "log:COPIED",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:destination",
+   "plan:load"
+  ]
+ },
+ "execute_cross_tv/approval_revoked_after_preflight": {
+  "error": [
+   "Refused",
+   "Latest approval does not approve this exact manifest hash"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "9f62285e7542afcdd958bfa23d24b885c647cf62208a11bd3e45ebedc8c616b1",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/source/Example"
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load"
+  ]
+ },
+ "execute_cross_tv/arr_update_failure": {
+  "error": [
+   "RuntimeError",
+   "simulated Arr failure"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "9f62285e7542afcdd958bfa23d24b885c647cf62208a11bd3e45ebedc8c616b1",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "episode_associations": {
+      "31": [
+       1,
+       1,
+       21,
+       true
+      ]
+     },
+     "episode_files": {
+      "21": [
+       "episode.mkv",
+       31
+      ]
+     },
+     "inventory": {
+      "episode.mkv": [
+       31,
+       "4c62fb002c8bdf578e6e2d26bc66c1acf9e03f5ad4ced9086bdca3029ee13946",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "COPIED",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ],
+   [
+    "SONARR_UPDATE_INTENT",
+    {}
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy",
+   "log:COPIED",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:destination",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "log:SONARR_UPDATE_INTENT",
+   "arr:update"
+  ]
+ },
+ "execute_cross_tv/check_only": {
+  "error": null,
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "9f62285e7542afcdd958bfa23d24b885c647cf62208a11bd3e45ebedc8c616b1",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "CHECK_ONLY",
+    {
+     "manifest_sha256": "9f62285e7542afcdd958bfa23d24b885c647cf62208a11bd3e45ebedc8c616b1"
+    }
+   ]
+  ],
+  "result": "CHECK_ONLY",
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "log:CHECK_ONLY"
+  ]
+ },
+ "execute_cross_tv/copy_timeout": {
+  "error": [
+   "TimeoutError",
+   "simulated uncertain copy response"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "9f62285e7542afcdd958bfa23d24b885c647cf62208a11bd3e45ebedc8c616b1",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "episode_associations": {
+      "31": [
+       1,
+       1,
+       21,
+       true
+      ]
+     },
+     "episode_files": {
+      "21": [
+       "episode.mkv",
+       31
+      ]
+     },
+     "inventory": {
+      "episode.mkv": [
+       31,
+       "4c62fb002c8bdf578e6e2d26bc66c1acf9e03f5ad4ced9086bdca3029ee13946",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy"
+  ]
+ },
+ "execute_cross_tv/corrupt_destination": {
+  "error": [
+   "Refused",
+   "Destination content mismatch"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "9f62285e7542afcdd958bfa23d24b885c647cf62208a11bd3e45ebedc8c616b1",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "episode_associations": {
+      "31": [
+       1,
+       1,
+       21,
+       true
+      ]
+     },
+     "episode_files": {
+      "21": [
+       "episode.mkv",
+       31
+      ]
+     },
+     "inventory": {
+      "episode.mkv": [
+       31,
+       "4c62fb002c8bdf578e6e2d26bc66c1acf9e03f5ad4ced9086bdca3029ee13946",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "COPIED",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy",
+   "log:COPIED",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination"
+  ]
+ },
+ "execute_cross_tv/delete_failure": {
+  "error": [
+   "TimeoutError",
+   "simulated uncertain delete response"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "9f62285e7542afcdd958bfa23d24b885c647cf62208a11bd3e45ebedc8c616b1",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "episode_associations": {
+      "31": [
+       1,
+       1,
+       21,
+       true
+      ]
+     },
+     "episode_files": {
+      "21": [
+       "episode.mkv",
+       31
+      ]
+     },
+     "inventory": {
+      "episode.mkv": [
+       31,
+       "4c62fb002c8bdf578e6e2d26bc66c1acf9e03f5ad4ced9086bdca3029ee13946",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "COPIED",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ],
+   [
+    "SONARR_UPDATE_INTENT",
+    {}
+   ],
+   [
+    "DELETE_INTENT",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy",
+   "log:COPIED",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:destination",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "log:SONARR_UPDATE_INTENT",
+   "arr:update",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:destination",
+   "fs:metadata:destination",
+   "plan:load",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "log:DELETE_INTENT",
+   "nas:delete"
+  ]
+ },
+ "execute_cross_tv/existing_destination": {
+  "error": [
+   "Refused",
+   "Source/destination not ready"
+  ],
+  "journal": [],
+  "result": null,
+  "trace": [
+   "plan:load"
+  ]
+ },
+ "execute_cross_tv/lock_tag": {
+  "error": [
+   "Refused",
+   "Series is locked"
+  ],
+  "journal": [],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag"
+  ]
+ },
+ "execute_cross_tv/source_change_after_copy": {
+  "error": [
+   "Refused",
+   "Source changed while copying; retain both copies"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "9f62285e7542afcdd958bfa23d24b885c647cf62208a11bd3e45ebedc8c616b1",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "episode_associations": {
+      "31": [
+       1,
+       1,
+       21,
+       true
+      ]
+     },
+     "episode_files": {
+      "21": [
+       "episode.mkv",
+       31
+      ]
+     },
+     "inventory": {
+      "episode.mkv": [
+       31,
+       "4c62fb002c8bdf578e6e2d26bc66c1acf9e03f5ad4ced9086bdca3029ee13946",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "COPIED",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy",
+   "log:COPIED",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source"
+  ]
+ },
+ "execute_cross_tv/source_change_after_preflight": {
+  "error": [
+   "Refused",
+   "Source changed during preflight"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "9f62285e7542afcdd958bfa23d24b885c647cf62208a11bd3e45ebedc8c616b1",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/source/Example"
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "fs:metadata:source"
+  ]
+ },
+ "execute_cross_tv/success": {
+  "error": null,
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "9f62285e7542afcdd958bfa23d24b885c647cf62208a11bd3e45ebedc8c616b1",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "episode_associations": {
+      "31": [
+       1,
+       1,
+       21,
+       true
+      ]
+     },
+     "episode_files": {
+      "21": [
+       "episode.mkv",
+       31
+      ]
+     },
+     "inventory": {
+      "episode.mkv": [
+       31,
+       "4c62fb002c8bdf578e6e2d26bc66c1acf9e03f5ad4ced9086bdca3029ee13946",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "COPIED",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ],
+   [
+    "SONARR_UPDATE_INTENT",
+    {}
+   ],
+   [
+    "DELETE_INTENT",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ],
+   [
+    "SOURCE_REMOVED",
+    {}
+   ],
+   [
+    "SUCCESS",
+    {
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "manifest_sha256": "9f62285e7542afcdd958bfa23d24b885c647cf62208a11bd3e45ebedc8c616b1"
+    }
+   ]
+  ],
+  "result": "SUCCESS",
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy",
+   "log:COPIED",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:destination",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "log:SONARR_UPDATE_INTENT",
+   "arr:update",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:destination",
+   "fs:metadata:destination",
+   "plan:load",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "log:DELETE_INTENT",
+   "nas:delete",
+   "log:SOURCE_REMOVED",
+   "fs:metadata:destination",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:destination",
+   "arr:get:series/11",
+   "log:SUCCESS"
+  ]
+ },
+ "execute_cross_tv/wrong_arr_path_after_update": {
+  "error": [
+   "Refused",
+   "Sonarr path verification failed"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/destination/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "9f62285e7542afcdd958bfa23d24b885c647cf62208a11bd3e45ebedc8c616b1",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/source/Example"
+    }
+   ],
+   [
+    "COPY_INTENT",
+    {
+     "episode_associations": {
+      "31": [
+       1,
+       1,
+       21,
+       true
+      ]
+     },
+     "episode_files": {
+      "21": [
+       "episode.mkv",
+       31
+      ]
+     },
+     "inventory": {
+      "episode.mkv": [
+       31,
+       "4c62fb002c8bdf578e6e2d26bc66c1acf9e03f5ad4ced9086bdca3029ee13946",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "COPIED",
+    {
+     "receipt": {
+      "operation": "copy",
+      "result": "OK"
+     }
+    }
+   ],
+   [
+    "SONARR_UPDATE_INTENT",
+    {}
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "fs:metadata:source",
+   "log:COPY_INTENT",
+   "nas:copy",
+   "log:COPIED",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:destination",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "log:SONARR_UPDATE_INTENT",
+   "arr:update",
+   "arr:get:series/11"
+  ]
+ },
+ "execute_movie_nas/approval_revoked_after_preflight": {
+  "error": [
+   "Refused",
+   "Latest approval does not approve this exact manifest hash"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/disk/Common/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "85c94524077176ecdfbca92c53996ec0cbc4afa52e3bd5a26c9ed63ecd2f338b",
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/disk/Library/Example"
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load"
+  ]
+ },
+ "execute_movie_nas/approval_revoked_after_rename": {
+  "error": null,
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/disk/Common/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "85c94524077176ecdfbca92c53996ec0cbc4afa52e3bd5a26c9ed63ecd2f338b",
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/disk/Library/Example"
+    }
+   ],
+   [
+    "RENAME_INTENT",
+    {
+     "inventory": {
+      "movie.mkv": [
+       26,
+       "51db14961e2f302f15aa72aaecda576d5a89c2a8d1d6fe8e66351f35bf42da95",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "RENAMED",
+    {}
+   ],
+   [
+    "RADARR_UPDATE_INTENT",
+    {}
+   ],
+   [
+    "SUCCESS",
+    {
+     "manifest_sha256": "85c94524077176ecdfbca92c53996ec0cbc4afa52e3bd5a26c9ed63ecd2f338b"
+    }
+   ]
+  ],
+  "result": "SUCCESS",
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:movie/7",
+   "fs:metadata:source",
+   "log:RENAME_INTENT",
+   "nas:rename",
+   "log:RENAMED",
+   "nfs:verify",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "arr:visible",
+   "log:RADARR_UPDATE_INTENT",
+   "arr:update",
+   "arr:get:movie/7",
+   "arr:verify:destination",
+   "nfs:verify",
+   "fs:metadata:destination",
+   "log:SUCCESS"
+  ]
+ },
+ "execute_movie_nas/arr_update_failure": {
+  "error": [
+   "RuntimeError",
+   "simulated Arr failure"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/disk/Common/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "85c94524077176ecdfbca92c53996ec0cbc4afa52e3bd5a26c9ed63ecd2f338b",
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/disk/Library/Example"
+    }
+   ],
+   [
+    "RENAME_INTENT",
+    {
+     "inventory": {
+      "movie.mkv": [
+       26,
+       "51db14961e2f302f15aa72aaecda576d5a89c2a8d1d6fe8e66351f35bf42da95",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "RENAMED",
+    {}
+   ],
+   [
+    "RADARR_UPDATE_INTENT",
+    {}
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:movie/7",
+   "fs:metadata:source",
+   "log:RENAME_INTENT",
+   "nas:rename",
+   "log:RENAMED",
+   "nfs:verify",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "arr:visible",
+   "log:RADARR_UPDATE_INTENT",
+   "arr:update"
+  ]
+ },
+ "execute_movie_nas/check_only": {
+  "error": null,
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/disk/Common/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "85c94524077176ecdfbca92c53996ec0cbc4afa52e3bd5a26c9ed63ecd2f338b",
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/disk/Library/Example"
+    }
+   ],
+   [
+    "CHECK_ONLY",
+    {
+     "manifest_sha256": "85c94524077176ecdfbca92c53996ec0cbc4afa52e3bd5a26c9ed63ecd2f338b"
+    }
+   ]
+  ],
+  "result": "CHECK_ONLY",
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "log:CHECK_ONLY"
+  ]
+ },
+ "execute_movie_nas/existing_destination": {
+  "error": [
+   "Refused",
+   "Destination already exists"
+  ],
+  "journal": [],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status"
+  ]
+ },
+ "execute_movie_nas/lock_tag": {
+  "error": [
+   "Refused",
+   "Movie now has migratarr-lock"
+  ],
+  "journal": [],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag"
+  ]
+ },
+ "execute_movie_nas/rename_failure": {
+  "error": [
+   "OSError",
+   "[Errno 22] simulated rename refusal"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/disk/Common/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "85c94524077176ecdfbca92c53996ec0cbc4afa52e3bd5a26c9ed63ecd2f338b",
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/disk/Library/Example"
+    }
+   ],
+   [
+    "RENAME_INTENT",
+    {
+     "inventory": {
+      "movie.mkv": [
+       26,
+       "51db14961e2f302f15aa72aaecda576d5a89c2a8d1d6fe8e66351f35bf42da95",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:movie/7",
+   "fs:metadata:source",
+   "log:RENAME_INTENT",
+   "nas:rename"
+  ]
+ },
+ "execute_movie_nas/source_change_after_preflight": {
+  "error": [
+   "Refused",
+   "Source changed during preflight"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/disk/Common/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "85c94524077176ecdfbca92c53996ec0cbc4afa52e3bd5a26c9ed63ecd2f338b",
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/disk/Library/Example"
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:movie/7",
+   "fs:metadata:source"
+  ]
+ },
+ "execute_movie_nas/success": {
+  "error": null,
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/disk/Common/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "85c94524077176ecdfbca92c53996ec0cbc4afa52e3bd5a26c9ed63ecd2f338b",
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/disk/Library/Example"
+    }
+   ],
+   [
+    "RENAME_INTENT",
+    {
+     "inventory": {
+      "movie.mkv": [
+       26,
+       "51db14961e2f302f15aa72aaecda576d5a89c2a8d1d6fe8e66351f35bf42da95",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "RENAMED",
+    {}
+   ],
+   [
+    "RADARR_UPDATE_INTENT",
+    {}
+   ],
+   [
+    "SUCCESS",
+    {
+     "manifest_sha256": "85c94524077176ecdfbca92c53996ec0cbc4afa52e3bd5a26c9ed63ecd2f338b"
+    }
+   ]
+  ],
+  "result": "SUCCESS",
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:movie/7",
+   "fs:metadata:source",
+   "log:RENAME_INTENT",
+   "nas:rename",
+   "log:RENAMED",
+   "nfs:verify",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "arr:visible",
+   "log:RADARR_UPDATE_INTENT",
+   "arr:update",
+   "arr:get:movie/7",
+   "arr:verify:destination",
+   "nfs:verify",
+   "fs:metadata:destination",
+   "log:SUCCESS"
+  ]
+ },
+ "execute_movie_nas/wrong_arr_path_after_update": {
+  "error": [
+   "Refused",
+   "Radarr post-update verification failed"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/disk/Common/Example",
+     "logical_destination": "/media/Movies/Common/Example",
+     "logical_source": "/media/Movies/Library/Example",
+     "manifest_sha256": "85c94524077176ecdfbca92c53996ec0cbc4afa52e3bd5a26c9ed63ecd2f338b",
+     "radarr_id": 7,
+     "radarr_version": "offline-test",
+     "source": "<BASE>/disk/Library/Example"
+    }
+   ],
+   [
+    "RENAME_INTENT",
+    {
+     "inventory": {
+      "movie.mkv": [
+       26,
+       "51db14961e2f302f15aa72aaecda576d5a89c2a8d1d6fe8e66351f35bf42da95",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "RENAMED",
+    {}
+   ],
+   [
+    "RADARR_UPDATE_INTENT",
+    {}
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:movie",
+   "arr:get:movie/7",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:movie/7",
+   "fs:metadata:source",
+   "log:RENAME_INTENT",
+   "nas:rename",
+   "log:RENAMED",
+   "nfs:verify",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "arr:visible",
+   "log:RADARR_UPDATE_INTENT",
+   "arr:update",
+   "arr:get:movie/7"
+  ]
+ },
+ "execute_tv_nas/approval_revoked_after_preflight": {
+  "error": [
+   "Refused",
+   "Latest approval does not approve this exact manifest hash"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/disk/Current/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "74c4d879641911c82c8d791040feefb1907c187adbfb474108d776af5eb56787",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/disk/Library/Example"
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load"
+  ]
+ },
+ "execute_tv_nas/approval_revoked_after_rename": {
+  "error": null,
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/disk/Current/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "74c4d879641911c82c8d791040feefb1907c187adbfb474108d776af5eb56787",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/disk/Library/Example"
+    }
+   ],
+   [
+    "RENAME_INTENT",
+    {
+     "episode_associations": {
+      "31": [
+       1,
+       1,
+       21,
+       true
+      ]
+     },
+     "episode_files": {
+      "21": [
+       "episode.mkv",
+       26
+      ]
+     },
+     "inventory": {
+      "episode.mkv": [
+       26,
+       "51db14961e2f302f15aa72aaecda576d5a89c2a8d1d6fe8e66351f35bf42da95",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "RENAMED",
+    {}
+   ],
+   [
+    "SONARR_UPDATE_INTENT",
+    {}
+   ],
+   [
+    "SUCCESS",
+    {
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "manifest_sha256": "74c4d879641911c82c8d791040feefb1907c187adbfb474108d776af5eb56787"
+    }
+   ]
+  ],
+  "result": "SUCCESS",
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "fs:metadata:source",
+   "log:RENAME_INTENT",
+   "nas:rename",
+   "log:RENAMED",
+   "nfs:verify",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "arr:visible",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "log:SONARR_UPDATE_INTENT",
+   "arr:update",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:destination",
+   "nfs:verify",
+   "fs:metadata:destination",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:get:series/11",
+   "log:SUCCESS"
+  ]
+ },
+ "execute_tv_nas/arr_update_failure": {
+  "error": [
+   "RuntimeError",
+   "simulated Arr failure"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/disk/Current/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "74c4d879641911c82c8d791040feefb1907c187adbfb474108d776af5eb56787",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/disk/Library/Example"
+    }
+   ],
+   [
+    "RENAME_INTENT",
+    {
+     "episode_associations": {
+      "31": [
+       1,
+       1,
+       21,
+       true
+      ]
+     },
+     "episode_files": {
+      "21": [
+       "episode.mkv",
+       26
+      ]
+     },
+     "inventory": {
+      "episode.mkv": [
+       26,
+       "51db14961e2f302f15aa72aaecda576d5a89c2a8d1d6fe8e66351f35bf42da95",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "RENAMED",
+    {}
+   ],
+   [
+    "SONARR_UPDATE_INTENT",
+    {}
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "fs:metadata:source",
+   "log:RENAME_INTENT",
+   "nas:rename",
+   "log:RENAMED",
+   "nfs:verify",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "arr:visible",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "log:SONARR_UPDATE_INTENT",
+   "arr:update"
+  ]
+ },
+ "execute_tv_nas/check_only": {
+  "error": null,
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/disk/Current/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "74c4d879641911c82c8d791040feefb1907c187adbfb474108d776af5eb56787",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/disk/Library/Example"
+    }
+   ],
+   [
+    "CHECK_ONLY",
+    {
+     "manifest_sha256": "74c4d879641911c82c8d791040feefb1907c187adbfb474108d776af5eb56787"
+    }
+   ]
+  ],
+  "result": "CHECK_ONLY",
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "log:CHECK_ONLY"
+  ]
+ },
+ "execute_tv_nas/episode_association_change_after_rename": {
+  "error": [
+   "Refused",
+   "Episode associations changed before path update"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/disk/Current/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "74c4d879641911c82c8d791040feefb1907c187adbfb474108d776af5eb56787",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/disk/Library/Example"
+    }
+   ],
+   [
+    "RENAME_INTENT",
+    {
+     "episode_associations": {
+      "31": [
+       1,
+       1,
+       21,
+       true
+      ]
+     },
+     "episode_files": {
+      "21": [
+       "episode.mkv",
+       26
+      ]
+     },
+     "inventory": {
+      "episode.mkv": [
+       26,
+       "51db14961e2f302f15aa72aaecda576d5a89c2a8d1d6fe8e66351f35bf42da95",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "RENAMED",
+    {}
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "fs:metadata:source",
+   "log:RENAME_INTENT",
+   "nas:rename",
+   "log:RENAMED",
+   "nfs:verify",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "arr:visible",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11"
+  ]
+ },
+ "execute_tv_nas/existing_destination": {
+  "error": [
+   "Refused",
+   "Destination already exists"
+  ],
+  "journal": [],
+  "result": null,
+  "trace": [
+   "plan:load"
+  ]
+ },
+ "execute_tv_nas/lock_tag": {
+  "error": [
+   "Refused",
+   "Series has migratarr-lock"
+  ],
+  "journal": [],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag"
+  ]
+ },
+ "execute_tv_nas/rename_failure": {
+  "error": [
+   "OSError",
+   "[Errno 22] simulated rename refusal"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/disk/Current/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "74c4d879641911c82c8d791040feefb1907c187adbfb474108d776af5eb56787",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/disk/Library/Example"
+    }
+   ],
+   [
+    "RENAME_INTENT",
+    {
+     "episode_associations": {
+      "31": [
+       1,
+       1,
+       21,
+       true
+      ]
+     },
+     "episode_files": {
+      "21": [
+       "episode.mkv",
+       26
+      ]
+     },
+     "inventory": {
+      "episode.mkv": [
+       26,
+       "51db14961e2f302f15aa72aaecda576d5a89c2a8d1d6fe8e66351f35bf42da95",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "fs:metadata:source",
+   "log:RENAME_INTENT",
+   "nas:rename"
+  ]
+ },
+ "execute_tv_nas/source_change_after_preflight": {
+  "error": [
+   "Refused",
+   "Source changed during preflight"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/disk/Current/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "74c4d879641911c82c8d791040feefb1907c187adbfb474108d776af5eb56787",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/disk/Library/Example"
+    }
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "fs:metadata:source"
+  ]
+ },
+ "execute_tv_nas/success": {
+  "error": null,
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/disk/Current/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "74c4d879641911c82c8d791040feefb1907c187adbfb474108d776af5eb56787",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/disk/Library/Example"
+    }
+   ],
+   [
+    "RENAME_INTENT",
+    {
+     "episode_associations": {
+      "31": [
+       1,
+       1,
+       21,
+       true
+      ]
+     },
+     "episode_files": {
+      "21": [
+       "episode.mkv",
+       26
+      ]
+     },
+     "inventory": {
+      "episode.mkv": [
+       26,
+       "51db14961e2f302f15aa72aaecda576d5a89c2a8d1d6fe8e66351f35bf42da95",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "RENAMED",
+    {}
+   ],
+   [
+    "SONARR_UPDATE_INTENT",
+    {}
+   ],
+   [
+    "SUCCESS",
+    {
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "manifest_sha256": "74c4d879641911c82c8d791040feefb1907c187adbfb474108d776af5eb56787"
+    }
+   ]
+  ],
+  "result": "SUCCESS",
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "fs:metadata:source",
+   "log:RENAME_INTENT",
+   "nas:rename",
+   "log:RENAMED",
+   "nfs:verify",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "arr:visible",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "log:SONARR_UPDATE_INTENT",
+   "arr:update",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:destination",
+   "nfs:verify",
+   "fs:metadata:destination",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:get:series/11",
+   "log:SUCCESS"
+  ]
+ },
+ "execute_tv_nas/wrong_arr_path_after_update": {
+  "error": [
+   "Refused",
+   "Sonarr path verification failed"
+  ],
+  "journal": [
+   [
+    "PREFLIGHT_OK",
+    {
+     "destination": "<BASE>/disk/Current/Example",
+     "episode_file_count": 1,
+     "linked_episode_count": 1,
+     "logical_destination": "/media/TV/Current/Example",
+     "logical_source": "/media/TV/Library/Example",
+     "manifest_sha256": "74c4d879641911c82c8d791040feefb1907c187adbfb474108d776af5eb56787",
+     "sonarr_id": 11,
+     "sonarr_version": "4.0.0",
+     "source": "<BASE>/disk/Library/Example"
+    }
+   ],
+   [
+    "RENAME_INTENT",
+    {
+     "episode_associations": {
+      "31": [
+       1,
+       1,
+       21,
+       true
+      ]
+     },
+     "episode_files": {
+      "21": [
+       "episode.mkv",
+       26
+      ]
+     },
+     "inventory": {
+      "episode.mkv": [
+       26,
+       "51db14961e2f302f15aa72aaecda576d5a89c2a8d1d6fe8e66351f35bf42da95",
+       "<ino>",
+       "<mtime_ns>"
+      ]
+     }
+    }
+   ],
+   [
+    "RENAMED",
+    {}
+   ],
+   [
+    "SONARR_UPDATE_INTENT",
+    {}
+   ]
+  ],
+  "result": null,
+  "trace": [
+   "plan:load",
+   "arr:get:system/status",
+   "arr:get:series",
+   "arr:get:series/11",
+   "arr:get:rootfolder",
+   "arr:get:tag",
+   "fs:inventory:source",
+   "fs:metadata:source",
+   "fs:metadata:source",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "arr:verify:source",
+   "arr:visible",
+   "nas:check",
+   "log:PREFLIGHT_OK",
+   "plan:load",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "fs:metadata:source",
+   "log:RENAME_INTENT",
+   "nas:rename",
+   "log:RENAMED",
+   "nfs:verify",
+   "fs:inventory:destination",
+   "fs:metadata:destination",
+   "fs:metadata:destination",
+   "arr:visible",
+   "arr:get:series/11",
+   "arr:get:episodefile?seriesId=11",
+   "arr:get:episode?seriesId=11",
+   "log:SONARR_UPDATE_INTENT",
+   "arr:update",
+   "arr:get:series/11"
+  ]
+ },
+ "nas/execute_cross_movie": {
+  "lock_lines": [
+   "lockfd = os.open('/tmp/migratarr-movie-' + str(os.getuid()) + '.lock',"
+  ],
+  "operation_allowlists": [
+   [
+    "check",
+    "copy"
+   ],
+   [
+    "check",
+    "copy",
+    "delete"
+   ]
+  ]
+ },
+ "nas/execute_cross_tv": {
+  "lock_lines": [
+   "lockfd = os.open('/tmp/migratarr-movie-' + str(os.getuid()) + '.lock',"
+  ],
+  "operation_allowlists": [
+   [
+    "check",
+    "copy"
+   ],
+   [
+    "check",
+    "copy",
+    "delete"
+   ]
+  ]
+ },
+ "nas/execute_movie_nas": {
+  "lock_lines": [
+   "lockfd = os.open('/tmp/migratarr-movie-' + str(os.getuid()) + '.lock',"
+  ],
+  "operation_allowlists": [
+   [
+    "check",
+    "rename"
+   ]
+  ]
+ },
+ "nas/execute_tv_nas": {
+  "lock_lines": [
+   "lockfd = os.open('/tmp/migratarr-movie-' + str(os.getuid()) + '.lock',"
+  ],
+  "operation_allowlists": [
+   [
+    "check",
+    "rename"
+   ]
+  ]
+ }
+}

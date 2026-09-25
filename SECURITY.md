@@ -7,7 +7,8 @@ seriously.
 ## Reporting a vulnerability
 
 Please report suspected vulnerabilities privately rather than as a public
-issue, using GitHub private vulnerability reporting. Include what you found,
+issue, using GitHub's private vulnerability reporting: the **Security** tab →
+**Report a vulnerability** on this repository. Include what you found,
 how to reproduce it, and — if it relates to a specific run — the relevant
 `execution_logs/<execution_id>.jsonl` entry with any secrets redacted.
 

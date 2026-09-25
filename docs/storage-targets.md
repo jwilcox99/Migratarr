@@ -199,6 +199,12 @@ a run's manifest and, with `--execute`, approves and runs each through
 pending series a single `--execute` invocation processes, so a real run can be
 staged against a small subset before committing to the full pending backlog.
 
+> **Later change (2026-09-24):** batch runners no longer approve. Approval is a
+> separate, recorded step (`approve_execution.py --approve-batch ... --yes`, or
+> `--approve` per row), and `--execute` runs only rows whose approval is current
+> for the manifest hash. The live evidence below was recorded under the earlier
+> approve-and-run behavior.
+
 Real-data evidence, both on the production host (the media host), using the real
 `media01`/`media04` disks (not a hypothetical 5th disk — this validates the
 generalized cross-disk **TV** capability, not gate 4's disk-count claim):

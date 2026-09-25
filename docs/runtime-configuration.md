@@ -26,12 +26,12 @@ optional `secrets` section only says where each one is read from (see
 
 ## Extracted values and production mapping
 
-| Setting | Existing deployment value |
+| Setting | Example value |
 | --- | --- |
 | `base_path` | `/opt/media-stack/migratarr` |
-| `nas.host`, `nas.user` | `nas.example`, `migratarr` |
+| `nas.host`, `nas.user` | `nas.example`, `migratarr` (placeholders; replace with your NAS host and SSH user) |
 | `nas.ssh_key`, `nas.python` | `~/.ssh/migratarr_nas`, `/usr/bin/python3` |
-| `containers.radarr`, `.sonarr`, `.homepage` (optional) | `radarr`, `sonarr`, `homepage` |
+| `containers.radarr`, `.sonarr`, `.homepage` (each optional; required where a Docker credential source or file check uses it) | `radarr`, `sonarr`, `homepage` |
 | `urls.radarr`, `.sonarr`, `.jellyfin` | `http://localhost:7878`, `http://localhost:8989`, `http://localhost:8096` |
 | `storage.media01` | `/mnt/nas/media01` → `/volume4/media01` |
 | `storage.media02` | `/mnt/nas/media02` → `/volume1/media02` |
@@ -142,6 +142,49 @@ executor key and `UrlBase`), Jellyfin (both planners' lookups) and TMDB, with
 every lookup succeeding (`"identical": true`). Replaying the item #3
 recordings stayed byte-identical for movies and TV with no misses, and the
 offline suite passed.
+
+## Arr file checks
+
+Before and after every move, the executors confirm that Radarr/Sonarr can see
+each file at the path they will use (under `storage-targets.json` `arr_root`)
+and that it hashes to the expected SHA-256. `arr_files.py` does this; without
+an `arr_file_checks` section both services use `docker`:
+
+```json
+"arr_file_checks": {
+  "radarr": {"mode": "docker"},
+  "sonarr": {"mode": "host", "host_root": "/srv/pool/media"}
+}
+```
+
+| `mode` | Fields | Checks |
+|---|---|---|
+| `docker` | `container` (optional, default `containers.radarr`/`.sonarr`) | `docker exec <container> test -f/-d` and `sha256sum` inside the Arr container. |
+| `host` | none | Radarr/Sonarr run natively on the executor host, so their paths are host paths; checked and hashed directly. |
+| `host` | `host_root` | Radarr/Sonarr see `host_root` as `arr_root` (a bind mount); paths are translated and checked on the host. |
+
+`docker` is the strongest check: it proves the container's own mounts show the
+file. Native `host` mode is equivalent when Radarr/Sonarr run on the executor
+host with the same mounts (but runs as the executor's user, not Radarr's).
+`host` with `host_root` proves only that the host sees the file; a container
+mounted wrongly would go unnoticed, so prefer `docker` when it is available.
+A path outside `arr_root`, a missing file or a hash mismatch refuses the move
+exactly as before.
+
+Evidence: `tests/test_arr_file_checks.py` pins the default's exact `docker
+exec` commands for all five executors and the 0102 recovery client, and covers
+host mode (translated and native), refusals, validation and a mutation check.
+`python3 -m migratarr_validation.arr_files_parity --radarr-host-root <dir>
+--sonarr-host-root <dir>` compares docker and host checks on the smallest real
+files each Arr reports, read-only.
+
+Real-data result on the media host (2026-09-24, candidate `e80cb4a`, run from a
+separate worktree while a live batch used the main checkout): Radarr and
+Sonarr both mount `/mnt/media` at `/media`, so `arr_files_parity` ran with
+`--radarr-host-root /mnt/media --sonarr-host-root /mnt/media --sample 5`. All
+10 files (7.9 MB to 471 MB) were visible both ways and hashed identically
+(`"identical": true`); the offline suite passed. the media host itself stays on
+`docker`, the stronger check.
 
 ## Environment and command-line precedence
 

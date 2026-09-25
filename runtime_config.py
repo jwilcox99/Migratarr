@@ -36,11 +36,12 @@ def path(value, label):
 class RuntimeConfig:
     def __init__(self, data):
         fields(data, ('schema_version', 'base_path', 'containers', 'urls', 'nas', 'storage'), 'root',
-               optional=('secrets',))
+               optional=('secrets', 'arr_file_checks'))
         require(type(data['schema_version']) is int and data['schema_version'] == 1, 'unsupported schema_version')
         self.base_path = Path(path(data['base_path'], 'base_path'))
-        # homepage only serves the default Jellyfin key source (see service_keys.py).
-        fields(data['containers'], ('radarr', 'sonarr'), 'containers', optional=('homepage',))
+        # Each container is needed only by a source or check that runs `docker exec` in it:
+        # service_keys.py (credentials) and arr_files.py (file checks) say which.
+        fields(data['containers'], (), 'containers', optional=('radarr', 'sonarr', 'homepage'))
         for name, value in data['containers'].items():
             require(isinstance(value, str) and re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.-]*', value),
                     'invalid container: ' + name)
@@ -103,6 +104,12 @@ class RuntimeConfig:
             self.secrets = parse_secrets(self.secrets_config, self.containers)
         except SecretError as exc:
             raise ConfigError('Runtime configuration: ' + str(exc)) from None
+        from arr_files import ArrFilesError, parse_arr_file_checks
+        self.arr_file_checks_config = data.get('arr_file_checks', {})
+        try:
+            self.arr_file_checks = parse_arr_file_checks(self.arr_file_checks_config, self.containers)
+        except ArrFilesError as exc:
+            raise ConfigError('Runtime configuration: ' + str(exc)) from None
 
     @property
     def remote_disks(self):
@@ -118,7 +125,9 @@ class RuntimeConfig:
                     containers=dict(self.containers), urls=dict(self.urls),
                     nas=dict(host=host, user=user, ssh_key=self.ssh_key, python=self.remote_python),
                     storage={disk: dict(entry) for disk, entry in self.storage.items()},
-                    **({'secrets': dict(self.secrets_config)} if self.secrets_config else {}))
+                    **({'secrets': dict(self.secrets_config)} if self.secrets_config else {}),
+                    **({'arr_file_checks': dict(self.arr_file_checks_config)}
+                       if self.arr_file_checks_config else {}))
 
 
 def unique_object(pairs):

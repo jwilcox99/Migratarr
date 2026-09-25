@@ -58,10 +58,14 @@ What remains is topology rather than values:
 - **One host, one NAS.** Planning and execution run on one host (here
   "the media host") that sees the NAS disks locally and reaches the NAS over SSH
   for cross-disk and same-disk moves.
-- **Radarr and Sonarr in Docker.** Even with API keys from `env` or `file`
-  sources, the executors run `docker exec <container> test` / `sha256sum` to
-  verify media as Radarr/Sonarr see it, so both must be containers named in
-  `runtime.json` `containers`.
+- **Radarr/Sonarr paths must be visible from the executor host.** The
+  executors verify every file at the path Radarr/Sonarr use, before and after
+  a move. By default that runs inside the containers (`docker exec`); a
+  non-Docker install on the executor host, or a host view of the containers'
+  media mount, can use `arr_file_checks` host mode instead (see
+  [Arr file checks](docs/runtime-configuration.md#arr-file-checks)). Radarr or
+  Sonarr on a *different* machine, with no view of their media from the
+  executor host, isn't supported.
 
 ## 3. Recommended first run
 

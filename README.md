@@ -63,9 +63,9 @@ approvals. There is no single command that runs the whole pipeline.
 | 3 | `audit_overrides.py` | Optional. Lists the override tags configured in `config/planner.json` (default `migratarr-*`) that are currently set in Radarr/Sonarr, so you can see what's being manually pinned before you plan around it. Other `migratarr-*` tags are flagged as unrecognized. |
 | 4 | `snapshot_run.py` | Copies `movie_dry_run.csv`, `tv_dry_run.csv`, `move_plan.csv`, and selected current code files into a read-only, checksummed run under `runs/<timestamp>/`. Keep the code unchanged between planning and snapshotting. |
 | 5 | `build_execution_manifest.py` | Turns the frozen snapshot's eligible rows into a manifest with one stable `execution_id` per proposed move, hashed and stored under `manifests/<run>/`. |
-| 6 | `approve_execution.py` | Human review. Lists manifest rows and lets you `--approve <execution_id>` one at a time. Writes an approval record; **moves no files**. |
+| 6 | `approve_execution.py` | Human review. Lists manifest rows and lets you `--approve <execution_id>` one at a time, or `--approve-batch --media TV --transfer CROSS_DISK_TRANSFER [--limit N]` to approve every eligible pending row of one kind at once (smallest first; shows a preview and approves nothing until you add `--yes`). Either way it writes one hash-bound APPROVE entry per row; **moves no files**. |
 | 7 | `execute_movie_nas.py` / `execute_tv_nas.py` (same-disk) / `execute_cross_movie.py` / `execute_cross_tv.py` (cross-disk) | Takes one approved `execution_id`, re-verifies everything (manifest hash, approval hash, live Radarr/Sonarr state, full file-content hash), performs the move, and updates Radarr/Sonarr. Defaults to check-only — pass `--execute` to actually move files. |
-| 8 | `batch_cross_movies.py` / `batch_cross_tv.py` (optional) | Lists every pending cross-disk Movie/TV row from a run's manifest and, with `--execute`, approves and runs each through its executor in sequence (smallest first). `--limit N` caps how many it processes in one invocation instead of the full pending set. Without `--execute` it only lists — no approvals, copies, updates, or deletions. |
+| 8 | `batch_cross_movies.py` / `batch_cross_tv.py` (optional) | Lists every pending cross-disk Movie/TV row from a run's manifest as APPROVED or AWAITING APPROVAL and, with `--execute`, runs each **already-approved** row through its executor in sequence (smallest first), re-checking the approval before each one. It never approves anything itself — approve first with step 6. `--limit N` (TV) caps how many approved rows it processes in one invocation. Without `--execute` it only lists — no copies, updates, or deletions. |
 
 `movie_placement_v1.py` / `tv_placement_v1.py` are frozen, checksum-pinned
 copies of the scoring logic from the point it was first validated
@@ -77,12 +77,13 @@ reproducing past decisions. They are not part of the pipeline you run.
 - Linux host with **Python 3.10+** — standard library only, nothing to
   `pip install`. (`migratarr_validation/` uses PEP 604 `X | None` union
   annotations, evaluated at import time; 3.9 will fail to import it.)
-- Docker, with `docker exec` access to your Radarr and Sonarr containers
-  (the executors verify files as Radarr/Sonarr see them). By default API keys
-  are read straight out of each service's config (Radarr/Sonarr
-  `config.xml`, a Jellyfin secret in a `homepage` container) rather than
-  stored anywhere; see [Service credentials](docs/runtime-configuration.md#service-credentials)
-  for other sources.
+- By default, Docker with `docker exec` access to your Radarr and Sonarr
+  containers: the executors verify files as Radarr/Sonarr see them from inside
+  the container, and API keys are read straight out of each service's config
+  (Radarr/Sonarr `config.xml`, a Jellyfin secret in a `homepage` container)
+  rather than stored anywhere. Non-Docker installs choose other sources in
+  `runtime.json`: [Service credentials](docs/runtime-configuration.md#service-credentials)
+  and [Arr file checks](docs/runtime-configuration.md#arr-file-checks).
 - A [TMDB](https://www.themoviedb.org/settings/api) API **Read Access
   Token**, by default exported as `TMDB_TOKEN` (see [Usage](#usage)).
 - SSH access to your NAS with a dedicated key, if you want the executors
@@ -99,7 +100,7 @@ cp config/runtime.example.json config/runtime.json
 python3 -c 'from runtime_config import get_config; get_config(); print("Runtime config valid")'
 ```
 
-Review the example's media host/NAS values before use. See
+Replace the example's host, NAS and disk values with your own before use. See
 [Runtime configuration](docs/runtime-configuration.md) for all fields, environment
 overrides, retained layout restrictions, validation errors and migration steps.
 No credentials belong in the config. The deployment file is ignored by Git.
@@ -141,6 +142,17 @@ python3 approve_execution.py --approve "$EXECUTION_ID"
 python3 execute_movie_nas.py "$EXECUTION_ID"
 # Then actually move it:
 python3 execute_movie_nas.py "$EXECUTION_ID" --execute
+```
+
+To move a whole set of cross-disk rows, approve them as one batch, then run
+the batch:
+
+```bash
+RUN='REPLACE_WITH_RUN_ID'
+python3 approve_execution.py --run "$RUN" --approve-batch --media TV --transfer CROSS_DISK_TRANSFER          # preview
+python3 approve_execution.py --run "$RUN" --approve-batch --media TV --transfer CROSS_DISK_TRANSFER --yes    # record approvals
+python3 batch_cross_tv.py --run "$RUN"             # status: approved vs awaiting approval
+python3 batch_cross_tv.py --run "$RUN" --execute   # moves approved rows only
 ```
 
 Set `EXECUTION_ID` to the Movie row you selected before running
@@ -242,21 +254,21 @@ pre-execution gate.
   not enforced by any single command. `batch_cross_movies.py` /
   `batch_cross_tv.py` sequence one media type's cross-disk moves, but
   nothing drives the whole dry-run → plan → snapshot → manifest pipeline.
-- Significant duplication between `execute_movie_nas.py`,
-  `execute_tv_nas.py`, `execute_cross_movie.py`, and `execute_cross_tv.py`
-  — changes to the shared safety logic currently have to be ported by hand
-  across all four (see the Phase Two handoff in `docs/phase-one-closeout.md`).
-- **No CI.** `tests/` exists on `main` but nothing runs it automatically —
-  `docs/phase-one-closeout.md` states this explicitly.
+- Five separate executors (`execute_movie.py`, `execute_movie_nas.py`,
+  `execute_tv_nas.py`, `execute_cross_movie.py`, `execute_cross_tv.py`).
+  Low-level safety primitives are shared (`executor_command.py`,
+  `executor_inventory.py`, `executor_manifest.py`, `executor_nfs.py`), but
+  each executor's preflight/move/verify flow is still its own copy (see the
+  Phase Two handoff in `docs/phase-one-closeout.md`).
+- CI (`.github/workflows/tests.yml`) runs only the safe unit tests in `tests/`.
+  Nothing that touches a real Radarr/Sonarr/Jellyfin/NAS stack runs
+  automatically; live behavior is validated by hand and recorded in `docs/`.
 - `migratarr_validation/` is read-only and not yet the live gate for
   planning or execution.
 - Runtime configuration supports one host/NAS pairing. Disk count, root
   depth and category folder names are configuration (`docs/media-layout.md`),
   but the executor topology itself (one media host, one NAS reached
   over SSH) isn't otherwise generalized.
-- Streaming subscriptions, TMDB region, override tags and every scoring
-  weight, tier and threshold are settings (`config/planner.json`, see
-  `docs/planner-settings.md`).
 
 ## Contributing
 

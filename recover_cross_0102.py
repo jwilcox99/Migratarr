@@ -12,6 +12,7 @@ import shlex
 import execute_cross_movie as m
 
 from runtime_config import get_config
+from arr_files import host_path, host_sha256
 from planner_settings import get_settings
 RUNTIME = get_config()
 OVERRIDES = get_settings().overrides
@@ -215,7 +216,12 @@ class RecoveryTransport(m.NasTransport):
 class RecoveryRadarr(m.Radarr):
     def verify_file(self, path, expected_hash):
         self.visible(path)
-        output = m.run_progress(['docker', 'exec', RUNTIME.containers['radarr'], 'sha256sum', '--', path],
+        check = RUNTIME.arr_file_checks['radarr']
+        if check['mode'] == 'host':
+            digest = host_sha256(host_path(check, m.TARGETS.arr_root, path))
+            m.require(digest == expected_hash, 'Radarr-visible content mismatch')
+            return
+        output = m.run_progress(['docker', 'exec', check['container'], 'sha256sum', '--', path],
                                 'Radarr recovery content verification', timeout=OPERATION_TIMEOUT)
         m.require(output.split()[0] == expected_hash, 'Radarr-visible content mismatch')
 

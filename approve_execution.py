@@ -128,6 +128,15 @@ group.add_argument(
 )
 
 group.add_argument(
+    "--approve-batch",
+    action="store_true",
+    help=(
+        "Approve every eligible pending row matching --media and --transfer, "
+        "smallest first. Shows a preview and approves nothing unless --yes is given."
+    )
+)
+
+group.add_argument(
     "--revoke",
     metavar="EXECUTION_ID",
     help="Revoke one approval."
@@ -139,7 +148,39 @@ group.add_argument(
     help="Show current approval status."
 )
 
+parser.add_argument(
+    "--media",
+    choices=["Movie", "TV"],
+    help="With --approve-batch: media type to approve."
+)
+
+parser.add_argument(
+    "--transfer",
+    choices=["SAME_DISK_RENAME", "CROSS_DISK_TRANSFER"],
+    help="With --approve-batch: transfer type to approve."
+)
+
+parser.add_argument(
+    "--limit",
+    type=int,
+    help="With --approve-batch: approve at most N rows (smallest first)."
+)
+
+parser.add_argument(
+    "--yes",
+    action="store_true",
+    help="With --approve-batch: record the approvals shown in the preview."
+)
+
 args = parser.parse_args()
+
+if args.approve_batch:
+    if not (args.media and args.transfer):
+        parser.error("--approve-batch requires --media and --transfer")
+    if args.limit is not None and args.limit <= 0:
+        parser.error("--limit must be positive")
+elif args.media or args.transfer or args.limit is not None or args.yes:
+    parser.error("--media, --transfer, --limit and --yes are only valid with --approve-batch")
 
 manifest_dir, manifest_path, rows = load_manifest(args.run)
 
@@ -238,6 +279,85 @@ elif args.approve:
     print("APPROVED")
     print_row(row)
     print()
+    print(f"Approval record: {path}")
+    print("NO FILES WERE MOVED.")
+
+elif args.approve_batch:
+    logs = BASE / "execution_logs"
+
+    def already_succeeded(execution_id):
+        journal = logs / f"{execution_id}.jsonl"
+        if not journal.exists():
+            return False
+        lines = [line for line in journal.read_text().splitlines() if line.strip()]
+        return bool(lines) and json.loads(lines[-1]).get("event") == "SUCCESS"
+
+    candidates = sorted(
+        (
+            r for r in rows
+            if r.get("media_type") == args.media
+            and r.get("transfer_type") == args.transfer
+            and r.get("status") == "READY_FOR_REVIEW"
+            and not r.get("blockers")
+            and r.get("executed") == "NO"
+            and r["execution_id"] not in approved
+            and not already_succeeded(r["execution_id"])
+        ),
+        key=lambda r: float(r["size_gb"])
+    )
+
+    if args.limit is not None:
+        candidates = candidates[:args.limit]
+
+    total_gb = sum(float(r["size_gb"]) for r in candidates)
+
+    print(f"Run: {run_id}")
+    print(
+        f"Batch: {args.media} {args.transfer}; "
+        f"{len(candidates)} row(s), {total_gb:.2f} GB"
+    )
+    print()
+
+    for row in candidates:
+        print_row(row)
+
+    if not candidates:
+        print("Nothing to approve.")
+        raise SystemExit(0)
+
+    if not args.yes:
+        print()
+        print("PREVIEW ONLY: nothing approved.")
+        print("Re-run with --yes to approve the rows listed above.")
+        raise SystemExit(0)
+
+    batch_utc = datetime.now(timezone.utc).isoformat()
+    manifest_sha256 = sha256(manifest_path)
+    batch = {
+        "utc": batch_utc,
+        "media_type": args.media,
+        "transfer_type": args.transfer,
+        "size": len(candidates),
+    }
+
+    for row in candidates:
+        approved.add(row["execution_id"])
+        # One APPROVE entry per row, exactly as --approve writes, so executors
+        # verify batch approvals the same way; "batch" records the shared decision.
+        approvals.setdefault("history", []).append({
+            "action": "APPROVE",
+            "execution_id": row["execution_id"],
+            "utc": batch_utc,
+            "manifest_sha256": manifest_sha256,
+            "batch": batch,
+        })
+
+    approvals["approved_execution_ids"] = sorted(approved)
+
+    path = save_approvals(run_id, approvals)
+
+    print()
+    print(f"APPROVED {len(candidates)} row(s) as one batch.")
     print(f"Approval record: {path}")
     print("NO FILES WERE MOVED.")
 
