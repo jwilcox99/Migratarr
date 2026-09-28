@@ -9,6 +9,12 @@ import sys
 import read_api
 
 
+def shorten(text, limit=160):
+    # STOPPED reasons can embed a whole shipped NAS program; --execution and --json keep them in full.
+    text = ' '.join(str(text).split())
+    return text if len(text) <= limit else text[:limit - 1] + '…'
+
+
 def default_base():
     from runtime_config import get_config
     return get_config().base_path
@@ -36,7 +42,7 @@ def show_run(base, run_id, as_json):
         print('INTEGRITY FAILED: ' + '; '.join(status['integrity_problems']))
         return None
     for row in status['rows']:
-        note = f" ({row['detail']})" if row['detail'] else ''
+        note = f" ({shorten(row['detail'])})" if row['detail'] else ''
         print(f"{row['execution_id']} | {row['media_type']} | {row['title']} | "
               f"{row['current']} -> {row['recommended']} | {row['size_gb']} GB | "
               f"{row['approval']} | {row['execution']}{note}")

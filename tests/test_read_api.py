@@ -267,6 +267,19 @@ class StatusCliTests(unittest.TestCase):
         rc, out, _ = self.run_cli('--execution', eid(3))
         self.assertIn('STOPPED {"error_type": "TimeoutError", "reason": "uncertain copy"}', out)
 
+    def test_long_stop_reasons_are_shortened_in_the_table_only(self):
+        journal = self.base / 'execution_logs' / (eid(4) + '.jsonl')
+        long_reason = "Command '['ssh', " + 'x' * 5000 + "]' timed out after 7200 seconds"
+        journal.write_text(json.dumps(dict(event='START', live=True)) + '\n'
+                           + json.dumps(dict(event='STOPPED', reason=long_reason)) + '\n')
+        _, out, _ = self.run_cli('--run', RUN)
+        line = next(l for l in out.splitlines() if l.startswith(eid(4)))
+        self.assertLess(len(line), 300)
+        self.assertTrue(line.endswith('…)'))
+        _, out, _ = self.run_cli('--run', RUN, '--json')
+        row = next(r for r in json.loads(out)['rows'] if r['execution_id'] == eid(4))
+        self.assertEqual(row['detail'], long_reason)
+
     def test_json_and_errors(self):
         rc, out, _ = self.run_cli('--run', RUN, '--json')
         self.assertEqual(json.loads(out)['totals'][read_api.SUCCEEDED]['count'], 2)

@@ -23,7 +23,7 @@ from service_keys import SecretError, service_endpoint
 from arr_files import host_path, host_sha256, host_visible
 from executor_manifest import digest, load_approved_plan
 from executor_nfs import verify_after_rename
-from executor_command import run_command
+from executor_command import NAS_IDLE_TIMEOUT, run_command
 from executor_inventory import scan_metadata, metadata_from_inventory
 RUNTIME = get_config()
 OVERRIDES = get_settings().overrides
@@ -137,8 +137,9 @@ def inventory(root):
     return found
 
 
-def run_progress(command, label, input=None, timeout=1800):
-    return run_command(command, label, input, timeout, require=require, progress=progress)
+def run_progress(command, label, input=None, timeout=1800, idle_timeout=None):
+    return run_command(command, label, input, timeout, require=require, progress=progress,
+                       idle_timeout=idle_timeout)
 
 
 def rename_noreplace(src, dst):
@@ -430,7 +431,8 @@ class NasTransport:
                        inventory=before)
         result = run_progress(['ssh', *self.options, '-o', 'BatchMode=yes', RUNTIME.ssh_target,
                                  shlex.quote(RUNTIME.remote_python) + ' -c ' + shlex.quote(remote_program(disk))],
-                              'NAS ' + operation, input=json.dumps(payload))
+                              'NAS ' + operation, input=json.dumps(payload),
+                              timeout=None, idle_timeout=NAS_IDLE_TIMEOUT)
         require(json.loads(result) == dict(result='OK', operation=operation),
                 'Unexpected NAS response; reconcile before retrying')
 

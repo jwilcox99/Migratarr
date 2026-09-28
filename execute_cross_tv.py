@@ -41,7 +41,7 @@ from media_layout import MediaLayout, canonical, get_targets, split_media_path
 from service_keys import SecretError, service_endpoint
 from arr_files import host_path, host_sha256, host_visible
 from executor_manifest import digest, load_approved_plan
-from executor_command import run_command
+from executor_command import NAS_IDLE_TIMEOUT, run_command
 from executor_inventory import scan_metadata, metadata_from_inventory
 RUNTIME = get_config()
 OVERRIDES = get_settings().overrides
@@ -110,8 +110,9 @@ def inventory(root):
     progress('Hash complete: %.2f GiB; elapsed %.0fs' % (checked / 2**30, time.monotonic() - started))
     return found
 
-def run_progress(command, label, input=None, timeout=7200):
-    return run_command(command, label, input, timeout, require=require, progress=progress)
+def run_progress(command, label, input=None, timeout=7200, idle_timeout=None):
+    return run_command(command, label, input, timeout, require=require, progress=progress,
+                       idle_timeout=idle_timeout)
 
 def rename_noreplace(src, dst):
     # Atomic collision protection. Never fall back to copy/delete or replacing rename.
@@ -247,7 +248,8 @@ class NasTransport:
                        inventory=before, execution_id=execution_id, receipt=receipt)
         result = run_progress(['ssh', *self.options, '-o', 'BatchMode=yes', RUNTIME.ssh_target,
                                  shlex.quote(RUNTIME.remote_python) + ' -c ' + shlex.quote(remote_program())],
-                              'NAS ' + operation, input=json.dumps(payload))
+                              'NAS ' + operation, input=json.dumps(payload),
+                              timeout=None, idle_timeout=NAS_IDLE_TIMEOUT)
         response = json.loads(result)
         require(response.get('result') == 'OK' and response.get('operation') == operation,
                 'Unexpected NAS response; reconcile before retrying')
