@@ -434,12 +434,17 @@ def execute(base, execution_id, live, radarr, log, transport):
 
 
 def copy_tree(src, stage, expected):
-    """Copy regular files only; exclusive creation, no symlink traversal fallback."""
-    stage.mkdir(mode=0o755)
+    """Copy regular files only; exclusive creation, no symlink traversal fallback.
+
+    Files and folders keep the source's permission bits, so the Arrs can still
+    write to moved media. Folders stay private (0700) while being filled and get
+    their source mode at the end, deepest first.
+    """
+    stage.mkdir(mode=0o700)
     for name, info in sorted(expected.items(), key=lambda x: (len(PurePosixPath(x[0]).parts), x[0])):
         target = stage / name
         if len(info) == 1:
-            target.mkdir(mode=0o755)
+            target.mkdir(mode=0o700)
             continue
         source = src / name
         fd = os.open(source, os.O_RDONLY | os.O_NOFOLLOW)
@@ -457,6 +462,9 @@ def copy_tree(src, stage, expected):
             os.fsync(copied.fileno())
     for folder in sorted([stage] + [stage / n for n, v in expected.items() if len(v) == 1],
                          key=lambda p: len(p.parts), reverse=True):
+        s = os.lstat(src / folder.relative_to(stage))
+        require(stat.S_ISDIR(s.st_mode), 'Source changed before copy')
+        os.chmod(folder, stat.S_IMODE(s.st_mode))
         fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
         try:
             os.fsync(fd)
