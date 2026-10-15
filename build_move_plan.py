@@ -11,6 +11,7 @@ from storage_targets import load_targets, check_runtime_consistency
 from runtime_config import get_config
 from service_keys import service_endpoint
 from planner_settings import get_settings
+from pipeline_inputs import require_fresh_inputs
 RUNTIME = get_config()
 PLANNER_SETTINGS = get_settings()
 
@@ -19,6 +20,9 @@ BASE = RUNTIME.base_path
 MOVIE_CSV = BASE / "movie_dry_run.csv"
 TV_CSV = BASE / "tv_dry_run.csv"
 OUTPUT = BASE / "move_plan.csv"
+
+# A failed dry run leaves the previous file in place; never plan from it silently.
+require_fresh_inputs("build_move_plan.py", [MOVIE_CSV, TV_CSV])
 
 # Explicit deployment configuration; never silently fall back to the example.
 TARGETS = load_targets(os.environ.get("MIGRATARR_STORAGE_TARGETS") or BASE / "config/storage-targets.json")

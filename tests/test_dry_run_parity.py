@@ -59,6 +59,7 @@ class DryRunParityTests(unittest.TestCase):
         out, summary = self.recording('movie')
         self.world.close()
         self.world = offline_world(network=False)  # any HTTP or Docker call now raises
+        self.addCleanup(self.world.close)  # setUp's cleanup is bound to the world closed above
         rows_again = compare(out, BASELINE['movie'])
         self.assertTrue(rows_again['byte_identical'])
         self.assertEqual(rows_again['candidate_csv_sha256'], summary['csv_sha256'])

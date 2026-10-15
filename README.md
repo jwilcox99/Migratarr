@@ -128,14 +128,11 @@ before running this against a library you care about.
 ## Usage
 
 ```bash
-export TMDB_TOKEN='YOUR_TMDB_READ_ACCESS_TOKEN'
+export TMDB_TOKEN='YOUR_TMDB_READ_ACCESS_TOKEN'   # or a file source: docs/runtime-configuration.md
 
-python3 dry_run_movies.py
-python3 dry_run_tv.py
-python3 build_move_plan.py
-python3 audit_overrides.py            # optional, read-only
-python3 snapshot_run.py
-python3 build_execution_manifest.py
+# Chain the planning steps with && so a failed step stops the rest.
+python3 dry_run_movies.py && python3 dry_run_tv.py && python3 build_move_plan.py && \
+python3 audit_overrides.py && python3 snapshot_run.py && python3 build_execution_manifest.py
 python3 approve_execution.py --list-same-disk
 EXECUTION_ID='REPLACE_WITH_SELECTED_MOVIE_EXECUTION_ID'
 python3 approve_execution.py --approve "$EXECUTION_ID"
@@ -145,6 +142,12 @@ python3 execute_movie_nas.py "$EXECUTION_ID"
 # Then actually move it:
 python3 execute_movie_nas.py "$EXECUTION_ID" --execute
 ```
+
+`build_move_plan.py` and `snapshot_run.py` also refuse dry-run or plan files
+more than 12 hours old, and `snapshot_run.py` refuses a plan older than either
+dry run (`pipeline_inputs.py`), so a failed step can't silently hand the next one
+an earlier session's file. `MIGRATARR_ALLOW_STALE_INPUTS=1` overrides this, with
+a warning.
 
 To move a whole set of cross-disk rows, approve them as one batch, then run
 the batch:

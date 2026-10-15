@@ -11,6 +11,7 @@ from pathlib import Path
 
 from runtime_config import get_config
 from storage_targets import load_targets, check_runtime_consistency
+from pipeline_inputs import require_fresh_inputs
 RUNTIME = get_config()
 
 BASE = RUNTIME.base_path
@@ -32,8 +33,13 @@ CODE_FILES = [
     "dry_run_tv.py",
     "build_move_plan.py",
     "audit_overrides.py",
+    "pipeline_inputs.py",
 ]
 
+# Refuse before creating a run directory: every input recent, and the plan built
+# after both dry runs it was made from.
+require_fresh_inputs("snapshot_run.py", [BASE / name for name in FILES],
+                     newer_than=[BASE / "movie_dry_run.csv", BASE / "tv_dry_run.csv"])
 RUNS.mkdir(exist_ok=True)
 
 
