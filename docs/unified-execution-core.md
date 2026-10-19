@@ -1,6 +1,6 @@
 # Unified execution core: Step 2 design spec
 
-**Status:** Proposal, not implemented. Written 2026-09-24 against `main` @ `7a1d084`.
+**Status:** In progress. Gates 1 and 2 done; gates 3–6 not started. Written 2026-09-24 against `main` @ `7a1d084`.
 **Plan reference:** Step 2 of `2026-09-24-release-path-plan` and the Phase Two handoff in `docs/phase-one-closeout.md` ("a unified execution core that preserves the Phase One safety invariants while removing duplicated Movie/TV and same-disk/cross-disk code").
 **Goal:** one execution engine replaces the four live executors. Every journal, refusal and Arr call stays exactly as it is today. The engine reports what it does as structured data, so the CLI now and a web UI later are both clients of the same code.
 
@@ -117,7 +117,7 @@ Live progress for a running execution comes from `progress` events (D3). The UI 
 | --- | --- | --- |
 | 0 | Merge `codex/host-verification` first. It edits all five executors (about 16 changed lines each, plus new `arr_files.py`); merging it after the refactor means porting it by hand. | Its own tests, and CI on 3.10–3.13 |
 | 1 | Characterization only: golden-journal tests for all four pairings, recording the exact event sequence and detail keys for check-only, success and each existing failure case in `test_executor_safety*.py`; stdout/exit-code tests for each wrapper; a test that the generated NAS programs compile and reject operations outside their set. **Done 2026-09-24:** `tests/test_executor_golden.py`, `tests/golden/executor_sequences.json` (70 records; mutation-checked). | New tests pass against **unchanged** executors |
-| 2 | `migratarr/engine/primitives.py` + `nas_side.py`; executors import from them, with no behavior change. | Step 1 golden tests byte-identical; `NasReceiptTests` pass against the new NAS program |
+| 2 | `migratarr/engine/primitives.py` + `nas_side.py`; executors import from them, with no behavior change. **Done 2026-10-19** (see "Recorded by gate 2"). | Step 1 golden tests byte-identical; `NasReceiptTests` pass against the new NAS program |
 | 3 | Adapters, strategies, `run()`; the four scripts become wrappers (D6). | All existing safety tests and Step 1 golden tests pass unmodified |
 | 4 | **Live parity:** for one approved row of each pairing, run old and new in check-only mode and compare the journals, which must be identical except for `utc`. This is the same bar as `docs/executor-refactor.md` / `docs/validation-engine.md`. Then one watched `--execute` per pairing on the smallest eligible item. | Evidence recorded in this doc, as `docs/storage-targets.md` does |
 | 5 | One `batch_cross.py --media {Movie,TV}` replaces both batch scripts; retire `execute_movie.py`; move recovery scripts (D7). | Existing batch tests ported; `--limit` behavior unchanged |
@@ -129,6 +129,17 @@ The golden records made two existing behaviors explicit. Both are preserved as t
 
 - **Same-disk executors don't re-check approval once the rename intent is logged.** Revoking an approval after the NAS rename still ends in `SUCCESS`, because the Arr update goes ahead. That arguably finishes the only safe state, since the media has already moved. Cross-disk re-checks approval after the copy and again before deleting the source, where stopping still leaves a complete source.
 - **Lock-tag refusal text differs between executors.** Same-disk says "Movie now has migratarr-lock" / "Series has migratarr-lock"; cross-disk says "Movie is locked" / "Series is locked". Both honor the configured lock tag. The goldens keep each message as it is today (D8).
+
+### Recorded by gate 2
+
+- **Shipped programs pinned first.** Before any code moved, `tests/test_nas_program_parity.py` recorded the SHA-256 of all 12 programs the executors ship to the NAS (both same-disk executors per disk, both cross-disk executors, and both recovery receipt programs). After the move every one is byte-identical, and the gate 1 golden journals are unchanged.
+- **What moved.** Only functions that were byte-identical in every executor that has them:
+  - `nas_side.py` (shipped to the NAS): `Refused`, `require`, `canonical_existing`, `file_metadata`, `inventory_metadata`, `rename_noreplace`, `sync_parents`, `filesystem_ready` (same-disk), `content_only`, `copy_tree`, `remove_verified_tree`, `nas_operation` (cross-disk).
+  - `primitives.py` (media host only): `layout`, `posix`, `remote_path`, `verify_nfs_after_rename` (same-disk), `verify_destination`, `wait_source_absent` (cross-disk).
+  - The variants (`inventory`, `nas_pair`, `progress`, `remote_layout`, `run_progress`, ...) stay in each executor until their D8 changes; `Sonarr`, `episode_state` and `verify_episode_contents` move with the adapters in gate 3. `executor_*.py` are not absorbed yet.
+- **How executors use it: `primitives.bind()`, not plain imports.** The shared functions call helpers that still differ per executor. On the NAS they meet them in one shipped program; on the media host, and in the safety tests that patch executor globals, they must resolve that executor's versions. `bind()` gives each executor its own function object over the same code with the executor's globals, which is exactly the behavior of the pasted text. `Refused` is now one class shared by all executors (journals record `error_type` by name, so they are unaffected).
+- **D4 enforced by test.** `tests/test_engine_layout.py` checks that `nas_side.py` imports only the standard library and runs nothing at import, that no executor still defines a shared function, and that every shared function is bound to each executor's globals.
+- **Deployment.** The executors now import `migratarr.engine`, so the `migratarr/` folder must be present beside them (it is, in the repository).
 
 ## 6. Decisions needed from Josh
 
