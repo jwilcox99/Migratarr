@@ -54,7 +54,8 @@ Radarr/Sonarr's records to match.
 
 The normal workflow follows this order. Stages read saved outputs and/or
 live service state and write reports, caches, snapshots, manifests, or
-approvals. There is no single command that runs the whole pipeline.
+approvals. `migratarr_plan.py` runs steps 1–5 as one command (see Usage);
+approving and executing stay separate, deliberate steps.
 
 | # | Script | What it does |
 |---|--------|---------------|
@@ -67,6 +68,7 @@ approvals. There is no single command that runs the whole pipeline.
 | 7 | `execute_movie_nas.py` / `execute_tv_nas.py` (same-disk) / `execute_cross_movie.py` / `execute_cross_tv.py` (cross-disk) | Takes one approved `execution_id`, re-verifies everything (manifest hash, approval hash, live Radarr/Sonarr state, full file-content hash), performs the move, and updates Radarr/Sonarr. Defaults to check-only — pass `--execute` to actually move files. |
 | 8 | `batch_cross_movies.py` / `batch_cross_tv.py` (optional) | Lists every pending cross-disk Movie/TV row from a run's manifest as APPROVED or AWAITING APPROVAL and, with `--execute`, runs each **already-approved** row through its executor in sequence (smallest first), re-checking the approval before each one. It never approves anything itself — approve first with step 6. `--limit N` (TV) caps how many approved rows it processes in one invocation. Without `--execute` it only lists — no copies, updates, or deletions. |
 | — | `migratarr_status.py` (any time) | Read-only status: lists runs, and with `--run <run_id>` shows every manifest row's approval and execution state (succeeded, unfinished, needs reconciliation, stopped safely, checked, not started) with totals; `--execution <id>` prints one move's journal timeline; `--json` for scripts. Never approves, moves, writes or locks anything. |
+| — | `migratarr_ui.py` (any time) | The same read-only information as a web page on `127.0.0.1:8765`: runs, each run's moves grouped by what needs doing (in progress, needs attention, waiting, not approved, moved, blocked), live disk space before and after the run's remaining moves, and each move's journal. GET only; never writes or locks. |
 | — | `recover_cross_published.py <execution_id>` (only if needed) | Finishes a cross-disk move whose NAS copy was published but whose NAS call timed out (`NEEDS_RECONCILIATION` ending in `COPY_INTENT` → `STOPPED TimeoutExpired`). Check-only by default; refuses unless source, destination and Arr state all still match. See `docs/recover-published-copy.md`. |
 
 `movie_placement_v1.py` / `tv_placement_v1.py` are frozen, checksum-pinned
@@ -130,9 +132,9 @@ before running this against a library you care about.
 ```bash
 export TMDB_TOKEN='YOUR_TMDB_READ_ACCESS_TOKEN'   # or a file source: docs/runtime-configuration.md
 
-# Chain the planning steps with && so a failed step stops the rest.
-python3 dry_run_movies.py && python3 dry_run_tv.py && python3 build_move_plan.py && \
-python3 audit_overrides.py && python3 snapshot_run.py && python3 build_execution_manifest.py
+# Plan: preflight (config, credentials, clean git), then every planning step,
+# stopping at the first failure. Run it inside tmux; the dry runs take a while.
+python3 migratarr_plan.py            # or --check for the preflight only
 python3 approve_execution.py --list-same-disk
 EXECUTION_ID='REPLACE_WITH_SELECTED_MOVIE_EXECUTION_ID'
 python3 approve_execution.py --approve "$EXECUTION_ID"
@@ -148,6 +150,18 @@ more than 12 hours old, and `snapshot_run.py` refuses a plan older than either
 dry run (`pipeline_inputs.py`), so a failed step can't silently hand the next one
 an earlier session's file. `MIGRATARR_ALLOW_STALE_INPUTS=1` overrides this, with
 a warning.
+
+To browse runs and moves in a browser, start the read-only view on the media
+host and open it through an SSH tunnel (it listens on 127.0.0.1 only and
+answers only `localhost` host names):
+
+```bash
+python3 migratarr_ui.py                               # on the media host, e.g. in tmux
+ssh -L 8765:localhost:8765 <user>@<media host>        # on your computer
+# then open http://localhost:8765
+```
+
+Pages reload every 30 seconds while a move is in progress.
 
 To move a whole set of cross-disk rows, approve them as one batch, then run
 the batch:
@@ -255,10 +269,9 @@ pre-execution gate.
 
 ## Known limitations
 
-- No orchestrating entry point; the pipeline order above is documentation,
-  not enforced by any single command. `batch_cross_movies.py` /
-  `batch_cross_tv.py` sequence one media type's cross-disk moves, but
-  nothing drives the whole dry-run → plan → snapshot → manifest pipeline.
+- `migratarr_plan.py` drives planning end to end, and `batch_cross_movies.py` /
+  `batch_cross_tv.py` sequence one media type's cross-disk moves, but approval
+  and execution are still separate commands per media and transfer type.
 - Five separate executors (`execute_movie.py`, `execute_movie_nas.py`,
   `execute_tv_nas.py`, `execute_cross_movie.py`, `execute_cross_tv.py`).
   Low-level safety primitives are shared (`executor_command.py`,
