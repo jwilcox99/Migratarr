@@ -21,3 +21,6 @@ config/storage-targets.json
 
 # Deployment-specific planner preferences
 config/planner.json
+
+# Web UI background jobs (logs, state, stop requests)
+jobs/

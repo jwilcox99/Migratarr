@@ -137,8 +137,8 @@ Blocked plan rows (`runs/*/move_plan.csv` `status=BLOCKED`) show as "Blocked" wi
 1. **Plan rows have no Arr item ID.** `move_plan.csv` has no `radarr_id`/`sonarr_id`, so the UI can't reliably join a plan row to its dry-run row. Title is ambiguous; path formats differ (Arr path vs. `/mnt/nas` path). The executors already accept an optional `radarr_id`/`sonarr_id`/`item_id` column.
    - Proposal: have the planner carry it through.
    - This changes `move_plan.csv`, so it needs its own change behind the planner parity tests.
-2. **No safe "is it running?" signal.** Proposal: the Step 2 engine writes `execution_logs/active.json`, containing `execution_id`, `pid`, `started_utc` and the last progress event, via atomic replace. The engine removes it when the attempt ends.
-3. **Approvals are written non-atomically.** Proposal: write to a temp file, then `os.replace`. This is a small `approve_execution.py` change.
+2. **No safe "is it running?" signal.** Proposal: the Step 2 engine writes `execution_logs/active.json`, containing `execution_id`, `pid`, `started_utc` and the last progress event, via atomic replace. The engine removes it when the attempt ends. **Partly addressed:** moves started from the UI run inside a job that keeps `jobs/active.json` (job, pid, current move and step); see `docs/ui-actions.md`. Moves started from the CLI still have no signal until the engine writes one.
+3. ~~**Approvals are written non-atomically.**~~ **Fixed:** `approval_store.py` writes through a temp file and `os.replace`, under a per-run lock (`approvals/.<run_id>.lock`) shared by `approve_execution.py` and the UI.
 4. **Frozen status fields (§3) look authoritative but aren't.** Proposal: document them in the file formats, or drop the unused ones in a future `manifest_version` bump. `executed` must stay.
 
 ## 6. Read API for Step 4 (shared by the CLI and the UI)

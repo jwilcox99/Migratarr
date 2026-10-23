@@ -7,6 +7,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+import approval_store
 from runtime_config import get_config
 RUNTIME = get_config()
 
@@ -89,13 +90,8 @@ def load_approvals(run_id):
 
 
 def save_approvals(run_id, data):
-    path = approval_path(run_id)
-
-    path.write_text(
-        json.dumps(data, indent=2) + "\n"
-    )
-
-    return path
+    # Atomic replace (temp file + os.replace), shared with the web UI.
+    return approval_store.write_record(BASE, run_id, data)
 
 
 parser = argparse.ArgumentParser(
@@ -185,6 +181,10 @@ elif args.media or args.transfer or args.limit is not None or args.yes:
 manifest_dir, manifest_path, rows = load_manifest(args.run)
 
 run_id = manifest_dir.name
+# Hold the run's approval lock from read to write so the web UI (or another
+# terminal) can't interleave a change; released when this process exits.
+_approval_lock = approval_store.locked(BASE, run_id)
+_approval_lock.__enter__()
 approvals = load_approvals(run_id)
 
 row_map = {
