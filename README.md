@@ -68,7 +68,7 @@ approving and executing stay separate, deliberate steps.
 | 7 | `execute_movie_nas.py` / `execute_tv_nas.py` (same-disk) / `execute_cross_movie.py` / `execute_cross_tv.py` (cross-disk) | Takes one approved `execution_id`, re-verifies everything (manifest hash, approval hash, live Radarr/Sonarr state, full file-content hash), performs the move, and updates Radarr/Sonarr. Defaults to check-only — pass `--execute` to actually move files. |
 | 8 | `batch_cross_movies.py` / `batch_cross_tv.py` (optional) | Lists every pending cross-disk Movie/TV row from a run's manifest as APPROVED or AWAITING APPROVAL and, with `--execute`, runs each **already-approved** row through its executor in sequence (smallest first), re-checking the approval before each one. It never approves anything itself — approve first with step 6. `--limit N` (TV) caps how many approved rows it processes in one invocation. Without `--execute` it only lists — no copies, updates, or deletions. |
 | — | `migratarr_status.py` (any time) | Read-only status: lists runs, and with `--run <run_id>` shows every manifest row's approval and execution state (succeeded, unfinished, needs reconciliation, stopped safely, checked, not started) with totals; `--execution <id>` prints one move's journal timeline; `--json` for scripts. Never approves, moves, writes or locks anything. |
-| — | `migratarr_ui.py` (any time) | The same read-only information as a web page on `127.0.0.1:8765`: runs, each run's moves grouped by what needs doing (in progress, needs attention, waiting, not approved, moved, blocked), live disk space before and after the run's remaining moves, and each move's journal. GET only; never writes or locks. |
+| — | `migratarr_ui.py` (any time) | Web UI on `127.0.0.1:8765` for the whole cycle: **plan** a run (runs `migratarr_plan.py` in the background), **confirm** moves (review selected rows with sizes, disk space after and folder-permission problems, then record the same hash-bound approvals as step 6), and **run** them (one background job runs each approved row through its step-7 executor, check-only then live, smallest first; stop after any move). Also shows each run's moves grouped by what needs doing, live disk space, and every move's journal. Pages never write; `--read-only` turns the actions off. See `docs/ui-actions.md`. |
 | — | `recover_cross_published.py <execution_id>` (only if needed) | Finishes a cross-disk move whose NAS copy was published but whose NAS call timed out (`NEEDS_RECONCILIATION` ending in `COPY_INTENT` → `STOPPED TimeoutExpired`). Check-only by default; refuses unless source, destination and Arr state all still match. See `docs/recover-published-copy.md`. |
 
 `movie_placement_v1.py` / `tv_placement_v1.py` are frozen, checksum-pinned
@@ -151,17 +151,26 @@ dry run (`pipeline_inputs.py`), so a failed step can't silently hand the next on
 an earlier session's file. `MIGRATARR_ALLOW_STALE_INPUTS=1` overrides this, with
 a warning.
 
-To browse runs and moves in a browser, start the read-only view on the media
+To plan, confirm and run from a browser instead, start the UI on the media
 host and open it through an SSH tunnel (it listens on 127.0.0.1 only and
 answers only `localhost` host names):
 
 ```bash
+export TMDB_TOKEN='YOUR_TMDB_READ_ACCESS_TOKEN'       # planning jobs inherit the UI's environment
 python3 migratarr_ui.py                               # on the media host, e.g. in tmux
 ssh -L 8765:localhost:8765 <user>@<media host>        # on your computer
 # then open http://localhost:8765
 ```
 
-Pages reload every 30 seconds while a move is in progress.
+1. **Plan:** "Plan a new run" on the Runs page.
+2. **Confirm:** on the run page, tick moves (or "Review all"), check the review
+   page, then "Approve N moves".
+3. **Run:** "Run N approved moves", check the order, then "Start moving". The
+   job page follows it live and can stop it after the current move.
+
+Jobs run as their own process, so closing the browser or restarting the UI
+doesn't stop them. `python3 migratarr_ui.py --read-only` is the view-only
+version. Details and safety checks: [docs/ui-actions.md](docs/ui-actions.md).
 
 To move a whole set of cross-disk rows, approve them as one batch, then run
 the batch:
