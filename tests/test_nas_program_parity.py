@@ -37,7 +37,7 @@ class NasProgramParityTests(unittest.TestCase):
         # executors' real functions: inspect.getsource() can't read a mock.
         stack = ExitStack()
         self.addCleanup(stack.close)
-        config = load_config(ROOT / 'config/runtime.example.json', environ={})
+        config = load_config(ROOT / 'config/examples/runtime.v1.example.json', environ={})
         with patch('runtime_config.get_config', return_value=config), \
                 patch('planner_settings.get_settings',
                       return_value=load_settings(ROOT / 'config/planner.example.json')), \
