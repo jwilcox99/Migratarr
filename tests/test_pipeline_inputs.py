@@ -81,7 +81,7 @@ class PipelineScriptTests(unittest.TestCase):
 
     def setUp(self):
         self.f = Files(self)
-        self.env = dict(os.environ, MIGRATARR_CONFIG=str(ROOT / 'config/runtime.example.json'),
+        self.env = dict(os.environ, MIGRATARR_CONFIG=str(ROOT / 'config/examples/runtime.v1.example.json'),
                         MIGRATARR_BASE_PATH=str(self.f.base),
                         MIGRATARR_PLANNER_CONFIG=str(ROOT / 'config/planner.example.json'),
                         MIGRATARR_STORAGE_TARGETS=str(ROOT / 'config/storage-targets.example.json'))

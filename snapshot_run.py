@@ -10,12 +10,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from runtime_config import get_config
-from storage_targets import load_targets, check_runtime_consistency
+from storage_targets import load_targets, check_runtime_consistency, deployed_targets_path
 from pipeline_inputs import require_fresh_inputs
 RUNTIME = get_config()
 
 BASE = RUNTIME.base_path
-TARGET_CONFIG = Path(os.environ.get('MIGRATARR_STORAGE_TARGETS') or BASE / 'config/storage-targets.json')
+TARGET_CONFIG = deployed_targets_path(RUNTIME)
 # Validate before creating a run directory, and refuse if it has drifted from runtime.json.
 check_runtime_consistency(RUNTIME, load_targets(TARGET_CONFIG))
 RUNS = BASE / "runs"

@@ -14,7 +14,7 @@ from service_keys import SecretError, parse_secrets, read_credential, read_key
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXAMPLE = json.loads((ROOT / 'config/runtime.example.json').read_text(encoding='utf-8'))
+EXAMPLE = json.loads((ROOT / 'config/examples/runtime.v1.example.json').read_text(encoding='utf-8'))
 KEY = 'a1b2c3d4e5f60718293a4b5c6d7e8f90'
 
 RADARR_XML = f'''<Config>
@@ -213,7 +213,7 @@ class ConfiguredSourceTests(unittest.TestCase):
         self.assertEqual(RuntimeConfig(c.as_dict()).secrets, c.secrets)
 
     def test_default_sources_are_the_documented_ones(self):
-        c = load_config(ROOT / 'config/runtime.example.json', environ={})
+        c = load_config(ROOT / 'config/examples/runtime.v1.example.json', environ={})
         self.assertEqual(c.secrets, parse_secrets({}, c.containers))
         self.assertEqual(c.secrets['radarr'], {'source': 'docker_config_xml', 'container': 'radarr',
                                                'path': '/config/config.xml'})

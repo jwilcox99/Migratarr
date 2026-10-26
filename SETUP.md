@@ -26,10 +26,11 @@ That covers: base path, NAS host/user/SSH key, Docker container names,
 Radarr/Sonarr/Jellyfin URLs (with base paths, see
 [Service URLs](docs/runtime-configuration.md#service-urls)), disk IDs and
 local+remote roots of any depth,
-and category folder names (see [Media layout](docs/media-layout.md)). Keep
-`runtime.json`'s `storage` block and `storage-targets.json`'s targets in
-agreement; `storage_targets.check_runtime_consistency()` refuses a deployment
-where they disagree.
+and category folder names (see [Media layout](docs/media-layout.md)). Disks
+are declared once, in `storage-targets.json`; `runtime.json` version 2 says
+only how moves run (`topology`: `nas_ssh` or `local`). A version 1
+`runtime.json` (with its own `storage` block) still works and is migrated
+automatically; see [Settings](docs/settings.md).
 
 `planner.json` holds your streaming subscriptions and TMDB watch-provider
 region, and optionally your override tag names and scoring tuning (see

@@ -43,7 +43,7 @@ class CaptureTests(unittest.TestCase):
 
     def test_refuses_existing_capture_directory(self):
         with tempfile.TemporaryDirectory() as temp:
-            example = load_config(Path(__file__).resolve().parents[1] / "config/runtime.example.json", environ={})
+            example = load_config(Path(__file__).resolve().parents[1] / "config/examples/runtime.v1.example.json", environ={})
             with patch.dict("os.environ", {"TMDB_TOKEN": "test"}),                     patch("runtime_config.get_config", return_value=example):
                 with self.assertRaises(FileExistsError):
                     capture.capture(Path(temp))

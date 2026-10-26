@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from runtime_config import get_config
-from storage_targets import load_targets, check_runtime_consistency
+from storage_targets import load_targets, check_runtime_consistency, deployed_targets_path
 RUNTIME = get_config()
 
 BASE = RUNTIME.base_path
@@ -18,7 +18,7 @@ RUNS = BASE / "runs"
 MANIFESTS = BASE / "manifests"
 
 # Explicit deployment configuration; never silently fall back to the example.
-TARGETS = load_targets(os.environ.get("MIGRATARR_STORAGE_TARGETS") or BASE / "config/storage-targets.json")
+TARGETS = load_targets(deployed_targets_path(RUNTIME))
 check_runtime_consistency(RUNTIME, TARGETS)
 
 

@@ -113,7 +113,7 @@ class PreflightTests(unittest.TestCase):
         (self.repo / 'tracked.py').write_text('x = 1\n')
         subprocess.run(['git', 'add', '.'], cwd=self.repo, check=True)
         subprocess.run([*git, 'commit', '-qm', 'init'], cwd=self.repo, check=True)
-        self.config = load_config(ROOT / 'config/runtime.example.json', environ={})
+        self.config = load_config(ROOT / 'config/examples/runtime.v1.example.json', environ={})
 
     def preflight(self, allow_dirty=False, failing=()):
         def read_key(service, runtime=None):

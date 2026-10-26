@@ -15,7 +15,7 @@ from storage_targets import load_targets
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXAMPLE = json.loads((ROOT / 'config/runtime.example.json').read_text(encoding='utf-8'))
+EXAMPLE = json.loads((ROOT / 'config/examples/runtime.v1.example.json').read_text(encoding='utf-8'))
 EXECUTORS = {'execute_movie': ('Radarr', 'radarr'), 'execute_movie_nas': ('Radarr', 'radarr'),
              'execute_cross_movie': ('Radarr', 'radarr'), 'execute_cross_tv': ('Sonarr', 'sonarr'),
              'execute_tv_nas': ('Sonarr', 'sonarr')}
@@ -67,7 +67,7 @@ class ExecutorClientTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        config = load_config(ROOT / 'config/runtime.example.json', environ={})
+        config = load_config(ROOT / 'config/examples/runtime.v1.example.json', environ={})
         with patch('runtime_config.get_config', return_value=config), \
                 patch('planner_settings.get_settings', return_value=load_settings(ROOT / 'config/planner.example.json')), \
                 patch('media_layout.get_targets', return_value=load_targets(ROOT / 'config/storage-targets.example.json')):

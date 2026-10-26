@@ -3,15 +3,17 @@
 Three views of the same item share the category folder from
 storage-targets.json `category_paths` (e.g. "Movies/Common"):
 
-  local   <runtime.json storage.<disk>.local_path>/<category dir>/<name>
-  remote  <runtime.json storage.<disk>.remote_path>/<category dir>/<name>   (NAS)
+  local   <disk path>/<category dir>/<name>
+  remote  <disk remote_path>/<category dir>/<name>   (NAS; topology local: same as local)
   logical <storage-targets.json arr_root, default /media>/<category dir>/<name>  (Radarr/Sonarr)
+
+Disk roots come from runtime.storage: runtime.json `storage` (version 1) or
+storage-targets.json `targets` (version 2, the only place disks are declared).
 
 Root depth and folder names are configuration; the shape (root + category
 folder + exactly one item folder) is the safety contract every executor checks.
 """
 from functools import lru_cache
-import os
 from pathlib import PurePosixPath
 
 
@@ -77,9 +79,8 @@ class MediaLayout:
 def get_targets():
     """Deployed storage-targets.json, verified against runtime.json; frozen per process."""
     from runtime_config import get_config
-    from storage_targets import check_runtime_consistency, load_targets
+    from storage_targets import check_runtime_consistency, deployed_targets_path, load_targets
     runtime = get_config()
-    targets = load_targets(os.environ.get('MIGRATARR_STORAGE_TARGETS')
-                           or runtime.base_path / 'config' / 'storage-targets.json')
+    targets = load_targets(deployed_targets_path(runtime))
     check_runtime_consistency(runtime, targets)
     return targets

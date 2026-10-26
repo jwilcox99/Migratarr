@@ -22,18 +22,16 @@ import subprocess
 from urllib.parse import urlsplit
 import xml.etree.ElementTree as ET
 
-SERVICES = ('radarr', 'sonarr', 'jellyfin', 'tmdb')
-ARR = ('radarr', 'sonarr')
+from migratarr import services as _registry
+
+# From the service registry (migratarr/services.py); tests pin these to the
+# values this module hard-coded before the registry existed.
+SERVICES = tuple(_registry.SERVICES)
+ARR = tuple(s.id for s in _registry.SERVICES.values() if s.url_base_from_config)
 REPOSITORY = Path(__file__).resolve().parent
-DEFAULT_SOURCES = {
-    'radarr': {'source': 'docker_config_xml'},
-    'sonarr': {'source': 'docker_config_xml'},
-    'jellyfin': {'source': 'docker_file',
-                 'paths': ['/run/secrets/jellyfin_api_key', '/run/secrets/jellyfin_key']},
-    'tmdb': {'source': 'env', 'variable': 'TMDB_TOKEN'},
-}
+DEFAULT_SOURCES = _registry.default_sources()
 # Which runtime.json container a docker source uses when it names none.
-DEFAULT_CONTAINER = {'radarr': 'radarr', 'sonarr': 'sonarr', 'jellyfin': 'homepage'}
+DEFAULT_CONTAINER = _registry.default_containers()
 FIELDS = {  # source: (required, optional)
     'docker_config_xml': ((), ('container', 'path')),
     'docker_file': (('paths',), ('container',)),

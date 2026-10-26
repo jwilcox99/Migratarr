@@ -19,7 +19,7 @@ GIB = 1024**3
 class PlannerTargetsTests(unittest.TestCase):
     def setUp(self):
         self.targets = load_targets(ROOT / 'config/storage-targets.example.json')
-        self.runtime = load_config(ROOT / 'config/runtime.example.json', environ={})
+        self.runtime = load_config(ROOT / 'config/examples/runtime.v1.example.json', environ={})
         # Original planner compares native Path.parts to mount_root.parts;
         # emulate its Linux separator semantics on Windows test hosts.
         self.runtime.mount_root = Path('/mnt/nas')

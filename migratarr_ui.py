@@ -1056,9 +1056,8 @@ def load_context(base=None):
     reserves = {}
     try:
         import os
-        from storage_targets import load_targets
-        targets = load_targets(os.environ.get('MIGRATARR_STORAGE_TARGETS')
-                               or runtime.base_path / 'config/storage-targets.json')
+        from storage_targets import deployed_targets_path, load_targets
+        targets = load_targets(deployed_targets_path(runtime))
         reserves = {t.id: t.minimum_free_space_gb for t in targets.targets}
     except Exception as exc:  # reserves are a display nicety; the page works without them
         print('Reserves not shown: ' + str(exc), file=sys.stderr)
@@ -1072,6 +1071,9 @@ def main(argv=None):
     parser.add_argument('--read-only', action='store_true',
                         help='View only: no planning, approving or moving from the browser')
     args = parser.parse_args(argv)
+    # One-time move of runtime.json to version 2 (docs/settings.md); never blocks startup.
+    from migratarr.settings import migrate_if_needed
+    migrate_if_needed(log=lambda message: print(message, file=sys.stderr, flush=True))
     base, storage, reserves = load_context(args.base)
     app = App(base, storage, reserves, actions=not args.read_only)
     server = ThreadingHTTPServer(('127.0.0.1', args.port), make_handler(app))

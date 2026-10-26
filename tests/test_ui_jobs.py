@@ -16,7 +16,7 @@ import read_api
 from test_read_api import RUN, Fixture, eid
 
 ROOT = Path(__file__).resolve().parents[1]
-EXAMPLE = ROOT / 'config' / 'runtime.example.json'
+EXAMPLE = ROOT / 'config' / 'examples' / 'runtime.v1.example.json'
 
 
 class FakeExecutors:

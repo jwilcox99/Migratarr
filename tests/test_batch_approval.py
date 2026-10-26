@@ -24,7 +24,7 @@ from runtime_config import load_config
 from storage_targets import load_targets
 
 ROOT = Path(__file__).resolve().parents[1]
-EXAMPLE = ROOT / 'config/runtime.example.json'
+EXAMPLE = ROOT / 'config/examples/runtime.v1.example.json'
 RUN = '20260915T192959Z'
 COLUMNS = ['execution_id', 'media_type', 'transfer_type', 'status', 'blockers', 'executed',
            'current', 'recommended', 'source_path', 'target_path', 'source_disk', 'target_disk',

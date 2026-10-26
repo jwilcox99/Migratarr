@@ -33,7 +33,7 @@ class OfflineTest(unittest.TestCase):
         for target in ('subprocess.Popen', 'subprocess.run', 'subprocess.check_output',
                        'socket.create_connection'):
             self.stack.enter_context(patch(target, side_effect=AssertionError('External I/O forbidden')))
-        self.config = load_config(ROOT / 'config/runtime.example.json', environ={})
+        self.config = load_config(ROOT / 'config/examples/runtime.v1.example.json', environ={})
         self.settings = load_settings(ROOT / 'config/planner.example.json')
         self.targets = load_targets(ROOT / 'config/storage-targets.example.json')
         with patch('runtime_config.get_config', return_value=self.config), \

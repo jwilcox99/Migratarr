@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "base_path": "/opt/migratarr",
+  "topology": "local",
+  "containers": {
+    "radarr": "radarr",
+    "sonarr": "sonarr",
+    "homepage": "homepage"
+  },
+  "urls": {
+    "radarr": "http://localhost:7878",
+    "sonarr": "http://localhost:8989",
+    "jellyfin": "http://localhost:8096"
+  },
+  "storage_targets": "storage-targets.local.example.json"
+}

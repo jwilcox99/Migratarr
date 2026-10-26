@@ -1,5 +1,9 @@
 # Runtime configuration (Phase 2 checkpoint)
 
+> **Version 2 (2026-10-26):** `storage` moved to storage-targets.json and
+> `topology` was added; see [Settings](settings.md). The version 1 reference
+> below still applies to every other field, and version 1 files still load.
+
 Runtime scripts require a version 1 JSON file. By default they load
 `config/runtime.json` beside `runtime_config.py`, independent of the current
 working directory. There is no automatic fallback to production settings.

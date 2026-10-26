@@ -169,7 +169,7 @@ def offline_world(network=True):
     network=False keeps the example config but makes any HTTP or Docker call fail.
     """
     stack = ExitStack()
-    config = load_config(ROOT / 'config/runtime.example.json', environ={})
+    config = load_config(ROOT / 'config/examples/runtime.v1.example.json', environ={})
     stack.enter_context(patch('runtime_config.get_config', return_value=config))
     stack.enter_context(patch.dict('os.environ', {
         'TMDB_TOKEN': 'fake', 'MIGRATARR_PLANNER_CONFIG': str(ROOT / 'config/planner.example.json'),

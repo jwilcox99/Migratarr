@@ -22,5 +22,8 @@ config/storage-targets.json
 # Deployment-specific planner preferences
 config/planner.json
 
+# Copies of settings files made before each save or migration (docs/settings.md)
+config/backups/
+
 # Web UI background jobs (logs, state, stop requests)
 jobs/

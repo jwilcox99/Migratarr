@@ -1,6 +1,7 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "base_path": "/opt/media-stack/migratarr",
+  "topology": "nas_ssh",
   "containers": {
     "radarr": "radarr",
     "sonarr": "sonarr",
@@ -16,23 +17,5 @@
     "user": "migratarr",
     "ssh_key": "~/.ssh/migratarr_nas",
     "python": "/usr/bin/python3"
-  },
-  "storage": {
-    "media01": {
-      "local_path": "/mnt/nas/media01",
-      "remote_path": "/volume4/media01"
-    },
-    "media02": {
-      "local_path": "/mnt/nas/media02",
-      "remote_path": "/volume1/media02"
-    },
-    "media03": {
-      "local_path": "/mnt/nas/media03",
-      "remote_path": "/volume2/media03"
-    },
-    "media04": {
-      "local_path": "/mnt/nas/media04",
-      "remote_path": "/volume3/media04"
-    }
   }
 }
