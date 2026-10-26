@@ -302,7 +302,9 @@ def targets_path(data, runtime_file, environ=None):
     if env.get('MIGRATARR_STORAGE_TARGETS'):
         return Path(env['MIGRATARR_STORAGE_TARGETS']).expanduser()
     if data.get('schema_version') == 1:
-        return Path(os.path.expanduser(data['base_path'])) / 'config' / DEFAULT_TARGETS_NAME
+        # Same as the scripts: base_path after the $MIGRATARR_BASE_PATH override.
+        base = env.get('MIGRATARR_BASE_PATH') or data['base_path']
+        return Path(os.path.expanduser(base)) / 'config' / DEFAULT_TARGETS_NAME
     folder = Path(runtime_file).expanduser().resolve().parent
     return folder / Path(data.get('storage_targets') or DEFAULT_TARGETS_NAME).expanduser()
 
