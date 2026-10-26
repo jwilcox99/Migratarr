@@ -80,3 +80,27 @@ the UI stops; restart the UI and the job page picks them up again.
   steps.
 - The permission check is made from the media host's view of the NFS mounts
   (group write bit), not as the NAS user.
+
+## Live evidence
+
+Production library, run `20261023T212605Z`, started from the UI (`main` @ `cbcfe07`).
+
+| Job | Outcome | Moved |
+| --- | --- | --- |
+| `20261023T213816Z-run` | `STOPPED` as requested, between moves ("Stopped as requested before Scooby-Doo and the Ghoul School (1988)") | 25 titles, 217.79 GB, smallest first (Scott Pilgrim vs. the World, 0.41 GB, up to It Follows, 23.87 GB) |
+| `20261025T204507Z-run` | `FAILED` on *The Hunger Games: Mockingjay – Part 2* (`-0031`); later moves not started | 4 titles, 97.21 GB |
+
+Together: 29 titles, 315.0 GB. Plan, approve, run, stop, and a fresh job resuming the remaining queue all worked.
+
+Five of the moved titles (Kingsman, Trapped in Paradise, Scooby-Doo! and the Witch's Ghost, The Equalizer, The Young Girls of Rochefort) had `2755` source folders, the case that stopped Nimrods (`20261015T174112Z-0004`) at its delete. They moved cleanly after `chmod g+w`.
+
+### Incident: `20261023T212605Z-0031` stopped during the NAS copy
+
+- Journal: `PREFLIGHT_OK` → `COPY_INTENT` → `STOPPED` (`Refused`, "NAS copy failed or is uncertain"), 2026-10-26 07:58–08:08 UTC. The NAS program hashed the 25.10 GiB source, printed "Copying …", and ended about four minutes later with no error output. That is well inside the 1,800 s silence timeout; the cause (dropped SSH session or the NAS ending the process) isn't recorded.
+- State checked 2026-10-26: source intact (26,951,161,512 bytes); no published destination; a partial `.migratarr-stage-20261023T212605Z-0031` (owned by the NAS user, `0700`) on media04; 383 GB free there. No Radarr change was attempted.
+- Cleanup: the staging folder was removed on the NAS by hand. The row stays `NEEDS_RECONCILIATION`; the next run will plan the move again.
+
+### Follow-ups found
+
+1. **Record a reconciliation.** Two rows (`20261015T174112Z-0004`, `20261023T212605Z-0031`) were reconciled by hand but still show "needs attention". A recorded "mark reconciled" action is needed.
+2. **Capture why a NAS step ended.** The copy failure kept only the last stderr lines, not the exit status or signal, so the cause can't be told apart after the fact.
