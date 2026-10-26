@@ -10,6 +10,32 @@ import time
 NAS_IDLE_TIMEOUT = 1800
 
 
+def exit_text(returncode):
+    """How a command ended, for the STOPPED reason: a signal is a cause in itself.
+
+    Incident 20261023T212605Z-0031 (NAS copy ended with no output) could not be
+    diagnosed afterwards because only stderr was kept.
+    """
+    import signal
+    def name(number):
+        try:
+            return signal.Signals(number).name
+        except ValueError:
+            return 'signal ' + str(number)
+    if returncode < 0:
+        return 'killed by ' + name(-returncode) + ' on this host'
+    if returncode == 255:
+        return 'exit status 255: an SSH error, or the NAS program ended by a signal'
+    if returncode > 128:
+        return f'exit status {returncode}, which a shell reports for {name(returncode - 128)}'
+    return f'exit status {returncode}'
+
+
+def with_status(output, returncode):
+    output = output.strip()
+    return (output + ' ' if output else '') + '[' + exit_text(returncode) + ']'
+
+
 def run_command(command, label, input_data, timeout, *, require, progress, idle_timeout=None):
     if idle_timeout is not None:
         return _run_until_idle(command, label, input_data, timeout, idle_timeout,
@@ -38,7 +64,7 @@ def run_command(command, label, input_data, timeout, *, require, progress, idle_
             process.communicate()
             raise
         require(process.returncode == 0,
-                label + ' failed or is uncertain: ' + stderr.strip())
+                label + ' failed or is uncertain: ' + with_status(stderr, process.returncode))
     progress('%s complete; elapsed %.0fs' % (label, time.monotonic() - started))
     return stdout
 
@@ -101,6 +127,7 @@ def _run_until_idle(command, label, input_data, timeout, idle_timeout, *, requir
             raise
         with lock:
             tail = '\n'.join(state['tail'])
-        require(process.returncode == 0, label + ' failed or is uncertain: ' + tail.strip())
+        require(process.returncode == 0, label + ' failed or is uncertain: '
+                + with_status(tail, process.returncode))
     progress('%s complete; elapsed %.0fs' % (label, time.monotonic() - started))
     return out[0] if out else ''
