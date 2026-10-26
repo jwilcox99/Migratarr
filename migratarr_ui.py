@@ -267,7 +267,126 @@ def page(title, body, refresh=False, ctx=None, seconds=30):
             f'<meta name="viewport" content="width=device-width, initial-scale=1">{meta}'
             f'<title>{e(title)} | Migratarr</title><link rel="stylesheet" href="/static/app.css"></head>'
             f'<body><header class="top"><a class="home" href="/">{MARK}<span>Migratarr</span></a>'
-            f'{mode}</header><main>{note}{body}</main></body></html>')
+            f'<nav class="nav"><a href="/settings">Settings &amp; health</a>{mode}</nav>'
+            f'</header><main>{note}{body}</main></body></html>')
+
+
+# ---------------------------------------------------------------- settings & health (read-only)
+
+STATUS_TEXT = {'ok': 'OK', 'warn': 'Warning', 'fail': 'Failed', 'skip': 'Skipped'}
+
+
+def settings_view(report=None, checks=None):
+    """Effective settings for display: where each credential comes from, never its value."""
+    from migratarr import services, settings
+    report = report or settings.load()
+    view = dict(report=report.as_dict(), services=[], disks=[], categories={}, planner=None,
+                runtime=None, checks=None if checks is None else [c.as_dict() for c in checks])
+    runtime, targets, planner = report.runtime, report.targets, report.planner
+    if runtime is not None:
+        view['runtime'] = dict(base_path=str(runtime.base_path), topology=runtime.topology,
+                               schema_version=runtime.schema_version, nas=runtime.ssh_target,
+                               nas_python=runtime.remote_python)
+        credentials = settings.redacted_secrets(runtime)
+        for descriptor in services.SERVICES.values():
+            url = runtime.urls.get(descriptor.url_setting.split('.', 1)[1]) if descriptor.url_setting else None
+            view['services'].append(dict(id=descriptor.id, label=descriptor.label, role=descriptor.role,
+                                         url=url or descriptor.probe.base_url,
+                                         credential=credentials.get(descriptor.id, '')))
+    if targets is not None:
+        for t in targets.targets:
+            view['disks'].append(dict(id=t.id, name=t.name, path=str(t.path),
+                                      remote_path=str(t.remote_path) if t.remote_path else None,
+                                      enabled=t.enabled, media_types=list(t.media_types),
+                                      reserve_gb=t.minimum_free_space_gb))
+        for media, categories in targets.placement.items():
+            view['categories'][media] = [dict(category=c, folder=str(targets.category_paths[media][c]),
+                                              disks=list(ids)) for c, ids in categories.items()]
+        view['arr_root'] = str(targets.arr_root)
+    if planner is not None:
+        view['planner'] = dict(region=planner.region, subscribed=sorted(planner.subscribed),
+                               user_free_access=sorted(planner.user_free_access),
+                               lock_tag=planner.overrides.lock_tag)
+    return view
+
+
+def render_settings(view, ctx=None, setup=False):
+    report = view['report']
+    parts = ['<h1>Settings &amp; health</h1>']
+    if setup:
+        parts.append('<div class="alert"><p>Migratarr can\'t start normally: its settings have problems. '
+                     'Fix the files below, then restart <code>migratarr_ui.py</code>.</p></div>')
+    parts.append('<p class="meta">Read-only. Change settings in the files listed here; '
+                 '<code>python3 migratarr_doctor.py</code> runs the same checks from a terminal.</p>')
+    errors = [p for p in report['problems'] if p['severity'] == 'error']
+    warnings = [p for p in report['problems'] if p['severity'] == 'warning']
+    if errors or warnings:
+        items = ''.join(f'<li><span class="flag {"bad" if p["severity"] == "error" else "warn"}">'
+                        f'{e(p["severity"])}</span> <code>{e(p["file"])}</code> <strong>{e(p["field"])}</strong>: '
+                        f'{e(p["message"])}</li>' for p in errors + warnings)
+        parts.append(f'<h2>Problems <span class="count">{len(errors)} errors, {len(warnings)} warnings</span></h2>'
+                     f'<ul class="plain">{items}</ul>')
+    missing = ' <span class="flag bad">missing</span>'
+    files = ''.join(f'<li><code>{e(name)}</code> {e(path)}{missing if name in report["missing"] else ""}</li>'
+                    for name, path in report['files'].items())
+    parts.append(f'<h2>Files</h2><ul class="plain">{files}</ul>')
+    checks = view.get('checks')
+    if checks is None:
+        parts.append('<h2>Health</h2><p class="hint">Checks contact each service, list Radarr/Sonarr root '
+                     'folders and (NAS topology) connect to the NAS over SSH. They change nothing.</p>'
+                     '<p><a class="btn" href="/settings?check=1">Run health checks</a></p>')
+    else:
+        rows = ''.join(f'<tr><td data-label="Status"><span class="flag {e(HEALTH_CLASS[c["status"]])}">'
+                       f'{e(STATUS_TEXT[c["status"]])}</span></td><td data-label="Check">{e(c["label"])}</td>'
+                       f'<td data-label="Detail">{e(c["detail"])}{fix_note(c)}</td></tr>' for c in checks)
+        parts.append('<h2>Health</h2><table><thead><tr><th>Status</th><th>Check</th><th>Detail</th></tr></thead>'
+                     f'<tbody>{rows}</tbody></table><p><a class="btn" href="/settings?check=1">Run again</a></p>')
+    runtime = view.get('runtime')
+    if runtime:
+        nas = (f'<li>NAS <code>{e(runtime["nas"])}</code>, Python <code>{e(runtime["nas_python"])}</code></li>'
+               if runtime['nas'] else '')
+        parts.append(f'<h2>Host</h2><ul class="plain"><li>Topology <strong>{e(runtime["topology"])}</strong> '
+                     f'(runtime.json version {runtime["schema_version"]})</li>'
+                     f'<li>Base path <code>{e(runtime["base_path"])}</code></li>{nas}</ul>')
+    if view['services']:
+        rows = ''.join(f'<tr><td data-label="Service">{e(x["label"])}</td><td data-label="URL"><code>'
+                       f'{e(x["url"] or "")}</code></td><td data-label="Key from">{e(x["credential"])}</td></tr>'
+                       for x in view['services'])
+        parts.append('<h2>Services</h2><table><thead><tr><th>Service</th><th>URL</th><th>Key from</th></tr>'
+                     f'</thead><tbody>{rows}</tbody></table>')
+    if view['disks']:
+        rows = ''.join(f'<tr><td data-label="Disk">{e(d["id"])}<div class="sub">{e(d["name"])}</div></td>'
+                       f'<td data-label="Path"><code>{e(d["path"])}</code></td>'
+                       f'<td data-label="On NAS"><code>{e(d["remote_path"] or "")}</code></td>'
+                       f'<td data-label="Holds">{e(", ".join(d["media_types"]))}'
+                       f'{"" if d["enabled"] else " (not a destination)"}</td>'
+                       f'<td data-label="Reserve" class="num">{d["reserve_gb"]} GB</td></tr>' for d in view['disks'])
+        parts.append('<h2>Disks</h2><table><thead><tr><th>Disk</th><th>Path</th><th>On NAS</th><th>Holds</th>'
+                     f'<th class="num">Reserve</th></tr></thead><tbody>{rows}</tbody></table>')
+        for media, categories in view['categories'].items():
+            rows = ''.join(f'<tr><td data-label="Category">{pill(c["category"])}</td>'
+                           f'<td data-label="Folder"><code>{e(c["folder"])}</code></td>'
+                           f'<td data-label="Disks">{e(", ".join(c["disks"]))}</td></tr>' for c in categories)
+            parts.append(f'<h2>{e(media)} categories <span class="count">Arr root {e(view["arr_root"])}</span></h2>'
+                         '<table><thead><tr><th>Category</th><th>Folder</th><th>Disks</th></tr></thead>'
+                         f'<tbody>{rows}</tbody></table>')
+    planner = view.get('planner')
+    if planner:
+        parts.append('<h2>Planner</h2><ul class="plain">'
+                     f'<li>Streaming region <strong>{e(planner["region"])}</strong></li>'
+                     f'<li>Subscribed: {e(", ".join(planner["subscribed"]) or "none")}</li>'
+                     f'<li>Free to you: {e(", ".join(planner["user_free_access"]) or "none")}</li>'
+                     f'<li>Lock tag <code>{e(planner["lock_tag"])}</code></li></ul>')
+    return page('Settings & health', ''.join(parts), ctx=ctx)
+
+
+HEALTH_CLASS = {'ok': 'ok', 'warn': 'warn', 'fail': 'bad', 'skip': ''}
+
+
+def fix_note(check):
+    if check['fix'] and check['status'] in ('warn', 'fail'):
+        return '<div class="hint">' + e(check['fix']) + '</div>'
+    return ''
 
 
 JOB_KIND = {'plan': 'Planning', 'run': 'Moving'}
@@ -706,6 +825,8 @@ a:focus-visible,summary:focus-visible{outline:2px solid var(--teal);outline-offs
 .home{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;text-decoration:none}
 .mark{width:28px;height:28px}
 .readonly{color:var(--muted);font-size:13px}
+.nav{display:flex;gap:16px;align-items:center;font-size:14px}
+table+h2,table+p+h2,ul.plain+h2{margin-top:28px}
 main{max-width:1240px;margin:0 auto;padding:24px}
 h1{font-size:28px;line-height:1.2;margin:4px 0 6px;font-weight:650}
 h2{font-size:18px;margin:0 0 4px;font-weight:650}
@@ -725,7 +846,7 @@ padding:14px 8px;border-bottom:1px solid var(--line);text-decoration:none}
 .meter{width:120px;height:6px;flex:none}.meter .track{fill:var(--slate)}.meter .fill{fill:var(--teal)}
 .flags{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .flag{font-size:12px;padding:2px 8px;border-radius:10px;background:var(--panel);color:var(--muted)}
-.flag.warn{color:var(--amber)}.flag.bad{color:var(--red)}
+.flag.warn{color:var(--amber)}.flag.bad{color:var(--red)}.flag.ok{color:var(--teal)}
 .disks{margin:8px 0 36px}
 .disk{display:grid;grid-template-columns:90px 1fr;gap:4px 16px;align-items:center;margin:14px 0}
 .disk .name{font-weight:650}
@@ -825,6 +946,8 @@ ROUTES = [
     (re.compile(r'/api/run/(\d{8}T\d{6}Z)'), 'api_run'),
     (re.compile(r'/api/execution/(\d{8}T\d{6}Z-\d{4,})'), 'api_execution'),
     (re.compile(r'/static/app\.css'), 'css'),
+    (re.compile(r'/settings'), 'settings'),
+    (re.compile(r'/api/settings'), 'api_settings'),
 ]
 
 
@@ -851,10 +974,18 @@ def match_route(routes, path):
 
 class App:
     def __init__(self, base, storage=None, reserves=None, usage=shutil.disk_usage, actions=False,
-                 token=None, start_job=jobs.start_job, permissions=jobs.permission_problems):
+                 token=None, start_job=jobs.start_job, permissions=jobs.permission_problems,
+                 setup=False, health=None, load_settings=None):
         self.base, self.storage, self.reserves, self.usage = Path(base), storage or {}, reserves or {}, usage
-        self.actions, self.token = actions, token or secrets.token_urlsafe(24)
+        self.actions, self.token = actions and not setup, token or secrets.token_urlsafe(24)
         self.start_job, self.permissions = start_job, permissions
+        # setup: the settings don't load, so only the Settings & health page works.
+        self.setup = setup
+        if health is None:
+            from migratarr.health import run_checks as health
+        if load_settings is None:
+            from migratarr.settings import load as load_settings
+        self.health, self.load_settings = health, load_settings
 
     def ctx(self, query=None):
         if not self.actions:
@@ -872,6 +1003,15 @@ class App:
         try:
             if name == 'css':
                 return 200, 'text/css; charset=utf-8', CSS.encode()
+            if name in ('settings', 'api_settings') or self.setup:
+                if self.setup and name not in ('settings', 'api_settings', 'runs'):
+                    return self.not_found('Fix the settings first: see Settings & health.')
+                report = self.load_settings()
+                checks = self.health(report) if (query or {}).get('check') == ['1'] else None
+                view = settings_view(report, checks)
+                if name == 'api_settings':
+                    return self.json(view)
+                return self.html(render_settings(view, self.ctx(query), setup=self.setup))
             if name in ('job', 'api_job', 'confirm_run') and not self.actions:
                 return self.not_found('Jobs are turned off in the read-only view.')
             ctx = self.ctx(query)
@@ -1074,8 +1214,12 @@ def main(argv=None):
     # One-time move of runtime.json to version 2 (docs/settings.md); never blocks startup.
     from migratarr.settings import migrate_if_needed
     migrate_if_needed(log=lambda message: print(message, file=sys.stderr, flush=True))
-    base, storage, reserves = load_context(args.base)
-    app = App(base, storage, reserves, actions=not args.read_only)
+    try:
+        base, storage, reserves = load_context(args.base)
+        app = App(base, storage, reserves, actions=not args.read_only)
+    except ValueError as exc:  # ConfigError, storage targets: show what's wrong instead of exiting
+        print('Settings problem; starting with only the Settings & health page: ' + str(exc), file=sys.stderr)
+        app = App(args.base or Path(__file__).resolve().parent, setup=True)
     server = ThreadingHTTPServer(('127.0.0.1', args.port), make_handler(app))
     mode = 'read-only view' if args.read_only else 'UI (plan, confirm, run)'
     print(f'Migratarr {mode} on http://localhost:{args.port}  (Ctrl+C to stop; running jobs keep going)\n'

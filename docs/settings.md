@@ -81,11 +81,25 @@ One `ServiceDescriptor` per service: id, label, role (`movies`, `tv`, `media_ser
 
 A future integration is a new descriptor here plus an adapter for what Migratarr does with it. Nothing else needs to list services.
 
+## Health checks: `migratarr_doctor.py` and Settings & health (Phase 2)
+
+`migratarr/health.py` holds the checks; `python3 migratarr_doctor.py` prints them (`--json`, `--offline`, `--only services,nas`, `--migrate`; exit 1 if any failed) and the UI's **Settings & health** page (`/settings`, linked from every page; `/api/settings` as JSON) shows the effective settings and runs the same checks on request (`/settings?check=1`). Opening the page contacts nothing.
+
+| Group | Fails when | Warns when |
+| --- | --- | --- |
+| config | a settings file has an error | runtime.json is still version 1 |
+| services | credential can't be read, service unreachable, key rejected (401/403), wrong response | Sonarr isn't v4 |
+| arr_roots | a placement category folder (`<arr_root>/<category dir>`) isn't an accessible Radarr/Sonarr root folder (the executors refuse moves into it) | |
+| disks | path missing; topology local: not writable | nas_ssh: not a mount point; free space below the disk's reserve |
+| nas | SSH fails (same options as the executors: key only, `BatchMode`, known host), NAS Python < 3.6, a NAS root missing or not writable by the NAS user | |
+| permissions | | a category folder or an item folder directly in it lacks group write; a category folder is missing |
+
+Details never contain a credential: HTTP status codes and exception type names only, never response bodies. If the UI starts with settings that don't load, it now opens in setup mode (only Settings & health, all actions off) instead of exiting.
+
 ## Not in Phase 1
 
 - Editing forms (Phase 4) and the wizard (Phase 5) build on `check`, `diff`, `save` and `store_key`.
 - Executing moves under `topology: local` (Phase 3).
-- `doctor` and the Settings & health page (Phase 2).
 
 ## Sources
 
