@@ -25,18 +25,15 @@ from executor_manifest import digest, load_approved_plan
 from executor_nfs import verify_after_rename
 from executor_command import NAS_IDLE_TIMEOUT, run_command
 from executor_inventory import scan_metadata, metadata_from_inventory
+from migratarr.engine import nas_side, primitives
+
+# Shared code, bound into this module so it resolves names (inventory, nas_pair,
+# RUNTIME, ...) here, exactly as when it was defined in this file.
+primitives.bind(globals(), nas_side.Refused, nas_side.require, nas_side.canonical_existing, nas_side.file_metadata, nas_side.inventory_metadata, nas_side.rename_noreplace, nas_side.sync_parents, nas_side.filesystem_ready,
+                primitives.layout, primitives.posix, primitives.remote_path, primitives.verify_nfs_after_rename)
 RUNTIME = get_config()
 OVERRIDES = get_settings().overrides
 TARGETS = get_targets()
-
-
-class Refused(RuntimeError):
-    pass
-
-
-def require(ok, message):
-    if not ok:
-        raise Refused(message)
 
 
 def load_plan(base, execution_id):
@@ -44,15 +41,6 @@ def load_plan(base, execution_id):
 
 
 MEDIA = 'TV'
-
-
-def layout():
-    # Built per call from RUNTIME, so a patched or reloaded runtime is honored.
-    return MediaLayout(RUNTIME, TARGETS)
-
-
-def posix(path):
-    return path.as_posix() if isinstance(path, PurePath) else str(path)
 
 
 def paths(row):
@@ -72,28 +60,8 @@ def paths(row):
         layout().logical(MEDIA, row['recommended'], dst.name)
 
 
-def canonical_existing(p):
-    require(p.resolve(strict=True) == p, 'Symlink or noncanonical filesystem path: ' + str(p))
-
-
-def filesystem_ready(src, dst):
-    canonical_existing(src)
-    canonical_existing(dst.parent)
-    require(src.is_dir() and dst.parent.is_dir(), 'Missing source or destination parent')
-    require(not os.path.lexists(dst), 'Destination already exists')
-    require(src.stat().st_dev == dst.parent.stat().st_dev, 'Different filesystem devices')
-
-
 def progress(message):
     print('[%s] %s' % (datetime.now().strftime('%H:%M:%S'), message), file=sys.stderr, flush=True)
-
-
-def file_metadata(root):
-    return scan_metadata(root, require)
-
-
-def inventory_metadata(items):
-    return metadata_from_inventory(items)
 
 
 def inventory(root):
@@ -142,27 +110,6 @@ def run_progress(command, label, input=None, timeout=1800, idle_timeout=None):
                        idle_timeout=idle_timeout)
 
 
-def rename_noreplace(src, dst):
-    # Atomic collision protection. Never fall back to copy/delete or replacing rename.
-    libc = ctypes.CDLL(None, use_errno=True)
-    require(hasattr(libc, 'renameat2'), 'renameat2 unavailable; refusing unsafe fallback')
-    fn = libc.renameat2
-    fn.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
-    fn.restype = ctypes.c_int
-    if fn(-100, os.fsencode(src), -100, os.fsencode(dst), 1) != 0:
-        err = ctypes.get_errno()
-        raise OSError(err, os.strerror(err))
-
-
-def sync_parents(src, dst):
-    for parent in {src.parent, dst.parent}:
-        fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY)
-        try:
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-
-
 class Sonarr:
     def __init__(self):
         # runtime.json urls + "secrets" (default: ApiKey/UrlBase from the container's config.xml).
@@ -207,13 +154,6 @@ class Sonarr:
         result = run_progress(['docker', 'exec', check['container'], 'sha256sum', '--', path],
                               'Sonarr file-content verification')
         require(result.split()[0] == expected_hash, 'Sonarr-visible file content mismatch')
-
-
-def verify_nfs_after_rename(src, dst, expected, log, timeout=60, interval=2, metadata_only=False):
-    return verify_after_rename(
-        src, dst, expected, log, require=require, canonical_existing=canonical_existing,
-        file_metadata=file_metadata, inventory=inventory, inventory_metadata=inventory_metadata,
-        timeout=timeout, interval=interval, metadata_only=metadata_only)
 
 
 def episode_state(sonarr, series_id, logical_path, before):
@@ -339,12 +279,6 @@ def check_journal(journal):
         events = [json.loads(line) for line in journal.read_text().splitlines()]
         require(not any(e['event'] in {'RENAME_INTENT', 'RENAMED', 'SONARR_UPDATE_INTENT', 'SUCCESS'}
                         for e in events), 'Previous live attempt exists; reconcile manually before retrying')
-
-
-def remote_path(path):
-    raw = posix(path)
-    require(layout().parse_local(raw, MEDIA) is not None, 'Invalid NAS mapping')
-    return layout().to_remote(raw, MEDIA)
 
 
 def remote_layout(disk):
