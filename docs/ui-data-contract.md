@@ -120,6 +120,7 @@ The `executed` column is still load-bearing: executors refuse any row where it i
 3. **Unfinished:** the last event is not terminal (`SUCCESS`, `CHECK_ONLY`, `STOPPED`). The move is either running right now or was interrupted without writing `STOPPED`, and only the media host can tell which.
    - *Changed 2026-09-25 from "running if the journal changed in the last few minutes".* That heuristic was wrong: nothing is written to the journal during a long copy or hash (hours for a large series), so an old file time doesn't mean the process died. The engine's status sidecar (§5, gap 2) will separate the two cases.
 4. **Needs reconciliation:** the journal contains any mutation event (`RENAME_INTENT`, `RENAMED`, `COPY_INTENT`, `COPIED`, `*_UPDATE_INTENT`, `DELETE_INTENT`, `SOURCE_REMOVED`, `RECOVERY_STARTED`) and no later `SUCCESS`, or it ends in a `SUCCESS` bound to a different manifest hash.
+   - **Reconciled** (added 2026-10-26): a *needs reconciliation* or *unfinished* move with a hand reconciliation record (`reconcile_store.py`) written against this exact journal. See [Execution transport](execution-transport.md#mark-reconciled-reconcile_storepy).
 5. **Stopped safely:** the last event is `STOPPED` and there is no mutation event. The refusal came before anything changed, so fixing the cause and retrying is safe.
 6. **Checked:** the last event is `CHECK_ONLY`.
 7. **Not started:** no journal, or an empty one.

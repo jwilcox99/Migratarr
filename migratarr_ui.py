@@ -43,6 +43,7 @@ SKIPPED_DETAILS = {'utc', 'execution_id', 'event', 'inventory', 'receipt', 'epis
 EXECUTION_LABELS = {
     read_api.SUCCEEDED: 'Moved', read_api.UNFINISHED: 'In progress or interrupted',
     read_api.NEEDS_RECONCILIATION: 'Needs attention', read_api.JOURNAL_UNREADABLE: 'Journal unreadable',
+    read_api.RECONCILED: 'Reconciled by hand',
     read_api.STOPPED_SAFE: 'Stopped before changing anything', read_api.CHECKED: 'Checked',
     read_api.NOT_STARTED: 'Not started',
 }
@@ -133,7 +134,7 @@ def group_of(row):
         return 'running'
     if state in (read_api.NEEDS_RECONCILIATION, read_api.JOURNAL_UNREADABLE):
         return 'attention'
-    if state == read_api.SUCCEEDED:
+    if state in (read_api.SUCCEEDED, read_api.RECONCILED):
         return 'done'
     return 'waiting' if row['approval'] == read_api.APPROVED else 'unapproved'
 
@@ -199,7 +200,7 @@ def execution_view(base, execution_id):
     row = next((r for r in manifest['rows'] if r['execution_id'] == execution_id), None)
     state = read_api.execution_state(base, execution_id, manifest['manifest_hash'])
     return dict(execution_id=execution_id, run_id=run_id, row=row, state=state, events=journal,
-                running=state['state'] == read_api.UNFINISHED)
+                running=state['state'] == read_api.UNFINISHED, manifest_hash=manifest['manifest_hash'])
 
 
 def review_view(base, run_id, ids, pick_all, storage=None, reserves=None, usage=shutil.disk_usage,
@@ -517,6 +518,7 @@ def render_execution(view, ctx=None):
                  f'{e(EXECUTION_LABELS.get(state["state"], state["state"]))}</span></div>')
     if state.get('detail'):
         head += f'<p class="reason">{e(state["detail"])}</p>'
+    head += render_reconcile(view, ctx)
     if not view['events']:
         return page(view['execution_id'], head + '<p class="empty">This move has not been started yet.</p>',
                     ctx=ctx)
@@ -550,6 +552,32 @@ def render_execution(view, ctx=None):
                      f'<span class="what">{e(label)} <code>{e(name)}</code></span>{gap}{facts}{why}</li>')
     return page(view['execution_id'], head + '<h2>Journal</h2><ol class="timeline">' + ''.join(items) + '</ol>',
                 refresh=view['running'], ctx=ctx)
+
+
+def render_reconcile(view, ctx):
+    """The "mark reconciled" form, for moves that need attention (reconcile_store.py)."""
+    import reconcile_store
+    state = view['state']
+    if state['state'] == read_api.RECONCILED:
+        r = state.get('reconciled') or {}
+        return (f'<p class="notice">Marked reconciled ({e(r.get("outcome"))}) on {e(local_time(r.get("utc")))}; '
+                f'it was {e(EXECUTION_LABELS.get(r.get("state_before"), r.get("state_before")))}. It won\'t run again '
+                'from this plan; the next plan looks at it afresh.</p>')
+    if not (ctx and ctx.get('actions')) or state['state'] not in reconcile_store.RECONCILABLE:
+        return ''
+    if ctx.get('job'):
+        return ''
+    options = ''.join(f'<label class="opt"><input type="radio" name="outcome" value="{e(k)}" required> {e(v)}</label>'
+                      for k, v in reconcile_store.OUTCOMES.items())
+    extra = (f'<fieldset><legend>What did you find?</legend>{options}</fieldset>'
+             '<label for="note">What you checked (kept with the journal)</label>'
+             '<textarea id="note" name="note" rows="3" maxlength="2000" required></textarea>'
+             f'<input type="hidden" name="manifest_hash" value="{e(view.get("manifest_hash", ""))}">')
+    return ('<details class="reconcile"><summary>Mark reconciled</summary><p class="hint">Use this after checking '
+            'the media and Radarr/Sonarr by hand. It changes nothing on disk or in Radarr/Sonarr; it records '
+            'what you found, so this move stops being flagged. A later attempt undoes it.</p>'
+            + form(f'/execution/{view["execution_id"]}/reconcile', ctx, button='Record', extra=extra)
+            + '</details>')
 
 
 def problem_notes(row):
@@ -809,6 +837,8 @@ td[data-label]{display:grid;grid-template-columns:76px 1fr;gap:8px}
 td[data-label]::before{content:attr(data-label);color:var(--muted);font-size:13px}
 td[data-label]>*{grid-column:2}
 td.num{text-align:left}td.title{min-width:0;padding-bottom:6px}}
+.reconcile{margin:0 0 24px}.reconcile textarea{width:100%;max-width:640px;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px}
+.reconcile fieldset{border:0;padding:0;margin:8px 0}.reconcile .opt,.reconcile label{display:block;margin:4px 0}
 """
 
 
@@ -836,6 +866,7 @@ POST_ROUTES = [
     (re.compile(r'/run/(\d{8}T\d{6}Z)/start'), 'start'),
     (re.compile(r'/job/(\d{8}T\d{6}Z-(?:plan|run))/stop'), 'stop'),
     (re.compile(r'/job/(\d{8}T\d{6}Z-(?:plan|run))/dismiss'), 'dismiss'),
+    (re.compile(r'/execution/(\d{8}T\d{6}Z-\d{4,})/reconcile'), 'reconcile'),
 ]
 NOTICES = {'approved': '{n} approved. Nothing has moved yet.', 'unchanged': 'Those were already approved.',
            'revoked': 'Approval revoked.', 'stop': 'Stop requested: the job stops before its next move.'}
@@ -946,6 +977,20 @@ class App:
             if name == 'dismiss':
                 jobs.dismiss_interrupted(self.base, arg)
                 return 'redirect', '/'
+            if name == 'reconcile':
+                import reconcile_store
+                if ctx['job']:
+                    raise jobs.JobError('Wait for the current job to finish before reconciling.')
+                manifest = read_api.get_manifest(self.base, read_api.EXECUTION_ID.fullmatch(arg).group(1))
+                if manifest['manifest_hash'] != expected:
+                    raise jobs.JobError('The manifest changed since this page was opened; reload it.')
+                try:
+                    reconcile_store.record(self.base, arg, (form_data.get('outcome') or [''])[0],
+                                           (form_data.get('note') or [''])[0],
+                                           manifest_hash=manifest['manifest_hash'], source='ui')
+                except reconcile_store.ReconcileError as exc:
+                    return self.problem('Nothing was recorded', str(exc), 409, '/execution/' + arg)
+                return 'redirect', '/execution/' + arg
         except (approval_store.ApprovalError, jobs.JobError, read_api.ReadError) as exc:
             return self.problem('Nothing was changed', str(exc), 409,
                                 '/run/' + arg if arg and read_api.RUN_ID.fullmatch(arg) else '/')

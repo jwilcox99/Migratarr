@@ -25,7 +25,7 @@ from executor_manifest import digest, load_approved_plan
 from executor_nfs import verify_after_rename
 from executor_command import NAS_IDLE_TIMEOUT, run_command
 from executor_inventory import scan_metadata, metadata_from_inventory
-from migratarr.engine import nas_side, primitives
+from migratarr.engine import nas_side, primitives, transport
 
 # Shared code, bound into this module so it resolves names (inventory, nas_pair,
 # RUNTIME, ...) here, exactly as when it was defined in this file.
@@ -332,30 +332,9 @@ with os.fdopen(lockfd, 'a') as lock:
 '''
 
 
-class NasTransport:
-    def __enter__(self):
-        self.temp = tempfile.TemporaryDirectory(prefix='migratarr-ssh-')
-        self.options = ['-i', RUNTIME.ssh_key,
-                        '-o', 'IdentitiesOnly=yes',
-                        '-o', 'BatchMode=yes',
-                        '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=15',
-                        '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3',
-                        '-o', 'ControlPath=' + self.temp.name + '/socket']
-        try:
-            # Prompt once through the terminal; no credentials are stored by Python.
-            subprocess.run(['ssh', *self.options, '-M', '-N', '-f',
-                            '-o', 'ControlPersist=yes', RUNTIME.ssh_target], check=True, timeout=120)
-        except BaseException:
-            self.temp.cleanup()
-            raise
-        return self
-
-    def __exit__(self, *exc):
-        try:
-            subprocess.run(['ssh', *self.options, '-O', 'exit', RUNTIME.ssh_target],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20)
-        finally:
-            self.temp.cleanup()
+class NasTransport(transport.NasChannel):
+    """The NAS program's channel (migratarr/engine/transport.py): SSH, or this host for topology local."""
+    runtime = property(lambda self: RUNTIME)
 
     def call(self, operation, src, dst, before):
         found = [layout().parse_local(posix(p), MEDIA) for p in (src, dst)]
@@ -363,8 +342,7 @@ class NasTransport:
         disk = found[0][0]
         payload = dict(operation=operation, source=remote_path(src), destination=remote_path(dst),
                        inventory=before)
-        result = run_progress(['ssh', *self.options, '-o', 'BatchMode=yes', RUNTIME.ssh_target,
-                                 shlex.quote(RUNTIME.remote_python) + ' -c ' + shlex.quote(remote_program(disk))],
+        result = run_progress(self.command(remote_program(disk)),
                               'NAS ' + operation, input=json.dumps(payload),
                               timeout=None, idle_timeout=NAS_IDLE_TIMEOUT)
         require(json.loads(result) == dict(result='OK', operation=operation),

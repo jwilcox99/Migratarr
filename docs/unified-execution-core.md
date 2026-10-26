@@ -1,6 +1,6 @@
 # Unified execution core: Step 2 design spec
 
-**Status:** In progress. Gates 1 and 2 done; gates 3–6 not started. Written 2026-09-24 against `main` @ `7a1d084`.
+**Status:** In progress. Gates 1 and 2 done; gates 3–6 not started. 2026-10-26: the transport layer (SSH or this host, by `topology`) landed ahead of gate 3; see [Execution transport](execution-transport.md). Written 2026-09-24 against `main` @ `7a1d084`.
 **Plan reference:** Step 2 of `2026-09-24-release-path-plan` and the Phase Two handoff in `docs/phase-one-closeout.md` ("a unified execution core that preserves the Phase One safety invariants while removing duplicated Movie/TV and same-disk/cross-disk code").
 **Goal:** one execution engine replaces the four live executors. Every journal, refusal and Arr call stays exactly as it is today. The engine reports what it does as structured data, so the CLI now and a web UI later are both clients of the same code.
 

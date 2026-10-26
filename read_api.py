@@ -29,6 +29,7 @@ SUCCEEDED = 'SUCCEEDED'
 JOURNAL_UNREADABLE = 'JOURNAL_UNREADABLE'
 UNFINISHED = 'UNFINISHED'                   # running now, or interrupted without a STOPPED record
 NEEDS_RECONCILIATION = 'NEEDS_RECONCILIATION'
+RECONCILED = 'RECONCILED'                   # checked by hand; reconcile_store.py, bound to this journal
 STOPPED_SAFE = 'STOPPED_SAFE'
 CHECKED = 'CHECKED'
 NOT_STARTED = 'NOT_STARTED'
@@ -225,14 +226,24 @@ def execution_state(base, execution_id, manifest_hash):
         return dict(info, state=NOT_STARTED)
     if last['event'] == 'SUCCESS' and last.get('manifest_sha256') == manifest_hash:
         return dict(info, state=SUCCEEDED)
+    flagged = None
     if last['event'] not in TERMINAL_EVENTS:
         # Journals are silent during long copies/hashes, so a stale file time does not
         # mean the process died; only the host can tell (see ui-data-contract §5, gap 2).
-        return dict(info, state=UNFINISHED)
-    if any(e['event'] in MUTATION_EVENTS for e in journal) or last['event'] == 'SUCCESS':
-        return dict(info, state=NEEDS_RECONCILIATION,
-                    detail='SUCCESS bound to a different manifest'
-                    if last['event'] == 'SUCCESS' else last.get('reason'))
+        flagged = dict(info, state=UNFINISHED)
+    elif any(e['event'] in MUTATION_EVENTS for e in journal) or last['event'] == 'SUCCESS':
+        flagged = dict(info, state=NEEDS_RECONCILIATION,
+                       detail='SUCCESS bound to a different manifest'
+                       if last['event'] == 'SUCCESS' else last.get('reason'))
+    if flagged is not None:
+        # A hand reconciliation counts only while the journal is exactly what it saw.
+        from reconcile_store import current
+        entry = current(base, execution_id)
+        if entry is not None:
+            return dict(flagged, state=RECONCILED, detail=entry.get('note'),
+                        reconciled=dict(outcome=entry.get('outcome'), utc=entry.get('utc'),
+                                        state_before=entry.get('state_before')))
+        return flagged
     if last['event'] == 'STOPPED':
         return dict(info, state=STOPPED_SAFE, detail=last.get('reason'))
     return dict(info, state=CHECKED)
