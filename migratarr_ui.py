@@ -327,10 +327,7 @@ def render_settings(view, ctx=None, setup=False):
                         f'{e(p["message"])}</li>' for p in errors + warnings)
         parts.append(f'<h2>Problems <span class="count">{len(errors)} errors, {len(warnings)} warnings</span></h2>'
                      f'<ul class="plain">{items}</ul>')
-    missing = ' <span class="flag bad">missing</span>'
-    files = ''.join(f'<li><code>{e(name)}</code> {e(path)}{missing if name in report["missing"] else ""}</li>'
-                    for name, path in report['files'].items())
-    parts.append(f'<h2>Files</h2><ul class="plain">{files}</ul>')
+    parts.append(render_settings_files(view))
     checks = view.get('checks')
     if checks is None:
         parts.append('<h2>Health</h2><p class="hint">Checks contact each service, list Radarr/Sonarr root '
@@ -342,6 +339,26 @@ def render_settings(view, ctx=None, setup=False):
                        f'<td data-label="Detail">{e(c["detail"])}{fix_note(c)}</td></tr>' for c in checks)
         parts.append('<h2>Health</h2><table><thead><tr><th>Status</th><th>Check</th><th>Detail</th></tr></thead>'
                      f'<tbody>{rows}</tbody></table><p><a class="btn" href="/settings?check=1">Run again</a></p>')
+    parts.append(render_settings_effective(view))
+    return page('Settings & health', ''.join(parts), ctx=ctx)
+
+
+def render_settings_files(view):
+    report = view['report']
+    missing = ' <span class="flag bad">missing</span>'
+    files = ''.join(f'<li><code>{e(name)}</code> {e(path)}{missing if name in report["missing"] else ""}</li>'
+                    for name, path in report['files'].items())
+    return f'<h2>Files</h2><ul class="plain">{files}</ul>'
+
+
+def render_settings_details(view):
+    """Effective settings and file locations, under the editable sections of the Settings page."""
+    return ('<h2>Effective settings</h2><p class="hint">What Migratarr reads now. Credentials show where '
+            'each key comes from, never the key.</p>' + render_settings_effective(view) + render_settings_files(view))
+
+
+def render_settings_effective(view):
+    parts = []
     runtime = view.get('runtime')
     if runtime:
         nas = (f'<li>NAS <code>{e(runtime["nas"])}</code>, Python <code>{e(runtime["nas_python"])}</code></li>'
@@ -378,7 +395,7 @@ def render_settings(view, ctx=None, setup=False):
                      f'<li>Subscribed: {e(", ".join(planner["subscribed"]) or "none")}</li>'
                      f'<li>Free to you: {e(", ".join(planner["user_free_access"]) or "none")}</li>'
                      f'<li>Lock tag <code>{e(planner["lock_tag"])}</code></li></ul>')
-    return page('Settings & health', ''.join(parts), ctx=ctx)
+    return ''.join(parts)
 
 
 HEALTH_CLASS = {'ok': 'ok', 'warn': 'warn', 'fail': 'bad', 'skip': ''}
@@ -447,7 +464,13 @@ def render_plan_panel(ctx):
     if job_busy(ctx):
         return ('<section class="panel"><h2>Plan a new run</h2><p class="hint">Available once the current job '
                 'is finished.</p></section>')
-    return ('<section class="panel"><h2>Plan a new run</h2><p class="hint">Scores every movie and series, builds '
+    blocked = ctx.get('plan_blocked')
+    why = (f'<div class="alert"><p>Planning is unavailable: {len(blocked)} health check'
+           f'{"s" if len(blocked) != 1 else ""} failed the last time they ran '
+           f'({e(", ".join(c.label for c in blocked[:3]))}{", ..." if len(blocked) > 3 else ""}). '
+           '<a href="/settings?check=1">Fix them in Settings &amp; health</a>; warnings don\'t block planning.'
+           '</p></div>' if blocked else '')
+    return ('<section class="panel"><h2>Plan a new run</h2>' + why + '<p class="hint">Scores every movie and series, builds '
             'the move plan, snapshots it and writes a manifest (<code>migratarr_plan.py</code>). It reads '
             'Radarr, Sonarr, Jellyfin and TMDB and can take a while. Nothing is approved or moved.</p>'
             + form('/plan', ctx, button='Plan a new run', cls='btn primary') + '</section>')
@@ -978,6 +1001,9 @@ ROUTES = [
     (re.compile(r'/static/app\.css'), 'css'),
     (re.compile(r'/settings'), 'settings'),
     (re.compile(r'/api/settings'), 'api_settings'),
+    (re.compile(r'/settings/([a-z_]+)'), 'settings_section'),
+    (re.compile(r'/setup'), 'setup'),
+    (re.compile(r'/setup/([a-z_]+)'), 'setup_step'),
 ]
 
 
@@ -990,9 +1016,16 @@ POST_ROUTES = [
     (re.compile(r'/job/(\d{8}T\d{6}Z-(?:plan|run))/stop'), 'stop'),
     (re.compile(r'/job/(\d{8}T\d{6}Z-(?:plan|run))/dismiss'), 'dismiss'),
     (re.compile(r'/execution/(\d{8}T\d{6}Z-\d{4,})/reconcile'), 'reconcile'),
+    (re.compile(r'/settings/([a-z_]+)/review'), 'settings_review'),
+    (re.compile(r'/settings/([a-z_]+)/save'), 'settings_save'),
+    (re.compile(r'/setup/([a-z_]+)'), 'setup_step'),
 ]
+SETTINGS_POSTS = {'settings_review', 'settings_save', 'setup_step'}
 NOTICES = {'approved': '{n} approved. Nothing has moved yet.', 'unchanged': 'Those were already approved.',
            'revoked': 'Approval revoked.', 'stop': 'Stop requested: the job stops before its next move.'}
+SETTINGS_NOTICES = {'saved': 'Saved. The previous file was backed up.',
+                    'unchanged': 'Nothing changed, so nothing was saved.'}
+SETUP_OPEN = {'setup', 'setup_step', 'css'}  # what setup mode serves; everything else redirects to /setup
 
 
 def match_route(routes, path):
@@ -1006,17 +1039,43 @@ def match_route(routes, path):
 class App:
     def __init__(self, base, storage=None, reserves=None, usage=shutil.disk_usage, actions=False,
                  token=None, start_job=jobs.start_job, permissions=jobs.permission_problems,
-                 setup=False, health=None, load_settings=None):
+                 setup=False, health=None, load_settings=None, settings=None, wizard=None, plan_gate=None):
         self.base, self.storage, self.reserves, self.usage = Path(base), storage or {}, reserves or {}, usage
-        self.actions, self.token = actions and not setup, token or secrets.token_urlsafe(24)
+        # Without editable settings pages, setup mode is view-only (Phase 2); with them, settings can be
+        # fixed from the browser while plan, approve and run stay refused (see respond_post).
+        self.actions = actions and (not setup or settings is not None)
+        self.token = token or secrets.token_urlsafe(24)
         self.start_job, self.permissions = start_job, permissions
-        # setup: the settings don't load, so only the Settings & health page works.
+        # setup: the settings files exist but don't load, so only Settings & health (and its forms) work.
         self.setup = setup
         if health is None:
             from migratarr.health import run_checks as health
         if load_settings is None:
             from migratarr.settings import load as load_settings
         self.health, self.load_settings = health, load_settings
+        # settings_ui.SettingsPages and setup_wizard.SetupWizard (main() passes both, backed by
+        # migratarr.settings.ui_backend). The wizard is active only while settings files are missing.
+        self.settings, self.wizard = settings, wizard
+        # plan_gate() -> failing health checks; planning is refused while any fail (decision 2026-10-26).
+        self.plan_gate, self.gate_failures = plan_gate, None
+        self.on_reload = None
+
+    def setup_mode(self):
+        return bool(self.wizard and self.wizard.active())
+
+    def reload(self, storage=None, reserves=None, base=None):
+        """After settings change: use the new disks and reserves without a restart; leave setup mode."""
+        if base is not None:
+            self.base = Path(base)
+        self.storage, self.reserves = storage or {}, reserves or {}
+        self.setup = False
+
+    def check_plan_gate(self):
+        """Failing checks that block planning ([] when none). Remembered for the runs page."""
+        if self.plan_gate is None:
+            return []
+        self.gate_failures = list(self.plan_gate())
+        return self.gate_failures
 
     def ctx(self, query=None):
         if not self.actions:
@@ -1024,24 +1083,34 @@ class App:
         query = query or {}
         notice = NOTICES.get((query.get('done') or [''])[0], '')
         return dict(actions=True, token=self.token, job=jobs.active_job(self.base),
-                    notice=notice.format(n=e((query.get('n') or [''])[0])) if notice else '')
+                    notice=notice.format(n=e((query.get('n') or [''])[0])) if notice else '',
+                    plan_blocked=self.gate_failures or None)
 
     def respond(self, path, query=None):
         """Return (status, content type, body bytes) for a GET of `path`. Never writes."""
         name, arg = match_route(ROUTES, path)
         if not name:
             return self.not_found('There is no page at this address.')
+        if self.setup_mode() and name not in SETUP_OPEN:
+            return 'redirect', '/setup'
         try:
             if name == 'css':
-                return 200, 'text/css; charset=utf-8', CSS.encode()
+                extra = getattr(self.settings, 'css', '') if self.settings else ''
+                return 200, 'text/css; charset=utf-8', (CSS + extra).encode()
+            if name in ('setup', 'setup_step', 'settings_section'):
+                return self.respond_settings(name, arg, query)
             if name in ('settings', 'api_settings') or self.setup:
                 if self.setup and name not in ('settings', 'api_settings', 'runs'):
                     return self.not_found('Fix the settings first: see Settings & health.')
+                if name == 'settings' and self.settings:
+                    return self.respond_settings(name, arg, query)
                 report = self.load_settings()
                 checks = self.health(report) if (query or {}).get('check') == ['1'] else None
                 view = settings_view(report, checks)
                 if name == 'api_settings':
                     return self.json(view)
+                if self.settings:  # 'runs' in setup mode lands on the editable Settings page
+                    return 'redirect', '/settings'
                 return self.html(render_settings(view, self.ctx(query), setup=self.setup))
             if name in ('job', 'api_job', 'confirm_run') and not self.actions:
                 return self.not_found('Jobs are turned off in the read-only view.')
@@ -1080,8 +1149,19 @@ class App:
         ids = form_data.get('id', [])
         expected = (form_data.get('manifest_hash') or [''])[0]
         ctx = self.ctx()
+        if name in SETTINGS_POSTS:
+            return self.respond_settings_post(name, arg, form_data, ctx)
+        if self.setup_mode():
+            return self.problem('Finish setup first', 'Migratarr is not set up yet. Nothing was changed.', 409,
+                                '/setup')
+        if self.setup:  # files present but invalid: settings can be fixed, nothing else runs
+            return self.problem('Fix the settings first', 'The settings files have problems, so planning, '
+                                'approving and moving are off. Nothing was changed.', 409, '/settings')
         try:
             if name == 'plan':
+                failing = self.check_plan_gate()
+                if failing:
+                    return self.plan_refused(failing)
                 return 'redirect', '/job/' + self.start_job(self.base, 'plan')
             if name == 'review':
                 pick_all = (form_data.get('pick') or [''])[0] == 'all'
@@ -1135,6 +1215,64 @@ class App:
             return self.problem('Nothing was changed', str(exc), 409,
                                 '/run/' + arg if arg and read_api.RUN_ID.fullmatch(arg) else '/')
         return self.not_found('There is no action at this address.')
+
+    def respond_settings(self, name, arg, query):
+        import settings_contract as sc
+        ctx = self.ctx()  # settings pages carry their own notices (NOTICES' codes mean other things)
+        try:
+            if name in ('setup', 'setup_step'):
+                if not self.wizard:
+                    return self.not_found('Setup is not available in this version.')
+                result = self.wizard.get(arg, ctx)
+            elif not self.settings:
+                return self.not_found('Settings are not available in this version.')
+            elif name == 'settings':
+                query = query or {}
+                notice = SETTINGS_NOTICES.get(query.get('done', [''])[0], '')
+                run = query.get('check') == ['1']  # probes contact services: only on request
+                result = 200, self.settings.index(ctx, notice, run_checks=run, overview=self.settings_overview(),
+                                                  setup=self.setup)
+                if run:
+                    self.gate_failures = [c for c in self.settings.last_checks if c.status == sc.FAIL]
+            else:
+                result = 200, self.settings.edit(arg, ctx)
+        except sc.SettingsError as exc:
+            return self.not_found(str(exc))
+        return result if result[0] == 'redirect' else (result[0], 'text/html; charset=utf-8', result[1].encode())
+
+    def respond_settings_post(self, name, arg, form_data, ctx):
+        import settings_contract as sc
+        try:
+            if name == 'setup_step':
+                if not self.wizard:
+                    return self.not_found('Setup is not available in this version.')
+                result = self.wizard.post(arg, form_data, ctx)
+            elif not self.settings or self.setup_mode():
+                return self.problem('Finish setup first', 'Nothing was changed.', 409, '/setup')
+            elif name == 'settings_review':
+                result = self.settings.review(arg, form_data, ctx)
+            else:
+                result = self.settings.save(arg, form_data, ctx)
+        except sc.SettingsError as exc:
+            back = '/setup' if name == 'setup_step' else '/settings/' + arg if arg else '/settings'
+            return self.problem('Nothing was changed', str(exc), 409, back)
+        return result if result[0] == 'redirect' else (result[0], 'text/html; charset=utf-8', result[1].encode())
+
+    def settings_overview(self):
+        """The effective settings (Phase 2's read-only view) shown under the editable sections."""
+        try:
+            return render_settings_details(settings_view(self.load_settings()))
+        except Exception as exc:  # the editable page must work even when the files can't be summarised
+            return f'<p class="hint">Effective settings could not be shown: {e(type(exc).__name__)}</p>'
+
+    def plan_refused(self, failing):
+        items = ''.join(f'<li><strong>{e(c.label)}</strong>: {e(c.detail)}</li>' for c in failing)
+        body = (f'<h1>Planning is unavailable</h1><div class="alert"><p>{len(failing)} health check'
+                f'{"s" if len(failing) != 1 else ""} failed. Migratarr plans only when no check fails '
+                f'(warnings are fine). Nothing was changed.</p><ul class="plain">{items}</ul></div>'
+                f'<p><a class="btn primary" href="/settings?check=1">Open Settings &amp; health</a> '
+                f'<a class="btn" href="/">Back</a></p>')
+        return 409, 'text/html; charset=utf-8', page('Planning is unavailable', body, ctx=self.ctx()).encode()
 
     def problem(self, title, message, status=400, back='/'):
         body = page(title, f'<h1>{e(title)}</h1><div class="alert"><p>{e(message)}</p></div>'
@@ -1192,7 +1330,10 @@ def make_handler(app):
                 return self.send(HTTPStatus.MISDIRECTED_REQUEST, 'text/plain; charset=utf-8',
                                  b'Open this page through localhost.\n', head)
             path, _, query = self.path.split('#', 1)[0].partition('?')
-            self.send(*app.respond(path, parse_qs(query)), head=head)
+            result = app.respond(path, parse_qs(query))
+            if result[0] == 'redirect':
+                return self.send(HTTPStatus.SEE_OTHER, 'text/plain; charset=utf-8', b'', head, location=result[1])
+            self.send(*result, head=head)
 
         def do_GET(self):
             self.handle_get(head=False)
