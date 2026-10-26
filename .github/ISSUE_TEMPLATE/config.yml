@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem privately
+    url: https://github.com/jwilcox99/Migratarr/security/advisories/new
+    about: Anything involving credentials, file permissions or moves you did not approve. Please don't open a public issue.
