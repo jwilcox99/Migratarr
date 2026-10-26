@@ -27,3 +27,7 @@ config/backups/
 
 # Web UI background jobs (logs, state, stop requests)
 jobs/
+
+# pip install -e . metadata
+*.egg-info/
+build/

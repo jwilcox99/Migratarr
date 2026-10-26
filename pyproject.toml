@@ -1,0 +1,77 @@
+# Packaging for the migratarr command (plan phase 6). v0.1.0 supports running from a
+# clone: `pip install -e .` in the repository. Settings, runs and logs still live in the
+# repository (config/, runs/, execution_logs/), so a non-editable install is not
+# supported yet; see docs/release-checklist.md.
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "migratarr"
+dynamic = ["version"]
+description = "Moves Radarr/Sonarr media between storage tiers by how hard it is to re-acquire, where it streams and how it is watched; every move is approved first."
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.10"
+dependencies = []  # standard library only
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: POSIX :: Linux",
+    "Environment :: Web Environment",
+    "Topic :: Multimedia :: Video",
+]
+
+[project.scripts]
+migratarr = "migratarr_cli:main"
+
+[project.urls]
+Source = "https://github.com/jwilcox99/Migratarr"
+Issues = "https://github.com/jwilcox99/Migratarr/issues"
+
+[tool.setuptools]
+packages = ["migratarr_validation"]
+py-modules = [
+    "approval_store",
+    "approve_execution",
+    "arr_files",
+    "audit_overrides",
+    "batch_cross_movies",
+    "batch_cross_tv",
+    "build_execution_manifest",
+    "build_move_plan",
+    "dry_run_movies",
+    "dry_run_tv",
+    "execute_cross_movie",
+    "execute_cross_tv",
+    "execute_movie",
+    "execute_movie_nas",
+    "execute_tv_nas",
+    "executor_command",
+    "executor_inventory",
+    "executor_manifest",
+    "executor_nfs",
+    "media_layout",
+    "migratarr_cli",
+    "migratarr_jobs",
+    "migratarr_plan",
+    "migratarr_status",
+    "migratarr_ui",
+    "movie_placement_v1",
+    "pipeline_inputs",
+    "planner_settings",
+    "read_api",
+    "recover_cross_0102",
+    "recover_cross_0116",
+    "recover_cross_published",
+    "runtime_config",
+    "service_keys",
+    "settings_contract",
+    "settings_ui",
+    "setup_wizard",
+    "snapshot_run",
+    "storage_targets",
+    "tv_placement_v1",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "migratarr_cli.__version__"}
