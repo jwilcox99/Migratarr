@@ -248,6 +248,11 @@ listing afterwards (`batch_cross_tv.py --run 20260923T013125Z`, read-only):
   (`20260923T013125Z-0014`, 160.06 GB) and *Supernatural*
   (`20260923T013125Z-0015`, 785.59 GB).
 
-Completed plus remaining is 14, but the paragraph above implies 13 (3 done plus
-10 pending). That count has not been reconciled yet, and the per-item journals
-are the record to check it against.
+**Count reconciled (2026-09-25).** `migratarr_status.py --run 20260923T013125Z` lists
+all 16 TV rows of the manifest. Two of them are `SAME_DISK_RENAME`, which the
+cross-disk batch doesn't count: `-0006` *A Pup Named Scooby-Doo* (check-only run,
+not executed) and `-0007` *My Brother, My Brother and Me* (unapproved, not
+started). That leaves 14 cross-disk TV series: 12 `SUCCEEDED` (234.78 GB),
+*Friday Night Lights* `-0014` in progress (its check-only preflight was running at
+17:02 UTC), and *Supernatural* `-0015` approved but not started. The "ten
+pending" above was one short: 11 were pending after the first 3 completed.
