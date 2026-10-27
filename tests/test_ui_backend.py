@@ -222,6 +222,66 @@ class SettingsEditTests(Env, unittest.TestCase):
             self.assertEqual(ours[cid].fix, c.fix)
 
 
+class WizardFeedbackTests(Env, unittest.TestCase):
+    """From the first real wizard run (2026-10-27)."""
+
+    def test_blank_nas_fields_are_named_on_their_fields_in_plain_words(self):
+        b = self.make(configured=False)
+        draft = self.draft()
+        draft[sc.TOPOLOGY]['topology.nas.ssh_key'] = None
+        problems = b.validate(sc.TOPOLOGY, draft[sc.TOPOLOGY], draft)
+        on_key = [p for p in problems if p.path == 'topology.nas.ssh_key']
+        self.assertEqual(len(on_key), 1)  # ours, not also the validator's
+        self.assertIn('full path to the SSH private key', on_key[0].message)
+        self.assertFalse([p for p in problems if p.path == sc.TOPOLOGY])  # nothing left in the top box
+
+    def test_local_topology_needs_no_nas_fields(self):
+        b = self.make(configured=False)
+        draft = self.draft('local')
+        self.assertEqual(sc.blocking(b.validate(sc.TOPOLOGY, draft[sc.TOPOLOGY], draft)), [])
+        self.assertFalse(any(f.required for f in b.fields(sc.TOPOLOGY, {}) if f.path.startswith('topology.nas.')))
+
+    def test_an_ip_address_as_the_nas_user_is_caught(self):
+        b = self.make(configured=False)
+        draft = self.draft()
+        draft[sc.TOPOLOGY].update({'topology.nas.host': 'migratarr', 'topology.nas.user': '10.0.0.5'})
+        problems = b.validate(sc.TOPOLOGY, draft[sc.TOPOLOGY], draft)
+        self.assertIn('looks like an IP address', ' '.join(p.message for p in problems
+                                                            if p.path == 'topology.nas.user'))
+
+    def test_validator_messages_naming_a_nas_field_land_on_it(self):
+        self.assertEqual(problem_path(store.Problem('runtime', 'nas', 'nas.ssh_key must be absolute'))[0],
+                         'topology.nas.ssh_key')
+
+    def test_detect_only_on_steps_that_can_detect(self):
+        b = self.make(configured=False)
+        wizard = setup_wizard.SetupWizard(b, b)
+        ctx = {'actions': True, 'token': TOKEN}
+        for step, shown in ((sc.SERVICES, True), (sc.TOPOLOGY, False), (sc.DISKS, True), (sc.STREAMING, False)):
+            wizard.done = set(setup_wizard.STEPS[:setup_wizard.STEPS.index(step)])
+            body = wizard.get(step, ctx)[1]
+            self.assertEqual('value="detect"' in body, shown, step)
+
+
+class PortInUseTests(unittest.TestCase):
+    def test_busy_port_is_a_message_not_a_traceback(self):
+        import contextlib
+        import io
+        import socket
+        from unittest.mock import patch
+        busy = socket.socket()
+        busy.bind(('127.0.0.1', 0))
+        busy.listen()
+        self.addCleanup(busy.close)
+        port = busy.getsockname()[1]
+        err = io.StringIO()
+        with patch.object(migratarr_ui, 'build_app', return_value=None), \
+                patch('migratarr.settings.migrate_if_needed'), contextlib.redirect_stderr(err):
+            code = migratarr_ui.main(['--port', str(port)])
+        self.assertEqual(code, 2)
+        self.assertIn(f'--port {port + 1}', err.getvalue())
+
+
 class ProblemPathTests(unittest.TestCase):
     def test_paths(self):
         P = store.Problem

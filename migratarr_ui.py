@@ -18,6 +18,7 @@ form carries a per-process token. --read-only turns every action off.
 Standard library only.
 """
 import argparse
+import errno
 import hmac
 import html
 import json
@@ -1458,7 +1459,14 @@ def main(argv=None):
     from migratarr.settings import migrate_if_needed
     migrate_if_needed(log=lambda message: print(message, file=sys.stderr, flush=True))
     app = build_app(args.base, actions=not args.read_only)
-    server = ThreadingHTTPServer(('127.0.0.1', args.port), make_handler(app))
+    try:
+        server = ThreadingHTTPServer(('127.0.0.1', args.port), make_handler(app))
+    except OSError as exc:
+        if exc.errno == errno.EADDRINUSE:
+            print(f'Port {args.port} is already in use (is another Migratarr UI running?). '
+                  f'Stop it, or start this one with --port {args.port + 1}.', file=sys.stderr)
+            return 2
+        raise
     mode = 'read-only view' if args.read_only else 'UI (plan, confirm, run)'
     print(f'Migratarr {mode} on http://localhost:{args.port}  (Ctrl+C to stop; running jobs keep going)\n'
           f'From another computer: ssh -L {args.port}:localhost:{args.port} <user>@<this host>', flush=True)

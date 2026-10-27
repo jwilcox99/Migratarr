@@ -29,6 +29,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 from pathlib import Path, PurePosixPath
 import subprocess
 
@@ -58,6 +59,15 @@ CATEGORY_FOLDERS = {  # a fresh install's folders; category identities are fixed
 OVERRIDE_CATEGORIES = ('Common', 'Current', 'Library', 'Rare', 'Archive')
 WEIGHTS = ('replacement', 'streaming', 'usage')
 SEVERITY = {'error': sc.FAIL, 'warning': sc.WARN}
+NAS_REQUIRED = {
+    'host': 'Enter the NAS address: its IP address or host name.',
+    'user': 'Enter the account Migratarr logs in to the NAS as.',
+    'ssh_key': 'Enter the full path to the SSH private key Migratarr uses for the NAS, '
+               'e.g. /home/you/.ssh/migratarr_nas.',
+    'python': 'Enter the path to Python 3 on the NAS, e.g. /usr/bin/python3.',
+}
+IPV4 = re.compile(r'\d{1,3}(\.\d{1,3}){3}')
+DISCOVERS = (sc.SERVICES, sc.DISKS)
 CHECK_STATUS = {health.OK: sc.OK, health.WARN: sc.WARN, health.FAIL: sc.FAIL, health.SKIP: sc.SKIPPED}
 
 
@@ -359,6 +369,13 @@ def write_section(section, docs, values, environ=None):
             runtime['base_path'] = values['topology.base_path']
         if mode == 'nas_ssh':
             runtime['nas'] = {k: values.get('topology.nas.' + k) or '' for k in ('host', 'user', 'ssh_key', 'python')}
+            for k, message in NAS_REQUIRED.items():
+                if _blank(values.get('topology.nas.' + k)):
+                    problems.append(sc.Problem('topology.nas.' + k, message))
+            user = values.get('topology.nas.user') or ''
+            if IPV4.fullmatch(user):
+                problems.append(sc.Problem('topology.nas.user', 'This looks like an IP address. The NAS address goes '
+                                                                'in "NAS host"; this is the account on the NAS.'))
         else:
             runtime.pop('nas', None)
             targets = _dict(docs.get(TARGETS))
@@ -463,6 +480,10 @@ def problem_path(p):
             return sc.SERVICES, f'{field}: {msg}'
         if head in ('secrets', 'arr_file_checks'):
             return sc.SERVICES, f'{field}: {msg}'
+        if head == 'nas' and not rest:
+            named = re.search(r'\bnas\.(host|user|ssh_key|python)\b', msg)
+            if named:
+                return 'topology.nas.' + named.group(1), msg
         if head == 'nas':
             return ('topology.nas.' + rest if rest in ('host', 'user', 'ssh_key', 'python') else sc.TOPOLOGY), \
                    (msg if rest else f'NAS: {msg}')
@@ -566,11 +587,16 @@ class UiBackend:
                              True, TOPOLOGY_CHOICES, read_only=configured),
                     sc.Field('topology.base_path', 'Migratarr data folder', sc.PATH,
                              'Runs, manifests, approvals and logs are kept here.', True),
-                    sc.Field('topology.nas.host', 'NAS host', sc.TEXT, 'Only for NAS over SSH.', group='NAS'),
-                    sc.Field('topology.nas.user', 'NAS user', sc.TEXT, 'Moves run as this user on the NAS.', group='NAS'),
-                    sc.Field('topology.nas.ssh_key', 'SSH key', sc.PATH, 'A key used only by Migratarr, '
-                             'e.g. ~/.ssh/migratarr_nas.', group='NAS'),
-                    sc.Field('topology.nas.python', 'Python on the NAS', sc.PATH, 'e.g. /usr/bin/python3', group='NAS')]
+                    # Required for NAS over SSH only; checked on the server, since a browser "required" would
+                    # also block choosing local disks.
+                    sc.Field('topology.nas.host', 'NAS host', sc.TEXT, 'Required for NAS over SSH. The NAS\'s IP '
+                             'address or host name.', group='NAS'),
+                    sc.Field('topology.nas.user', 'NAS user', sc.TEXT, 'Required for NAS over SSH. The account '
+                             'moves run as on the NAS.', group='NAS'),
+                    sc.Field('topology.nas.ssh_key', 'SSH key', sc.PATH, 'Required for NAS over SSH. Full path to a '
+                             'private key used only by Migratarr, e.g. /home/you/.ssh/migratarr_nas.', group='NAS'),
+                    sc.Field('topology.nas.python', 'Python on the NAS', sc.PATH, 'Required for NAS over SSH, e.g. '
+                             '/usr/bin/python3.', group='NAS')]
         if section == sc.DISKS:
             mode = values.get('disks._topology') or self.topology_of(self.docs(self.report()))
             return disk_fields(values, mode != 'local')
@@ -628,7 +654,12 @@ class UiBackend:
         found = store.check(docs, self.environ)[0]
         # Only this section's problems: the others are shown (and fixed) in their own section or step,
         # and a fresh install's runtime.json can't be complete before the wizard's later steps.
-        return problems + [p for p in translate(found) if in_section(p, section)]
+        mine = {p.path for p in problems}
+        return problems + [p for p in translate(found) if in_section(p, section) and p.path not in mine]
+
+    def can_discover(self, section):
+        """Whether "Detect" has anything to find on this step."""
+        return section in DISCOVERS
 
     def diff(self, section, values):
         before = self.current(section)
