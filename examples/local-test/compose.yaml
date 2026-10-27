@@ -1,0 +1,66 @@
+# Throwaway Radarr, Sonarr and Jellyfin for testing Migratarr's local-disk moves.
+# See README.md. Start and stop it through ./kit.py (it sets the variables below);
+# by hand: MTEST_ROOT=... MTEST_PUID=... MTEST_PGID=... docker compose -f compose.yaml up -d
+#
+# Everything lives under $MTEST_ROOT: `docker compose down` plus deleting that folder
+# removes all of it. Ports are bound to 127.0.0.1 only and differ from the standard
+# ones (7878, 8989, 8096), so nothing here can clash with a real Radarr, Sonarr or Jellyfin.
+#
+# Two test "disks" ($MTEST_ROOT/disk1 and disk2) are plain folders. Each category
+# folder is bind-mounted on its own at /media/<category folder>, the path Migratarr's
+# settings call the Arr root, so a category can live on either disk:
+#
+#   Movies: Common, Rare on disk1   Library, Archive on disk2
+#   TV:     Current, Rare on disk2  Library, Archive on disk1
+#
+# A movie moving Common -> Rare stays on disk1 (same-disk rename); Common -> Library
+# moves to disk2 (cross-disk transfer). The same for TV, the other way round.
+# kit.py's LAYOUT must match these mounts (kit.py check-compose verifies it).
+
+name: mtest
+
+x-common: &common
+  restart: "no"
+  environment:
+    PUID: ${MTEST_PUID:?set MTEST_PUID}
+    PGID: ${MTEST_PGID:?set MTEST_PGID}
+    UMASK: "002"
+    TZ: ${TZ:-Etc/UTC}
+
+services:
+  radarr:
+    <<: *common
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: mtest-radarr
+    ports:
+      - "127.0.0.1:17878:7878"
+    volumes:
+      - ${MTEST_ROOT:?set MTEST_ROOT}/config/radarr:/config
+      - ${MTEST_ROOT}/disk1/Movies/Common:/media/Movies/Common
+      - ${MTEST_ROOT}/disk1/Movies/Rare:/media/Movies/Rare
+      - ${MTEST_ROOT}/disk2/Movies/Library:/media/Movies/Library
+      - ${MTEST_ROOT}/disk2/Movies/Archive:/media/Movies/Archive
+
+  sonarr:
+    <<: *common
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: mtest-sonarr
+    ports:
+      - "127.0.0.1:18989:8989"
+    volumes:
+      - ${MTEST_ROOT}/config/sonarr:/config
+      - ${MTEST_ROOT}/disk2/TV/Current:/media/TV/Current
+      - ${MTEST_ROOT}/disk2/TV/Rare:/media/TV/Rare
+      - ${MTEST_ROOT}/disk1/TV/Library:/media/TV/Library
+      - ${MTEST_ROOT}/disk1/TV/Archive:/media/TV/Archive
+
+  jellyfin:
+    <<: *common
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: mtest-jellyfin
+    ports:
+      - "127.0.0.1:18096:8096"
+    volumes:
+      - ${MTEST_ROOT}/config/jellyfin:/config
+      # kit.py seed uses this container's ffmpeg to make the small sample video here.
+      - ${MTEST_ROOT}/seed:/seed
