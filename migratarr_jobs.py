@@ -37,7 +37,7 @@ from pathlib import Path
 import read_api
 from executor_manifest import approval_is_current
 
-REPO = Path(__file__).resolve().parent
+from migratarr.paths import CODE as REPO, module_command  # steps run as modules (clone or installed)
 EXECUTORS = {
     ('Movie', 'SAME_DISK_RENAME'): 'execute_movie_nas.py',
     ('TV', 'SAME_DISK_RENAME'): 'execute_tv_nas.py',
@@ -98,8 +98,10 @@ def process_alive(pid, job_id):
         state = Path(f'/proc/{int(pid)}/stat').read_text().rsplit(')', 1)[1].split()[0]
     except (OSError, ValueError, TypeError, IndexError):
         return False
-    return state != 'Z' and any(c.endswith(b'migratarr_jobs.py') for c in cmdline) \
-        and job_id.encode() in cmdline
+    # Started as `python -m migratarr_jobs` (since phase 7); a job begun by an older UI ran the file by path.
+    ours = any(c.endswith(b'migratarr_jobs.py') for c in cmdline) or \
+        any(a == b'-m' and b == b'migratarr_jobs' for a, b in zip(cmdline, cmdline[1:]))
+    return state != 'Z' and ours and job_id.encode() in cmdline
 
 
 def active_job(base, alive=None):
@@ -222,8 +224,7 @@ def start_job(base, kind, run_id=None, execution_ids=(), repo=REPO, popen=subpro
         job_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '-' + kind
         folder = jobs_dir(base)
         folder.mkdir(exist_ok=True)
-        command = [sys.executable, str(Path(repo) / 'migratarr_jobs.py'), 'run', '--base', str(base),
-                   '--job', job_id, kind]
+        command = module_command('migratarr_jobs.py', 'run', '--base', base, '--job', job_id, kind)
         if kind == 'run':
             command += ['--run', read_api._checked_run_id(run_id)]
             for execution_id in execution_ids:
@@ -310,7 +311,7 @@ class Job:
 def run_plan(job, repo=REPO, runner=subprocess.run):
     before = {r['run_id'] for r in read_api.list_runs(job.base)}
     job.update(message='Planning: scoring, building the plan, snapshot and manifest')
-    code = runner([sys.executable, str(Path(repo) / 'migratarr_plan.py')], cwd=str(repo)).returncode
+    code = runner(module_command('migratarr_plan.py'), cwd=str(repo)).returncode
     created = sorted({r['run_id'] for r in read_api.list_runs(job.base)} - before)
     job.record['run_id'] = created[-1] if created else None
     if code != 0:
@@ -362,13 +363,13 @@ def run_moves(job, run_id, execution_ids, repo=REPO, runner=subprocess.run, conf
             continue
         if snapshot() != config_before:
             return job.finish(FAILED, 'Runtime configuration changed during the job; stopped.')
-        script = str(Path(repo) / EXECUTORS[(row['media_type'], row['transfer_type'])])
+        script = EXECUTORS[(row['media_type'], row['transfer_type'])]
         for live in (False, True):
             if live and job.stop_requested():
                 return job.finish(STOPPED, f'Stopped as requested after checking {title}; it was not moved.')
             job.update(current=dict(job.record['current'], step='moving' if live else 'checking'))
             job.say(('MOVING' if live else 'CHECK ONLY') + ': ' + os.path.basename(script))
-            command = [sys.executable, script, execution_id, '--base', str(base)] + (['--execute'] if live else [])
+            command = module_command(script, execution_id, '--base', base) + (['--execute'] if live else [])
             code = runner(command, cwd=str(repo), env=_executor_env(base)).returncode
             if code != 0 and not live:
                 # A check-only refusal changes nothing, so the next move can still run.

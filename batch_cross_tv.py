@@ -10,6 +10,8 @@ import re
 import subprocess
 import sys
 
+from migratarr.paths import CODE, module_command
+
 import execute_cross_tv as m
 
 from executor_manifest import approval_is_current
@@ -106,15 +108,15 @@ def run_batch(base, run, execute, runner=subprocess.run, limit=None):
             continue
         print(f'\n=== {index}/{len(approved)} | {row["title"]} ===', flush=True)
         commands = [
-            [sys.executable, str(base / 'execute_cross_tv.py'), execution_id, '--base', str(base)],
-            [sys.executable, str(base / 'execute_cross_tv.py'), execution_id, '--base', str(base), '--execute'],
+            module_command('execute_cross_tv.py', execution_id, '--base', base),
+            module_command('execute_cross_tv.py', execution_id, '--base', base, '--execute'),
         ]
         for command in commands:
             m.require(load_config(RUNTIME.source_path).as_dict() == RUNTIME.as_dict(),
                       'Runtime configuration changed during batch')
             env = dict(os.environ, MIGRATARR_CONFIG=str(RUNTIME.source_path),
                        MIGRATARR_BASE_PATH=base.as_posix())
-            result = runner(command, cwd=base, env=env)
+            result = runner(command, cwd=str(CODE), env=env)  # -m finds the executor next to this code
             m.require(result.returncode == 0, 'Command failed for ' + execution_id + '; batch stopped')
         events = [json.loads(line) for line in
                   (base / 'execution_logs' / (execution_id + '.jsonl')).read_text().splitlines()]

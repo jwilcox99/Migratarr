@@ -197,7 +197,7 @@ class BatchRunnerApprovalTests(unittest.TestCase):
             def runner(command, **kwargs):
                 calls.append(command)
                 if '--execute' in command:
-                    (base / 'execution_logs' / (command[2] + '.jsonl')).write_text(
+                    (base / 'execution_logs' / (command[3] + '.jsonl')).write_text(
                         json.dumps(dict(event='SUCCESS', manifest_sha256='hash')) + '\n')
                     if revoke_after_first:
                         write_approvals(base, history + [dict(action='REVOKE', execution_id=i,
@@ -209,7 +209,7 @@ class BatchRunnerApprovalTests(unittest.TestCase):
                     contextlib.redirect_stdout(out):
                 self.assertEqual(batch.run_batch(base, RUN, True, runner), 0)
         self.output = out.getvalue()
-        return {command[2] for command in calls}, calls
+        return {command[3] for command in calls}, calls
 
     def test_only_approved_rows_run_and_nothing_is_approved(self):
         for module_name, pending_name in (('batch_cross_movies', 'pending_movies'),

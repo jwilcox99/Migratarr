@@ -26,7 +26,7 @@ from pathlib import Path
 
 import read_api
 
-REPO = Path(__file__).resolve().parent
+from migratarr.paths import CODE as REPO, module_command
 STEPS = (
     ('Score movies', ['dry_run_movies.py']),
     ('Score TV', ['dry_run_tv.py']),
@@ -71,6 +71,8 @@ def preflight(repo, allow_dirty):
         for check in health_failures():
             problems.append(f'Health check failed: {check.label}: {check.detail}'
                             + (f' ({check.fix})' if check.fix else ''))
+    if not (Path(repo) / '.git').exists():  # an installed copy: the snapshot records version and code hash
+        return problems, runtime.base_path
     try:
         status = subprocess.run(['git', 'status', '--porcelain'], cwd=repo, capture_output=True,
                                 text=True, check=True).stdout
@@ -86,7 +88,7 @@ def preflight(repo, allow_dirty):
 def run_step(repo, label, args, number, total):
     banner(f'[{number}/{total}] {label}: {" ".join(args)}')
     started = time.monotonic()
-    code = subprocess.run([sys.executable, str(repo / args[0]), *args[1:]], cwd=repo).returncode
+    code = subprocess.run(module_command(*args), cwd=repo).returncode
     print(f'[{number}/{total}] {label}: {"OK" if code == 0 else "FAILED (exit %d)" % code}'
           f' in {time.monotonic() - started:.0f}s', flush=True)
     return code

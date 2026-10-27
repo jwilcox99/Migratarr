@@ -243,9 +243,9 @@ class RuntimeWiringTests(unittest.TestCase):
                         self.assertEqual(batch.run_batch(base, '20260915T192959Z', True, runner), 0)
                     # The batch never approves: check-only, then --execute, nothing else.
                     self.assertEqual(len(calls), 2)
-                    self.assertTrue(calls[0][0][1].endswith(executor_name))
+                    self.assertEqual(calls[0][0][1:3], ['-m', executor_name[:-3]])
                     self.assertNotIn('--execute', calls[0][0])
-                    self.assertTrue(calls[1][0][1].endswith(executor_name))
+                    self.assertEqual(calls[1][0][1:3], ['-m', executor_name[:-3]])
                     self.assertIn('--execute', calls[1][0])
                     self.assertFalse(any('approve_execution.py' in part
                                          for command, _ in calls for part in command))
@@ -266,13 +266,13 @@ class RuntimeWiringTests(unittest.TestCase):
             def runner(command, **kwargs):
                 calls.append(command)
                 if '--execute' in command:
-                    (logs / (command[2] + '.jsonl')).write_text(
+                    (logs / (command[3] + '.jsonl')).write_text(
                         json.dumps(dict(event='SUCCESS', manifest_sha256='hash')) + '\n')
                 return Mock(returncode=0)
             with patch.object(batch, 'pending_series', return_value=(rows, 0, 'hash')):
                 self.assertEqual(batch.run_batch(base, '20260915T192959Z', True, runner, limit=2), 0)
             self.assertEqual(len(calls), 4)
-            executed = {command[2] for command in calls if command[1].endswith('execute_cross_tv.py')}
+            executed = {command[3] for command in calls if command[1:3] == ['-m', 'execute_cross_tv']}
             self.assertEqual(executed, {'20260915T192959Z-0001', '20260915T192959Z-0002'})
 
 

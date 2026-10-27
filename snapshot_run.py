@@ -12,6 +12,7 @@ from pathlib import Path
 from runtime_config import get_config
 from storage_targets import load_targets, check_runtime_consistency, deployed_targets_path
 from pipeline_inputs import require_fresh_inputs
+from migratarr.paths import CODE, code_digest, is_clone, version
 RUNTIME = get_config()
 
 BASE = RUNTIME.base_path
@@ -54,10 +55,12 @@ def sha256(path):
 
 
 def git_output(*args):
+    if not is_clone():
+        return ""
     try:
         return subprocess.check_output(
             ["git", *args],
-            cwd=BASE,
+            cwd=CODE,
             text=True,
             stderr=subprocess.DEVNULL,
         ).strip()
@@ -123,7 +126,7 @@ code_dir = run_dir / "code"
 code_dir.mkdir()
 
 for filename in CODE_FILES:
-    src = BASE / filename
+    src = CODE / filename  # the code that ran, from a clone or site-packages
 
     if not src.exists():
         continue
@@ -175,6 +178,11 @@ git_status = git_output("status", "--porcelain")
 metadata = {
     "run_id": run_id,
     "created_utc": now.isoformat(),
+    "code": {
+        "version": version(),
+        "source": "clone" if is_clone() else "installed",
+        "sha256": code_digest(CODE_FILES),
+    },
     "git": {
         "commit": git_commit,
         "branch": git_branch,

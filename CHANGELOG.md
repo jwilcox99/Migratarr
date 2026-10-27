@@ -11,8 +11,17 @@ First public release: set up and run Migratarr on your own stack without
 hand-editing JSON. Tracked in `reviews/2026-10-26-public-setup-plan.md`.
 
 ### Added
-- `migratarr` command (`pip install -e .` from a clone): `ui`, `plan`, `status`,
-  `approve`, and `doctor` once the health checks land.
+- `pip install migratarr`: an installed copy keeps settings, runs and logs in one data
+  folder, `$MIGRATARR_HOME` (default `~/.local/share/migratarr`). A git clone keeps
+  using the clone, so existing setups don't change. `migratarr doctor` shows which.
+- `migratarr` command: `ui`, `plan`, `status`, `approve`, `doctor`, `reconcile`.
+- Settings pages and first-run setup in the web UI; planning is refused while any
+  health check fails (warnings are fine).
+
+### Changed
+- Pipeline steps and executors start as `python -m <module>`, so they work from an
+  install. Run snapshots record the Migratarr version and a hash of the code; the git
+  commit and the clean-tree check apply only to a clone.
 
 ### Built, switched on when the settings layer lands
 - Settings pages in the web UI: edit a section, review the exact change, save

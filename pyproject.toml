@@ -1,7 +1,7 @@
-# Packaging for the migratarr command (plan phase 6). v0.1.0 supports running from a
-# clone: `pip install -e .` in the repository. Settings, runs and logs still live in the
-# repository (config/, runs/, execution_logs/), so a non-editable install is not
-# supported yet; see docs/release-checklist.md.
+# Packaging for `pip install migratarr` (plan phases 6-7). An installed copy keeps its
+# settings, runs and logs in one data folder: $MIGRATARR_HOME, default
+# ~/.local/share/migratarr (migratarr/paths.py). A clone (`pip install -e .`) keeps using
+# the clone. The version comes from migratarr_cli.__version__; releases: release.yml.
 [build-system]
 requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
@@ -15,7 +15,9 @@ license = {file = "LICENSE"}
 requires-python = ">=3.10"
 dependencies = []  # standard library only
 classifiers = [
+    "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Operating System :: POSIX :: Linux",
     "Environment :: Web Environment",
     "Topic :: Multimedia :: Video",

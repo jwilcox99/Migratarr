@@ -19,7 +19,7 @@ import argparse
 import json
 import sys
 
-from migratarr import health, settings
+from migratarr import health, paths, settings
 
 SYMBOL = {health.OK: ' ok ', health.WARN: 'warn', health.FAIL: 'FAIL', health.SKIP: 'skip'}
 
@@ -61,6 +61,7 @@ def main(argv=None, out=sys.stdout):
     checks = health.run_checks(report, groups=groups)
     if args.json:
         json.dump(dict(ok=health.worst(checks) != health.FAIL, migration=migration,
+                       data_folder=str(paths.home()), data_folder_source=paths.home_source(),
                        settings=report.as_dict(), checks=[c.as_dict() for c in checks]), out, indent=2)
         out.write('\n')
     else:
@@ -68,6 +69,11 @@ def main(argv=None, out=sys.stdout):
             print(migration, file=out)
         topology = report.topology or 'unknown'
         print(f'Migratarr doctor: topology {topology}; settings from {report.files.runtime}', file=out)
+        source = paths.home_source()
+        print(f'Data folder: {paths.home()} (from {source}'
+              + ('' if source == 'MIGRATARR_HOME' else '; set MIGRATARR_HOME to use another') + ')', file=out)
+        if report.missing:
+            print('Not set up yet: run "migratarr ui" and open it in a browser to set up.', file=out)
         render(checks, out)
     return 1 if health.worst(checks) == health.FAIL else 0
 
