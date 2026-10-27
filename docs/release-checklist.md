@@ -8,9 +8,15 @@ Owner key: **A** = phases 1–3 team, **B** = phases 4–6 team.
 - [x] `pyproject.toml`, standard library only, Python ≥ 3.10 (B)
 - [x] `migratarr` command: `ui`, `plan`, `status`, `approve`, `doctor` (B)
 - [ ] `migratarr doctor` exists (A, phase 2); `tests/test_cli.py` then expects every command
-- [ ] Decide install scope (Josh): **clone + `pip install -e .`** for 0.1.0 (works today), or a
-      regular `pip install` too, which needs `MIGRATARR_HOME` for `config/`, `runs/`, `jobs/`,
-      `execution_logs/` and a version in place of the git commit in snapshots (A + B)
+- [x] Install scope (Josh, 2026-10-26): a regular `pip install migratarr`. Data folder
+      `MIGRATARR_HOME`, default `~/.local/share/migratarr`; a clone keeps using itself (2026-10-27).
+      Steps run as modules; snapshots record the version and a code hash when installed
+- [x] CI builds the wheel and sdist, installs the wheel into a clean environment and runs it with an
+      empty data folder (doctor, the wizard, nothing written into site-packages)
+- [x] Release workflow (`.github/workflows/release.yml`): tag `vX.Y.Z` -> tests, build, PyPI via
+      trusted publishing, GitHub release from the CHANGELOG section
+- [ ] PyPI: add a trusted publisher for project `migratarr` (repository `jwilcox99/Migratarr`,
+      workflow `release.yml`, environment `pypi`), and create the `pypi` environment on GitHub (Josh)
 - [ ] Fresh-machine install test: clone, `pip install -e .`, `migratarr ui`, wizard, first plan (B)
 
 ## Settings and onboarding

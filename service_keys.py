@@ -112,7 +112,10 @@ def describe(service, source):
 
 def _docker_cat(container, path):
     # No shell: container and path are validated and passed as separate arguments.
-    return subprocess.check_output(['docker', 'exec', container, 'cat', path], timeout=30)
+    # Docker's own stderr (e.g. "failed to connect to the docker API") is dropped: the caller's error says what
+    # failed, and nothing a container prints should reach logs next to a credential read.
+    return subprocess.check_output(['docker', 'exec', container, 'cat', path], timeout=30,
+                                   stderr=subprocess.DEVNULL)
 
 
 def _owner_only_file(raw):

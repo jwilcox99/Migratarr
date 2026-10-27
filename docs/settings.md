@@ -10,9 +10,11 @@ and [Planner settings](planner-settings.md).
 
 | File | Holds | Located by |
 | --- | --- | --- |
-| `runtime.json` | base path, **topology**, NAS (SSH), containers, service URLs, where credentials come from, Arr file checks | `$MIGRATARR_CONFIG`, else `config/runtime.json` beside `runtime_config.py` |
+| `runtime.json` | base path, **topology**, NAS (SSH), containers, service URLs, where credentials come from, Arr file checks | `$MIGRATARR_CONFIG`, else `<data folder>/config/runtime.json` |
 | `storage-targets.json` | **disks** (the only place they are declared from version 2), category folders, Arr root, reserves, placement | `$MIGRATARR_STORAGE_TARGETS`; else version 2: `storage_targets` in runtime.json (relative to its folder), default `storage-targets.json` beside it; version 1: `<base_path>/config/storage-targets.json` |
-| `planner.json` | streaming, override tags, scoring | `$MIGRATARR_PLANNER_CONFIG`, else `config/planner.json` |
+| `planner.json` | streaming, override tags, scoring | `$MIGRATARR_PLANNER_CONFIG`, else `<data folder>/config/planner.json` |
+
+**Data folder** (`migratarr/paths.py`, decision 2026-10-27): `$MIGRATARR_HOME`; else, when the code runs from a git clone, the clone itself (so an existing clone behaves exactly as before); else `$XDG_DATA_HOME/migratarr`, normally `~/.local/share/migratarr` (a `pip install`). `migratarr doctor` prints which one is in use. A new install's runs, manifests and logs go there too: the wizard sets `base_path` to it.
 
 ## runtime.json version 2
 

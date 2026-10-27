@@ -341,10 +341,15 @@ def _unique_object(pairs):
     return result
 
 
+def _default_path(env):
+    from migratarr.paths import config_dir
+    return config_dir(env) / 'planner.json'
+
+
 def load_settings(filename=None, environ=None):
     env = os.environ if environ is None else environ
     filename = (filename or env.get('MIGRATARR_PLANNER_CONFIG')
-                or Path(__file__).parent / 'config' / 'planner.json')
+                or _default_path(env))
     try:
         data = json.loads(Path(filename).expanduser().read_text(encoding='utf-8'),
                           object_pairs_hook=_unique_object)

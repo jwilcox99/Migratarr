@@ -287,7 +287,8 @@ def unique_object(pairs):
 
 def runtime_path(environ=None):
     env = os.environ if environ is None else environ
-    return Path(env.get('MIGRATARR_CONFIG') or Path(__file__).parent / 'config' / 'runtime.json').expanduser()
+    from migratarr.paths import config_dir  # the clone's config/, or the data folder's (docs/settings.md)
+    return Path(env.get('MIGRATARR_CONFIG') or config_dir(env) / 'runtime.json').expanduser()
 
 
 def targets_path(data, runtime_file, environ=None):

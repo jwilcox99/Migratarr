@@ -121,8 +121,8 @@ def locate(environ=None, runtime_file=None):
     from runtime_config import read_json, runtime_path, targets_path, ConfigError
     env = os.environ if environ is None else environ
     runtime = Path(runtime_file).expanduser() if runtime_file else runtime_path(env)
-    planner = Path(env.get('MIGRATARR_PLANNER_CONFIG')
-                   or REPOSITORY / 'config' / 'planner.json').expanduser()
+    from migratarr.paths import config_dir
+    planner = Path(env.get('MIGRATARR_PLANNER_CONFIG') or config_dir(env) / 'planner.json').expanduser()
     try:
         data = read_json(runtime)
     except ConfigError:

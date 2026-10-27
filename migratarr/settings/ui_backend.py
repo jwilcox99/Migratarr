@@ -83,9 +83,10 @@ def _blank(value):
     return value is None or value == '' or value == []
 
 
-def default_base():
-    """Where runs, manifests and logs go when nothing says otherwise: the clone (until phase 7)."""
-    return str(Path(store.REPOSITORY))
+def default_base(environ=None):
+    """Where runs, manifests and logs go for a new install: the data folder (migratarr.paths)."""
+    from migratarr.paths import home
+    return str(home(environ))
 
 
 def templates(base=None):

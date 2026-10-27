@@ -24,3 +24,49 @@ jobs:
           python -m pip install -e .
           migratarr --help
           migratarr --version
+
+  # An installed copy, the way a user gets it: build the wheel, install it into a clean
+  # virtual environment, and run it from outside the clone with an empty data folder.
+  install:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Build the wheel and sdist
+        run: |
+          python -m pip install build
+          python -m build
+          ls -l dist
+      - name: Install the wheel into a clean environment
+        run: |
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install dist/*.whl
+      - name: Run it like a user (outside the clone, empty data folder)
+        working-directory: /tmp
+        env:
+          MIGRATARR_HOME: /tmp/migratarr-home
+          MIGRATARR_SECRETS_DIR: /tmp/migratarr-secrets
+        run: |
+          set -x
+          /tmp/venv/bin/migratarr --version
+          /tmp/venv/bin/migratarr --help
+          # Not set up: doctor fails (exit 1) and says where the data folder is.
+          out=$(/tmp/venv/bin/migratarr doctor --offline || true)
+          echo "$out"
+          echo "$out" | grep -q "Data folder: /tmp/migratarr-home"
+          echo "$out" | grep -q "Not set up yet"
+          # The UI opens the setup wizard.
+          /tmp/venv/bin/migratarr ui --port 8799 & ui=$!
+          for i in $(seq 1 20); do curl -sf -o /dev/null http://localhost:8799/static/app.css && break; sleep 0.5; done
+          test "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' http://localhost:8799/)" = "303 http://localhost:8799/setup"
+          curl -sfL http://localhost:8799/setup | grep -q "Connect your services"
+          kill $ui
+          # Nothing was written into the installed package.
+          site=$(/tmp/venv/bin/python -c 'import migratarr_ui, os; print(os.path.dirname(migratarr_ui.__file__))')
+          test ! -e "$site/config"
