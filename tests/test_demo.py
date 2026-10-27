@@ -27,7 +27,12 @@ class DemoTests(unittest.TestCase):
             self.assertIn('nothing has moved', result.stdout)
             self.assertIn('CROSS_DISK_TRANSFER', result.stdout)
             self.assertIn('SAME_DISK_RENAME', result.stdout)
-            self.assertNotIn('python3 ', result.stdout.split('Next:')[-1])  # commands, not script paths
+            ending = result.stdout.split('SAME_DISK_RENAME')[-1]
+            self.assertNotIn('python3 ', ending)  # commands, not script paths
+            # No approve or plain `migratarr ui`: those would act on the user's own data folder.
+            self.assertNotIn('approve --', ending)
+            # Settings come from the data folder, so browsing the demo again needs MIGRATARR_HOME.
+            self.assertIn(f'MIGRATARR_HOME={home.resolve()} migratarr ui --read-only', ending)
             runtime = json.loads((home / 'config/runtime.json').read_text())
             self.assertEqual(runtime['topology'], 'local')
             self.assertFalse(list(home.glob('secrets/*')))  # no keys stored

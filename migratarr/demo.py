@@ -150,11 +150,21 @@ def run_step_here(repo, label, args, number, total):
     return code
 
 
+def demo_summary(real_summary, home):
+    """migratarr.plan's summary without its "Next:" commands, which would act on the user's own
+    data folder (approve, ui), not the demo's. Points at the read-only UI on the demo instead."""
+    def summary(base, run_id):
+        text = real_summary(base, run_id).split('\nEvery row is unapproved')[0].rstrip()
+        return (f'{text}\n\nThis is a demo: nothing has moved, and nothing in it can be approved or moved.\n'
+                f'Browse it again with:\n  MIGRATARR_HOME={home} migratarr ui --read-only')
+    return summary
+
+
 def make_plan(home):
     """Run the planning pipeline against the made-up library. Returns migratarr.plan's exit code."""
     from migratarr import plan
     with swapped((urllib.request, 'urlopen', library.fake_urlopen), (time, 'sleep', lambda seconds: None),
-                 (plan, 'run_step', run_step_here),
+                 (plan, 'run_step', run_step_here), (plan, 'summary', demo_summary(plan.summary, home)),
                  # The preflight's health checks would contact the real services; the demo has none.
                  (plan, 'preflight', lambda repo, allow_dirty: ([], Path(home)))):
         return plan.main(['--allow-dirty'])
