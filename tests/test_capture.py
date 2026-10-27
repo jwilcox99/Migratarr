@@ -35,7 +35,8 @@ class CaptureTests(unittest.TestCase):
 
     def test_rejects_changed_source(self):
         with tempfile.TemporaryDirectory() as temp:
-            path = Path(temp) / "dry_run_movies.py"
+            path = Path(temp) / "migratarr" / "dry_run_movies.py"
+            path.parent.mkdir()
             path.write_text('OUTPUT = Path("/live")')
             with patch.object(capture, "ROOT", Path(temp)):
                 with self.assertRaisesRegex(ValueError, "changed"):

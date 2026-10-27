@@ -13,12 +13,12 @@ import sys
 from datetime import datetime, timezone
 import urllib.request
 
-from runtime_config import get_config
-from planner_settings import get_settings
-from media_layout import MediaLayout, canonical, get_targets, split_media_path
-from service_keys import SecretError, service_endpoint
-from arr_files import host_path, host_sha256, host_visible
-from executor_manifest import digest, load_approved_plan
+from migratarr.runtime_config import get_config
+from migratarr.planner_settings import get_settings
+from migratarr.media_layout import MediaLayout, canonical, get_targets, split_media_path
+from migratarr.service_keys import SecretError, service_endpoint
+from migratarr.arr_files import host_path, host_sha256, host_visible
+from migratarr.executor_manifest import digest, load_approved_plan
 RUNTIME = get_config()
 OVERRIDES = get_settings().overrides
 TARGETS = get_targets()

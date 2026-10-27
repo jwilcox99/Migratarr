@@ -17,8 +17,8 @@ import secrets
 import time
 from urllib.parse import urlencode
 
-import settings_contract as sc
-from migratarr_ui import e, form, page
+from migratarr import settings_contract as sc
+from migratarr.ui import e, form, page
 
 PENDING_SECONDS = 15 * 60
 PENDING_LIMIT = 20

@@ -237,7 +237,7 @@ def execution_state(base, execution_id, manifest_hash):
                        if last['event'] == 'SUCCESS' else last.get('reason'))
     if flagged is not None:
         # A hand reconciliation counts only while the journal is exactly what it saw.
-        from reconcile_store import current
+        from migratarr.reconcile_store import current
         entry = current(base, execution_id)
         if entry is not None:
             return dict(flagged, state=RECONCILED, detail=entry.get('note'),

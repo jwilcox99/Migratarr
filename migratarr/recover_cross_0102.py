@@ -9,11 +9,11 @@ from pathlib import Path, PurePosixPath
 import sys
 import shlex
 
-import execute_cross_movie as m
+from migratarr import execute_cross_movie as m
 
-from runtime_config import get_config
-from arr_files import host_path, host_sha256
-from planner_settings import get_settings
+from migratarr.runtime_config import get_config
+from migratarr.arr_files import host_path, host_sha256
+from migratarr.planner_settings import get_settings
 RUNTIME = get_config()
 OVERRIDES = get_settings().overrides
 

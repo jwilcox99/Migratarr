@@ -19,7 +19,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-import read_api
+from migratarr import read_api
 
 
 class ApprovalError(ValueError):

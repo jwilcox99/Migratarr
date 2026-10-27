@@ -52,6 +52,20 @@ dry-run planners (record one real dry run's API traffic, then replay it
 through the old and new planner offline with the clock frozen). See
 `docs/planner-settings.md` for worked examples of both.
 
+## Code layout
+
+- **All code is in the `migratarr` package** (since 0.1.0); that's all `pip install` puts in
+  site-packages. Import siblings as `from migratarr import read_api` or
+  `from migratarr.runtime_config import get_config`, never `import read_api`.
+- **The `*.py` files at the top of a clone are wrappers**, one per old script name, so
+  `python3 migratarr_ui.py` and `import read_api` keep working in existing clones and tests.
+  They hold no code; `tests/test_cli.py` checks that. Don't add code to them.
+- Scripts that start other scripts use `migratarr.paths.module_command()` (`python -m
+  migratarr.<module>`), which works from a clone and an install.
+- `migratarr_validation/` and `tests/` are development tools and aren't installed.
+- `migratarr/movie_placement_v1.py` and `tv_placement_v1.py` are frozen: `cd migratarr &&
+  sha256sum -c *_placement_v1.sha256` (also a test).
+
 ## Code conventions already in use
 
 - **Fail loud, never guess.** The codebase's dominant pattern is a
@@ -64,7 +78,7 @@ through the old and new planner offline with the clock frozen). See
   executors touches a source or destination media file. They do write more
   than just their named CSV/JSON output, though: the placement scripts
   cache external API lookups as JSON under
-  `cache/`, and `snapshot_run.py` writes a whole `runs/<timestamp>/`
+  `cache/`, and `migratarr/snapshot_run.py` writes a whole `runs/<timestamp>/`
   directory — copies of the score/plan CSVs, selected current code files,
   `metadata.json`, and `SHA256SUMS`. Keep code unchanged between planning
   and snapshotting. Executors default to check-only
@@ -72,7 +86,7 @@ through the old and new planner offline with the clock frozen). See
 - **Journal before you mutate.** If you're adding a new code path that
   changes filesystem or Arr state, write a journal entry before the
   mutation and another after, following the pattern in
-  `execute_movie_nas.py`.
+  `migratarr/execute_movie_nas.py`.
 - **Verify by content hash, not just by name/size.** Renames and moves
   are confirmed by hashing file contents before and after, on both the
   local and Radarr/Sonarr-visible paths.

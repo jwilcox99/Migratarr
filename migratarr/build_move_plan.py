@@ -7,11 +7,11 @@ import urllib.request
 from pathlib import Path
 from collections import Counter
 
-from storage_targets import load_targets, check_runtime_consistency, deployed_targets_path
-from runtime_config import get_config
-from service_keys import service_endpoint
-from planner_settings import get_settings
-from pipeline_inputs import require_fresh_inputs
+from migratarr.storage_targets import load_targets, check_runtime_consistency, deployed_targets_path
+from migratarr.runtime_config import get_config
+from migratarr.service_keys import service_endpoint
+from migratarr.planner_settings import get_settings
+from migratarr.pipeline_inputs import require_fresh_inputs
 RUNTIME = get_config()
 PLANNER_SETTINGS = get_settings()
 

@@ -24,7 +24,7 @@ import sys
 import time
 from pathlib import Path
 
-import read_api
+from migratarr import read_api
 
 from migratarr.paths import CODE as REPO, module_command
 STEPS = (
@@ -52,16 +52,16 @@ def preflight(repo, allow_dirty):
     """Return (problems, base path); no problems means every step can start."""
     problems = []
     try:
-        from runtime_config import get_config
+        from migratarr.runtime_config import get_config
         runtime = get_config()
     except Exception as exc:  # any config error stops the pipeline before it starts
         return ['Runtime config: ' + str(exc)], None
     try:
-        from planner_settings import get_settings
+        from migratarr.planner_settings import get_settings
         get_settings()
     except Exception as exc:
         problems.append('Planner settings: ' + str(exc))
-    from service_keys import SecretError, read_key
+    from migratarr.service_keys import SecretError, read_key
     for service in CREDENTIALS:
         try:
             read_key(service, runtime)

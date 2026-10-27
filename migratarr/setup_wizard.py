@@ -17,9 +17,9 @@ backend's create() (atomic, owner-only secrets file). Pasted keys live only
 in this process's memory until then and are never put back into a page.
 Standard library only.
 """
-import settings_contract as sc
-from migratarr_ui import e, page
-from settings_ui import change_text, parse_form, render_checks, render_fields
+from migratarr import settings_contract as sc
+from migratarr.ui import e, page
+from migratarr.settings_ui import change_text, parse_form, render_checks, render_fields
 
 STEPS = (sc.SERVICES, sc.TOPOLOGY, sc.DISKS, sc.STREAMING)
 REVIEW, DONE = 'review', 'done'

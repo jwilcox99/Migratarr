@@ -78,8 +78,8 @@ class MediaLayout:
 @lru_cache(maxsize=1)
 def get_targets():
     """Deployed storage-targets.json, verified against runtime.json; frozen per process."""
-    from runtime_config import get_config
-    from storage_targets import check_runtime_consistency, deployed_targets_path, load_targets
+    from migratarr.runtime_config import get_config
+    from migratarr.storage_targets import check_runtime_consistency, deployed_targets_path, load_targets
     runtime = get_config()
     targets = load_targets(deployed_targets_path(runtime))
     check_runtime_consistency(runtime, targets)

@@ -12,10 +12,10 @@ import sys
 
 from migratarr.paths import CODE, module_command
 
-import execute_cross_tv as m
+from migratarr import execute_cross_tv as m
 
-from executor_manifest import approval_is_current
-from runtime_config import get_config, load_config
+from migratarr.executor_manifest import approval_is_current
+from migratarr.runtime_config import get_config, load_config
 RUNTIME = get_config()
 
 

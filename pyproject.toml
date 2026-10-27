@@ -1,7 +1,7 @@
 # Packaging for `pip install migratarr` (plan phases 6-7). An installed copy keeps its
 # settings, runs and logs in one data folder: $MIGRATARR_HOME, default
 # ~/.local/share/migratarr (migratarr/paths.py). A clone (`pip install -e .`) keeps using
-# the clone. The version comes from migratarr_cli.__version__; releases: release.yml.
+# the clone. The version comes from migratarr.cli.__version__; releases: release.yml.
 [build-system]
 requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
@@ -24,59 +24,17 @@ classifiers = [
 ]
 
 [project.scripts]
-migratarr = "migratarr_cli:main"
+migratarr = "migratarr.cli:main"
 
 [project.urls]
 Source = "https://github.com/jwilcox99/Migratarr"
 Issues = "https://github.com/jwilcox99/Migratarr/issues"
 
 [tool.setuptools]
-packages = ["migratarr", "migratarr.engine", "migratarr.settings", "migratarr_validation"]
-py-modules = [
-    "approval_store",
-    "approve_execution",
-    "arr_files",
-    "audit_overrides",
-    "batch_cross_movies",
-    "batch_cross_tv",
-    "build_execution_manifest",
-    "build_move_plan",
-    "dry_run_movies",
-    "dry_run_tv",
-    "execute_cross_movie",
-    "execute_cross_tv",
-    "execute_movie",
-    "execute_movie_nas",
-    "execute_tv_nas",
-    "executor_command",
-    "executor_inventory",
-    "executor_manifest",
-    "executor_nfs",
-    "media_layout",
-    "migratarr_cli",
-    "migratarr_doctor",
-    "migratarr_jobs",
-    "migratarr_plan",
-    "migratarr_reconcile",
-    "migratarr_status",
-    "migratarr_ui",
-    "movie_placement_v1",
-    "pipeline_inputs",
-    "planner_settings",
-    "read_api",
-    "reconcile_store",
-    "recover_cross_0102",
-    "recover_cross_0116",
-    "recover_cross_published",
-    "runtime_config",
-    "service_keys",
-    "settings_contract",
-    "settings_ui",
-    "setup_wizard",
-    "snapshot_run",
-    "storage_targets",
-    "tv_placement_v1",
-]
+# Only the package is installed. The top-level *.py files in a clone are compatibility
+# wrappers (python3 <script>.py keeps working there); migratarr_validation and tests/ are
+# development tools.
+packages = ["migratarr", "migratarr.engine", "migratarr.settings"]
 
 [tool.setuptools.dynamic]
-version = {attr = "migratarr_cli.__version__"}
+version = {attr = "migratarr.cli.__version__"}

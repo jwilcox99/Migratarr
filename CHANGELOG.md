@@ -19,6 +19,10 @@ hand-editing JSON. Tracked in `reviews/2026-10-26-public-setup-plan.md`.
   health check fails (warnings are fine).
 
 ### Changed
+- All code is in the `migratarr` package; an install adds only `migratarr` to
+  site-packages. In a clone, `python3 <script>.py` keeps working through small
+  wrapper files. Commands that need settings print what's missing instead of a
+  traceback.
 - Pipeline steps and executors start as `python -m <module>`, so they work from an
   install. Run snapshots record the Migratarr version and a hash of the code; the git
   commit and the clean-tree check apply only to a clone.

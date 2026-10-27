@@ -34,7 +34,7 @@ def _assigned_name(node):
 
 def load_streaming(kind, planner=None, settings=None):
     """Execute only a planner's streaming functions; fetchers must be supplied."""
-    planner = planner or ROOT / ('dry_run_' + kind + '.py')
+    planner = planner or ROOT / 'migratarr' / ('dry_run_' + kind + '.py')
     tree = ast.parse(planner.read_text(encoding='utf-8'), filename=str(planner))
     if settings is None:
         from planner_settings import load_settings

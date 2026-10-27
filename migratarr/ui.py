@@ -32,9 +32,9 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-import approval_store
-import migratarr_jobs as jobs
-import read_api
+from migratarr import approval_store
+from migratarr import jobs
+from migratarr import read_api
 
 LOOPBACK_NAMES = {'localhost', '127.0.0.1', '[::1]', '::1'}
 GiB = 1024 ** 3
@@ -699,7 +699,7 @@ def render_execution(view, ctx=None):
 
 def render_reconcile(view, ctx):
     """The "mark reconciled" form, for moves that need attention (reconcile_store.py)."""
-    import reconcile_store
+    from migratarr import reconcile_store
     state = view['state']
     if state['state'] == read_api.RECONCILED:
         r = state.get('reconciled') or {}
@@ -1199,7 +1199,7 @@ class App:
                 jobs.dismiss_interrupted(self.base, arg)
                 return 'redirect', '/'
             if name == 'reconcile':
-                import reconcile_store
+                from migratarr import reconcile_store
                 if ctx['job']:
                     raise jobs.JobError('Wait for the current job to finish before reconciling.')
                 manifest = read_api.get_manifest(self.base, read_api.EXECUTION_ID.fullmatch(arg).group(1))
@@ -1218,7 +1218,7 @@ class App:
         return self.not_found('There is no action at this address.')
 
     def respond_settings(self, name, arg, query):
-        import settings_contract as sc
+        from migratarr import settings_contract as sc
         ctx = self.ctx()  # settings pages carry their own notices (NOTICES' codes mean other things)
         try:
             if name in ('setup', 'setup_step'):
@@ -1242,7 +1242,7 @@ class App:
         return result if result[0] == 'redirect' else (result[0], 'text/html; charset=utf-8', result[1].encode())
 
     def respond_settings_post(self, name, arg, form_data, ctx):
-        import settings_contract as sc
+        from migratarr import settings_contract as sc
         try:
             if name == 'setup_step':
                 if not self.wizard:
@@ -1378,11 +1378,11 @@ def make_handler(app):
 
 def load_context(base=None, environ=None):
     """Base path, disk paths and reserves from the deployment config (``environ``: tests, the settings backend)."""
-    from runtime_config import get_config, load_config
+    from migratarr.runtime_config import get_config, load_config
     runtime = get_config() if environ is None else load_config(environ=environ)
     reserves = {}
     try:
-        from storage_targets import deployed_targets_path, load_targets
+        from migratarr.storage_targets import deployed_targets_path, load_targets
         targets = load_targets(deployed_targets_path(runtime, environ))
         reserves = {t.id: t.minimum_free_space_gb for t in targets.targets}
     except Exception as exc:  # reserves are a display nicety; the page works without them
@@ -1392,8 +1392,8 @@ def load_context(base=None, environ=None):
 
 def reload_context(base=None, environ=None):
     """load_context after the settings files changed (the loaders cache what they read)."""
-    from planner_settings import get_settings
-    from runtime_config import get_config
+    from migratarr.planner_settings import get_settings
+    from migratarr.runtime_config import get_config
     get_config.cache_clear()
     get_settings.cache_clear()
     return load_context(base, environ)
@@ -1408,9 +1408,9 @@ def build_app(base=None, actions=True, backend=None):
     After a save or setup the new disks, reserves and base path are used without a restart.
     """
     import os
-    import settings_contract as sc
-    import settings_ui
-    import setup_wizard
+    from migratarr import settings_contract as sc
+    from migratarr import settings_ui
+    from migratarr import setup_wizard
     from migratarr import health
     from migratarr.settings.ui_backend import UiBackend
     backend = backend or UiBackend(os.environ, base=base)

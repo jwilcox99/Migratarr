@@ -3,9 +3,9 @@
 import json
 import urllib.request
 
-from planner_settings import TAG_NAMESPACE, get_settings
-from runtime_config import get_config
-from service_keys import service_endpoint
+from migratarr.planner_settings import TAG_NAMESPACE, get_settings
+from migratarr.runtime_config import get_config
+from migratarr.service_keys import service_endpoint
 RUNTIME = get_config()
 
 

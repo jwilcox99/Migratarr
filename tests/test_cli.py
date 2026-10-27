@@ -22,6 +22,7 @@ class CliTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
+        self.tmp_path = tmp.name
         Path(tmp.name, 'fake_cmd.py').write_text(textwrap.dedent('''
             import sys
             print('argv=' + repr(sys.argv))
@@ -66,6 +67,18 @@ class CliTests(unittest.TestCase):
         code, _, err = run('fake', '--fail')
         self.assertEqual((code, err), (1, 'it failed\n'))
 
+    def test_missing_settings_are_a_message_not_a_traceback(self):
+        Path(self.tmp_path, 'fake_cfg.py').write_text(
+            'from migratarr.runtime_config import ConfigError\n'
+            'raise ConfigError("Runtime configuration: cannot load /x/config/runtime.json")\n')
+        self.addCleanup(sys.modules.pop, 'fake_cfg', None)
+        with patch.dict(migratarr_cli.COMMANDS, {'cfg': ('fake_cfg', 'needs settings')}):
+            code, _, err = run('cfg')
+        self.assertEqual(code, 2)
+        self.assertIn('cannot load /x/config/runtime.json', err)
+        self.assertIn('migratarr doctor', err)
+        self.assertNotIn('Traceback', err)
+
     def test_every_listed_command_exists(self):
         import importlib.util
         missing = {name for name, (module, _) in migratarr_cli.COMMANDS.items()
@@ -74,21 +87,37 @@ class CliTests(unittest.TestCase):
 
 
 class PackagingTests(unittest.TestCase):
-    def test_pyproject_lists_every_top_level_module(self):
-        import re
-        root = Path(__file__).resolve().parents[1]
-        text = (root / 'pyproject.toml').read_text(encoding='utf-8')
-        listed = set(re.findall(r'^\s+"([A-Za-z0-9_]+)",$', text.split('py-modules = [', 1)[1].split(']', 1)[0], re.M))
-        self.assertEqual(listed, {p.stem for p in root.glob('*.py')})
+    ROOT = Path(__file__).resolve().parents[1]
 
-    def test_pyproject_lists_every_package(self):
+    def test_only_the_package_is_installed(self):
         import re
-        root = Path(__file__).resolve().parents[1]
-        text = (root / 'pyproject.toml').read_text(encoding='utf-8')
+        text = (self.ROOT / 'pyproject.toml').read_text(encoding='utf-8')
+        self.assertNotIn('py-modules', text)  # no top-level modules in site-packages
         listed = set(re.findall(r'"([A-Za-z0-9_.]+)"', re.search(r'^packages = \[(.*?)\]', text, re.M).group(1)))
-        found = {'.'.join(p.parent.relative_to(root).parts) for p in root.glob('**/__init__.py')
-                 if 'tests' not in p.parts and not any(part.startswith('.') for part in p.parts)}
+        found = {'.'.join(p.parent.relative_to(self.ROOT).parts) for p in (self.ROOT / 'migratarr').glob('**/__init__.py')}
         self.assertEqual(listed, found)
+        self.assertIn('migratarr = "migratarr.cli:main"', text)
+
+    def test_top_level_files_are_only_wrappers_for_the_package(self):
+        """A clone keeps `python3 <script>.py` working; each file only forwards to migratarr/<module>."""
+        import importlib.util
+        from migratarr.paths import module_name
+        for path in sorted(self.ROOT.glob('*.py')):
+            with self.subTest(path.name):
+                text = path.read_text(encoding='utf-8')
+                target = module_name(path.name)
+                self.assertIn(f"run_module('{target}', run_name='__main__')", text)
+                self.assertIn(f"import_module('{target}')", text)
+                self.assertLess(len(text.splitlines()), 20)
+                self.assertIsNotNone(importlib.util.find_spec(target), target)
+
+    def test_frozen_placement_modules_match_their_pins(self):
+        """movie_placement_v1 / tv_placement_v1 are frozen; `sha256sum -c` in migratarr/ checks them."""
+        import hashlib
+        for pin in sorted((self.ROOT / 'migratarr').glob('*_placement_v1.sha256')):
+            digest, name = pin.read_text().split()
+            source = (pin.parent / name).read_bytes().replace(b'\r\n', b'\n')
+            self.assertEqual(hashlib.sha256(source).hexdigest(), digest, name)
 
 
 if __name__ == '__main__':

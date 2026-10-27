@@ -25,10 +25,10 @@ import re
 import shlex
 import sys
 
-import execute_cross_movie
-import execute_cross_tv
-from executor_command import NAS_IDLE_TIMEOUT
-import read_api
+from migratarr import execute_cross_movie
+from migratarr import execute_cross_tv
+from migratarr.executor_command import NAS_IDLE_TIMEOUT
+from migratarr import read_api
 
 LATER_EVENTS = frozenset({'COPIED', 'RADARR_UPDATE_INTENT', 'SONARR_UPDATE_INTENT', 'DELETE_INTENT',
                           'SOURCE_REMOVED', 'SUCCESS', 'RECOVERY_STARTED'})

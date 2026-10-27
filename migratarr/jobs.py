@@ -34,8 +34,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-import read_api
-from executor_manifest import approval_is_current
+from migratarr import read_api
+from migratarr.executor_manifest import approval_is_current
 
 from migratarr.paths import CODE as REPO, module_command  # steps run as modules (clone or installed)
 EXECUTORS = {
@@ -98,9 +98,9 @@ def process_alive(pid, job_id):
         state = Path(f'/proc/{int(pid)}/stat').read_text().rsplit(')', 1)[1].split()[0]
     except (OSError, ValueError, TypeError, IndexError):
         return False
-    # Started as `python -m migratarr_jobs` (since phase 7); a job begun by an older UI ran the file by path.
+    # Started as `python -m migratarr.jobs` (0.1.0); jobs begun by older UIs ran the file or `-m migratarr_jobs`.
     ours = any(c.endswith(b'migratarr_jobs.py') for c in cmdline) or \
-        any(a == b'-m' and b == b'migratarr_jobs' for a, b in zip(cmdline, cmdline[1:]))
+        any(a == b'-m' and b in (b'migratarr.jobs', b'migratarr_jobs') for a, b in zip(cmdline, cmdline[1:]))
     return state != 'Z' and ours and job_id.encode() in cmdline
 
 
@@ -399,14 +399,14 @@ def _require(ok, message):
 
 
 def _config_snapshot():
-    from runtime_config import get_config, load_config
+    from migratarr.runtime_config import get_config, load_config
     return load_config(get_config().source_path).as_dict()
 
 
 def _executor_env(base):
     env = dict(os.environ, MIGRATARR_BASE_PATH=Path(base).as_posix())
     with contextlib.suppress(Exception):
-        from runtime_config import get_config
+        from migratarr.runtime_config import get_config
         env['MIGRATARR_CONFIG'] = str(get_config().source_path)
     return env
 

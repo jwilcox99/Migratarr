@@ -9,8 +9,8 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from runtime_config import get_config
-from storage_targets import load_targets, check_runtime_consistency, deployed_targets_path
+from migratarr.runtime_config import get_config
+from migratarr.storage_targets import load_targets, check_runtime_consistency, deployed_targets_path
 RUNTIME = get_config()
 
 BASE = RUNTIME.base_path

@@ -28,7 +28,7 @@ from migratarr import services as _registry
 # values this module hard-coded before the registry existed.
 SERVICES = tuple(_registry.SERVICES)
 ARR = tuple(s.id for s in _registry.SERVICES.values() if s.url_base_from_config)
-REPOSITORY = Path(__file__).resolve().parent
+from migratarr.paths import CODE as REPOSITORY  # the clone (or site-packages): never keep keys in it
 DEFAULT_SOURCES = _registry.default_sources()
 # Which runtime.json container a docker source uses when it names none.
 DEFAULT_CONTAINER = _registry.default_containers()
@@ -142,7 +142,7 @@ def _from_xml(data, service, source):
 def read_credential(service, runtime=None):
     """Return (value, url_base) for a service; url_base is '' where none applies."""
     if runtime is None:
-        from runtime_config import get_config
+        from migratarr.runtime_config import get_config
         runtime = get_config()
     source = runtime.secrets[service]
     kind = source['source']
@@ -187,7 +187,7 @@ def service_endpoint(service, runtime=None):
     env/file source); a path written in urls wins.
     """
     if runtime is None:
-        from runtime_config import get_config
+        from migratarr.runtime_config import get_config
         runtime = get_config()
     _require(service in runtime.urls, service + ' has no URL in runtime.json urls')
     key, url_base = read_credential(service, runtime)

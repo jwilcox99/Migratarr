@@ -7,8 +7,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-import approval_store
-from runtime_config import get_config
+from migratarr import approval_store
+from migratarr.runtime_config import get_config
 RUNTIME = get_config()
 
 BASE = RUNTIME.base_path

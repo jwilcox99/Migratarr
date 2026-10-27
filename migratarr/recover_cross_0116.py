@@ -7,10 +7,10 @@ import os
 from pathlib import Path, PurePosixPath
 import sys
 
-import execute_cross_movie as m
+from migratarr import execute_cross_movie as m
 
-from runtime_config import get_config
-from planner_settings import get_settings
+from migratarr.runtime_config import get_config
+from migratarr.planner_settings import get_settings
 RUNTIME = get_config()
 OVERRIDES = get_settings().overrides
 

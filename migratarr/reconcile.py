@@ -15,8 +15,8 @@ import json
 from pathlib import Path
 import sys
 
-import read_api
-import reconcile_store
+from migratarr import read_api
+from migratarr import reconcile_store
 
 
 def main(argv=None, out=sys.stdout):
@@ -28,7 +28,7 @@ def main(argv=None, out=sys.stdout):
     parser.add_argument('--base', type=Path, help='Migratarr base path (default: runtime.json base_path)')
     args = parser.parse_args(argv)
     if args.base is None:
-        from runtime_config import get_config
+        from migratarr.runtime_config import get_config
         args.base = get_config().base_path
     match = read_api.EXECUTION_ID.fullmatch(args.execution_id)
     if not match:

@@ -46,8 +46,11 @@ class PlanCommandTests(unittest.TestCase):
             folder.mkdir()
         Fixture(staging)
         (self.base / 'runs').mkdir()
+        # Steps run as `python -m migratarr.<step>` from the repo folder: stand-ins in its package.
+        (self.repo / 'migratarr').mkdir()
+        (self.repo / 'migratarr' / '__init__.py').write_text('')
         for _, args in migratarr_plan.STEPS:
-            (self.repo / args[0]).write_text(STUB)
+            (self.repo / 'migratarr' / args[0]).write_text(STUB)
         self.log = root / 'steps.log'
         env = dict(STUB_LOG=str(self.log), STUB_BASE=str(self.base), STUB_STAGING=str(staging), STUB_RUN=RUN)
         self.enterContext_(patch.dict(os.environ, env))

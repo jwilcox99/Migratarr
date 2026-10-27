@@ -52,23 +52,26 @@ class HomeTests(unittest.TestCase):
 class ModuleLaunchTests(unittest.TestCase):
     def test_module_command(self):
         self.assertEqual(paths.module_command('execute_cross_tv.py', 'id', '--base', Path('/b'), python='py'),
-                         ['py', '-m', 'execute_cross_tv', 'id', '--base', '/b'])
+                         ['py', '-m', 'migratarr.execute_cross_tv', 'id', '--base', '/b'])
+        self.assertEqual(paths.module_name('migratarr_jobs.py'), 'migratarr.jobs')
 
-    def test_every_launched_script_is_an_importable_top_level_module(self):
+    def test_every_launched_script_is_a_module_in_the_package(self):
         import importlib.util
         names = set(migratarr_jobs.EXECUTORS.values()) | {'migratarr_jobs.py', 'migratarr_plan.py'} | \
             {args[0] for _, args in migratarr_plan.STEPS}
         for name in names:
             spec = importlib.util.find_spec(paths.module_name(name))
             self.assertIsNotNone(spec, name)
-            self.assertEqual(Path(spec.origin).parent, paths.CODE, name)
+            self.assertEqual(Path(spec.origin).parent, paths.PACKAGE, name)
 
     def test_a_job_started_as_a_module_is_recognised_as_alive(self):
         job_id = '20261027T100000Z-plan'
         # A stand-in with the same command line shape as start_job's: python -m migratarr_jobs run ... <job>
         with tempfile.TemporaryDirectory() as tmp:
-            Path(tmp, 'migratarr_jobs.py').write_text('import time\ntime.sleep(30)\n')
-            proc = subprocess.Popen([sys.executable, '-m', 'migratarr_jobs', 'run', '--job', job_id, 'plan'],
+            Path(tmp, 'migratarr').mkdir()
+            Path(tmp, 'migratarr', '__init__.py').write_text('')
+            Path(tmp, 'migratarr', 'jobs.py').write_text('import time\ntime.sleep(30)\n')
+            proc = subprocess.Popen([sys.executable, '-m', 'migratarr.jobs', 'run', '--job', job_id, 'plan'],
                                     cwd=tmp)
             try:
                 time.sleep(0.3)

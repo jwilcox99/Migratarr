@@ -28,7 +28,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-import read_api
+from migratarr import read_api
 
 OUTCOMES = {
     'moved': 'The move completed by hand: media is at the destination and Radarr/Sonarr point there',

@@ -44,7 +44,7 @@ def store_key(service, value, *, folder=None, url_base=None, environ=None):
         raise KeyStoreError('that does not look like a ' + services.SERVICES[service].credential_label
                             + ' (one line, no spaces); nothing was saved')
     folder = Path(folder).expanduser() if folder else secrets_folder(environ)
-    from service_keys import REPOSITORY
+    from migratarr.service_keys import REPOSITORY
     resolved = folder.resolve()
     if resolved == REPOSITORY or REPOSITORY in resolved.parents:
         raise KeyStoreError('keep the secrets folder outside the Migratarr repository')

@@ -33,7 +33,7 @@ import re
 from pathlib import Path, PurePosixPath
 import subprocess
 
-import settings_contract as sc
+from migratarr import settings_contract as sc
 from migratarr import health, services
 from migratarr.settings import keys, store
 
@@ -253,11 +253,11 @@ def read_section(section, docs, environ=None):
         v = {'streaming.region': s.get('region'), 'streaming.subscribed': _list(s.get('subscribed')),
              'streaming.user_free_access': _list(s.get('user_free_access'))}
     elif section == sc.SCORING:
-        from planner_settings import DEFAULT_SCORING
+        from migratarr.planner_settings import DEFAULT_SCORING
         weights = _dict(_dict(planner.get('scoring')).get('weights'))
         v = {'scoring.weights.' + k: weights.get(k, DEFAULT_SCORING['weights'][k]) for k in WEIGHTS}
     elif section == sc.OVERRIDES:
-        from planner_settings import DEFAULT_OVERRIDES
+        from migratarr.planner_settings import DEFAULT_OVERRIDES
         o = _dict(planner.get('overrides')) or DEFAULT_OVERRIDES
         by_category = {cat: tag for tag, cat in _dict(o.get('category_tags')).items()}
         v = {'overrides.lock_tag': o.get('lock_tag')}
@@ -433,7 +433,7 @@ def write_section(section, docs, values, environ=None):
                      user_free_access=list(values.get('streaming.user_free_access') or []))
             planner['streaming'] = s
         elif section == sc.SCORING:
-            from planner_settings import DEFAULT_SCORING
+            from migratarr.planner_settings import DEFAULT_SCORING
             weights = {k: values.get('scoring.weights.' + k) for k in WEIGHTS}
             for k, w in weights.items():
                 if w is None:
@@ -449,7 +449,7 @@ def write_section(section, docs, values, environ=None):
                 problems.append(sc.Problem(sc.SCORING, f'The weights add up to {total:g}; they are usually '
                                                        'chosen to add up to 1.', sc.WARN))
         else:
-            from planner_settings import DEFAULT_OVERRIDES
+            from migratarr.planner_settings import DEFAULT_OVERRIDES
             o = dict(_dict(planner.get('overrides')) or copy.deepcopy(DEFAULT_OVERRIDES))
             o['lock_tag'] = values.get('overrides.lock_tag') or ''
             o['category_tags'] = {values['overrides.category_tags.' + c]: c for c in OVERRIDE_CATEGORIES
@@ -783,7 +783,7 @@ class UiBackend:
         return sc.Discovery({}, ())
 
     def discover_services(self, draft):
-        from service_keys import SecretError, _docker_cat, _from_xml
+        from migratarr.service_keys import SecretError, _docker_cat, _from_xml
         cat = self.docker_cat or _docker_cat
         values, notes = {}, []
         mine = dict(draft.get(sc.SERVICES, {}))

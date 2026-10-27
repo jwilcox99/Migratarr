@@ -28,7 +28,7 @@ import tempfile
 
 RUNTIME, TARGETS, PLANNER = 'runtime', 'storage_targets', 'planner'
 FILES = (RUNTIME, TARGETS, PLANNER)
-REPOSITORY = Path(__file__).resolve().parents[2]
+from migratarr.paths import CODE as REPOSITORY
 BACKUP_FOLDER = 'backups'
 
 
@@ -118,7 +118,7 @@ class Report:
 
 def locate(environ=None, runtime_file=None):
     """The three files, by the same rules every script uses to load them."""
-    from runtime_config import read_json, runtime_path, targets_path, ConfigError
+    from migratarr.runtime_config import read_json, runtime_path, targets_path, ConfigError
     env = os.environ if environ is None else environ
     runtime = Path(runtime_file).expanduser() if runtime_file else runtime_path(env)
     from migratarr.paths import config_dir
@@ -143,7 +143,7 @@ def locate(environ=None, runtime_file=None):
 
 def _read(path):
     """(data, sha256, problem message). data is None when missing or unparsable."""
-    from runtime_config import unique_object, ConfigError
+    from migratarr.runtime_config import unique_object, ConfigError
     try:
         raw = Path(path).read_bytes()
     except FileNotFoundError:
@@ -171,9 +171,9 @@ def check(data, environ=None):
     so a save is checked exactly the way the next load will be.
     Returns (problems, runtime, targets, planner).
     """
-    from runtime_config import RuntimeConfig, ConfigError
-    from storage_targets import parse_targets, target_problems, check_runtime_consistency
-    from planner_settings import parse_settings, settings_problems, SettingsError
+    from migratarr.runtime_config import RuntimeConfig, ConfigError
+    from migratarr.storage_targets import parse_targets, target_problems, check_runtime_consistency
+    from migratarr.planner_settings import parse_settings, settings_problems, SettingsError
     problems, runtime, targets, planner = [], None, None, None
 
     raw_targets = data.get(TARGETS)
@@ -504,5 +504,5 @@ def migrate_if_needed(*, environ=None, log=print):
 
 def redacted_secrets(runtime):
     """Where each credential comes from, for display. Never the value."""
-    from service_keys import describe
+    from migratarr.service_keys import describe
     return {service: describe(service, source) for service, source in runtime.secrets.items()}

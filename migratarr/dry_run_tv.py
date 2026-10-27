@@ -10,10 +10,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean
 
-from runtime_config import get_config
-from planner_settings import at_least, at_most, family_of, load_settings
-from media_layout import MediaLayout, get_targets
-from service_keys import read_key, service_endpoint
+from migratarr.runtime_config import get_config
+from migratarr.planner_settings import at_least, at_most, family_of, load_settings
+from migratarr.media_layout import MediaLayout, get_targets
+from migratarr.service_keys import read_key, service_endpoint
 RUNTIME = get_config()
 PLANNER_SETTINGS = load_settings()
 LAYOUT = MediaLayout(RUNTIME, get_targets())

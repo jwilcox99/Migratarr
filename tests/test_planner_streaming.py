@@ -124,7 +124,7 @@ class StreamingSettingsTests(unittest.TestCase):
             self.assertFalse(changed['byte_identical'])
             self.assertIn('movie/1', changed['differences'])
             with self.assertRaisesRegex(ValueError, 'Baseline must be'):
-                compare_streaming(ROOT / 'dry_run_movies.py', BASELINE_TV, cache, self.settings())
+                compare_streaming(ROOT / 'migratarr' / 'dry_run_movies.py', BASELINE_TV, cache, self.settings())
 
 
 class PlannerSettingsTests(unittest.TestCase):

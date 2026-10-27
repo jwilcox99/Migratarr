@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import sys
 
-import read_api
+from migratarr import read_api
 
 
 def shorten(text, limit=160):
@@ -16,7 +16,7 @@ def shorten(text, limit=160):
 
 
 def default_base():
-    from runtime_config import get_config
+    from migratarr.runtime_config import get_config
     return get_config().base_path
 
 

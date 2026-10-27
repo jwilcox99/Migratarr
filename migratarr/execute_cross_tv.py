@@ -35,14 +35,14 @@ from datetime import datetime, timezone
 import urllib.request
 
 
-from runtime_config import get_config
-from planner_settings import get_settings
-from media_layout import MediaLayout, canonical, get_targets, split_media_path
-from service_keys import SecretError, service_endpoint
-from arr_files import host_path, host_sha256, host_visible
-from executor_manifest import digest, load_approved_plan
-from executor_command import NAS_IDLE_TIMEOUT, run_command
-from executor_inventory import scan_metadata, metadata_from_inventory
+from migratarr.runtime_config import get_config
+from migratarr.planner_settings import get_settings
+from migratarr.media_layout import MediaLayout, canonical, get_targets, split_media_path
+from migratarr.service_keys import SecretError, service_endpoint
+from migratarr.arr_files import host_path, host_sha256, host_visible
+from migratarr.executor_manifest import digest, load_approved_plan
+from migratarr.executor_command import NAS_IDLE_TIMEOUT, run_command
+from migratarr.executor_inventory import scan_metadata, metadata_from_inventory
 from migratarr.engine import nas_side, primitives, transport
 
 # Shared code, bound into this module so it resolves names (inventory, nas_pair,

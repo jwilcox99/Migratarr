@@ -39,7 +39,7 @@ def old_function(script, name):
 
 
 def current_function(script, name, settings):
-    path = ROOT / f'{script}.py'
+    path = ROOT / 'migratarr' / f'{script}.py'
     tree = ast.parse(path.read_text(encoding='utf-8'))
     nodes = [n for n in tree.body if (isinstance(n, ast.FunctionDef) and n.name == name)
              or (isinstance(n, ast.Assign) and [getattr(t, 'id', None) for t in n.targets] == ['STREAMING_FAMILIES'])]

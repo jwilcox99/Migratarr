@@ -200,7 +200,7 @@ class RuntimeConfig:
         self.mount_root = PurePosixPath(parents.pop()) if len(parents) == 1 else None
 
     def _secrets(self, data):
-        from service_keys import SecretError, parse_secrets
+        from migratarr.service_keys import SecretError, parse_secrets
         self.secrets_config = data.get('secrets', {})
         try:
             self.secrets = parse_secrets(self.secrets_config, self.containers)
@@ -208,7 +208,7 @@ class RuntimeConfig:
             raise ConfigError('Runtime configuration: ' + str(exc)) from None
 
     def _arr_file_checks(self, data):
-        from arr_files import ArrFilesError, parse_arr_file_checks
+        from migratarr.arr_files import ArrFilesError, parse_arr_file_checks
         self.arr_file_checks_config = data.get('arr_file_checks', {})
         try:
             self.arr_file_checks = parse_arr_file_checks(self.arr_file_checks_config, self.containers)
@@ -323,7 +323,7 @@ def _load_targets(data, filename, env):
     if not (isinstance(data, dict) and data.get('schema_version') == 2):
         return None, None
     location = targets_path(data, filename, env)
-    from storage_targets import load_targets
+    from migratarr.storage_targets import load_targets
     try:
         return load_targets(location), location
     except (OSError, ValueError) as exc:

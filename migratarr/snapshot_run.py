@@ -9,10 +9,10 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from runtime_config import get_config
-from storage_targets import load_targets, check_runtime_consistency, deployed_targets_path
-from pipeline_inputs import require_fresh_inputs
-from migratarr.paths import CODE, code_digest, is_clone, version
+from migratarr.runtime_config import get_config
+from migratarr.storage_targets import load_targets, check_runtime_consistency, deployed_targets_path
+from migratarr.pipeline_inputs import require_fresh_inputs
+from migratarr.paths import CODE, PACKAGE, code_digest, is_clone, version
 RUNTIME = get_config()
 
 BASE = RUNTIME.base_path
@@ -126,7 +126,7 @@ code_dir = run_dir / "code"
 code_dir.mkdir()
 
 for filename in CODE_FILES:
-    src = CODE / filename  # the code that ran, from a clone or site-packages
+    src = PACKAGE / filename  # the code that ran, from a clone or site-packages
 
     if not src.exists():
         continue

@@ -163,7 +163,7 @@ def record(kind, out, cache_dir=None, now=None):
         raise ValueError(f'Recording already exists: {out}')
     from service_keys import read_key
     read_key('tmdb')  # fail before any work if the TMDB credential is unavailable
-    script = ROOT / SCRIPTS[kind]
+    script = ROOT / 'migratarr' / SCRIPTS[kind]
     if cache_dir is None:
         from runtime_config import get_config
         cache_dir = get_config().base_path / 'cache'
@@ -207,7 +207,7 @@ def row_differences(old, new, limit=20):
 
 def compare(recording_path, baseline, candidate=None):
     recording = json.loads(Path(recording_path).read_text(encoding='utf-8'))
-    candidate = candidate or ROOT / recording['script']
+    candidate = candidate or ROOT / 'migratarr' / recording['script']
     old, old_misses = replay(baseline, recording)
     new, new_misses = replay(candidate, recording)
     identical = old == new and not old_misses and not new_misses

@@ -33,7 +33,7 @@ branches to push).
 
 ## To do, in order
 
-1. - [ ] **Package layout** (Claude): move the top-level modules into the `migratarr` package so an
+1. - [x] **Package layout** (Claude): move the top-level modules into the `migratarr` package so an
          install doesn't add ~50 generic module names (`read_api`, `storage_targets`, ...) to
          site-packages. Keep `python3 <script>.py` working in a clone for existing setups
 2. - [ ] **Docs** (Claude):

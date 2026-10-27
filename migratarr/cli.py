@@ -20,12 +20,12 @@ import sys
 __version__ = '0.1.0.dev0'
 
 COMMANDS = {  # name: (module, one-line help)
-    'ui': ('migratarr_ui', 'web UI (setup, settings, plan, confirm, run)'),
-    'plan': ('migratarr_plan', 'make a new plan; nothing moves'),
-    'status': ('migratarr_status', 'runs, moves and timelines (read-only)'),
-    'approve': ('approve_execution', 'approve moves from the terminal'),
-    'doctor': ('migratarr_doctor', 'check settings, services and disks'),
-    'reconcile': ('migratarr_reconcile', 'record that a flagged move was checked by hand'),
+    'ui': ('migratarr.ui', 'web UI (setup, settings, plan, confirm, run)'),
+    'plan': ('migratarr.plan', 'make a new plan; nothing moves'),
+    'status': ('migratarr.status', 'runs, moves and timelines (read-only)'),
+    'approve': ('migratarr.approve_execution', 'approve moves from the terminal'),
+    'doctor': ('migratarr.doctor', 'check settings, services and disks'),
+    'reconcile': ('migratarr.reconcile', 'record that a flagged move was checked by hand'),
 }
 
 
@@ -61,6 +61,14 @@ def main(argv=None):
             return exc.code or 0
         sys.stderr.write(str(exc.code) + '\n')  # sys.exit('message'), as Python itself would print it
         return 1
+    except Exception as exc:  # settings that are missing or invalid: say so, not a traceback
+        from migratarr.planner_settings import SettingsError
+        from migratarr.runtime_config import ConfigError
+        if not isinstance(exc, (ConfigError, SettingsError)):
+            raise
+        sys.stderr.write(f'migratarr {name}: {exc}\n'
+                         'Set up or fix the settings with "migratarr ui", or check them with "migratarr doctor".\n')
+        return 2
     finally:
         sys.argv = saved
     return 0

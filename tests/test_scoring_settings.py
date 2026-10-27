@@ -15,7 +15,7 @@ from synthetic_library import NOW
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = {'movie': ROOT / 'tests/fixtures/dry_run_movies_before_scoring_settings.py',
             'tv': ROOT / 'tests/fixtures/dry_run_tv_before_scoring_settings.py'}
-CANDIDATE = {'movie': ROOT / 'dry_run_movies.py', 'tv': ROOT / 'dry_run_tv.py'}
+CANDIDATE = {'movie': ROOT / 'migratarr' / 'dry_run_movies.py', 'tv': ROOT / 'migratarr' / 'dry_run_tv.py'}
 TIER_FUNCTIONS = {'movie': ('scarcity_from_count', 'recency_points', 'repeat_points', 'users_points'),
                   'tv': ('scarcity', 'recency_points', 'repeat_points', 'user_points')}
 
