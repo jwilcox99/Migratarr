@@ -116,9 +116,9 @@ def summary(base, run_id):
     for kind, (count, size) in sorted(flow.items()):
         lines.append(f'           {kind}: {count} ({size:.2f} GB)')
     lines += ['', 'Every row is unapproved and nothing has moved. Next:',
-              f'  python3 migratarr_status.py --run {run_id}      # review',
-              f'  python3 migratarr_ui.py                          # or browse it (read-only)',
-              f'  python3 approve_execution.py --run {run_id} --approve-batch '
+              f'  migratarr status --run {run_id}      # review',
+              f'  migratarr ui                                      # or review and approve in the browser',
+              f'  migratarr approve --run {run_id} --approve-batch '
               '--media TV --transfer CROSS_DISK_TRANSFER   # preview a batch']
     return '\n'.join(lines)
 

@@ -15,8 +15,14 @@ hand-editing JSON. Tracked in `reviews/2026-10-26-public-setup-plan.md`.
   folder, `$MIGRATARR_HOME` (default `~/.local/share/migratarr`). A git clone keeps
   using the clone, so existing setups don't change. `migratarr doctor` shows which.
 - `migratarr` command: `ui`, `plan`, `status`, `approve`, `doctor`, `reconcile`.
+- `migratarr demo`: plans a made-up library with the real pipeline, offline, and
+  opens the UI read-only. No Radarr, Sonarr, Jellyfin or TMDB needed.
 - Settings pages and first-run setup in the web UI; planning is refused while any
   health check fails (warnings are fine).
+
+### Fixed
+- Planning on "this machine's own disks" (topology local) stopped at the storage
+  consistency check ("remote_path disagrees"); local disks have no NAS path.
 
 ### Changed
 - All code is in the `migratarr` package; an install adds only `migratarr` to

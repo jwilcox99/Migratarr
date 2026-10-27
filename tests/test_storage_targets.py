@@ -178,3 +178,21 @@ class StorageTargetTests(unittest.TestCase):
         for capacity, free in ((-1, 0), (100, 101), (100, -1), (True, 0), (100, 1.5)):
             with self.subTest(capacity=capacity, free=free), self.assertRaises(ValueError):
                 TargetState('media01', capacity, free)
+
+
+class LocalTopologyConsistencyTests(unittest.TestCase):
+    """Topology local: disks have no remote_path, and the planners' consistency check must accept that."""
+
+    def test_the_local_example_is_consistent(self):
+        runtime = load_config(ROOT / 'config/examples/runtime.local.example.json', environ={})
+        self.assertEqual(runtime.topology, 'local')
+        targets = load_targets(ROOT / 'config/examples/storage-targets.local.example.json')
+        check_runtime_consistency(runtime, targets)  # raised "remote_path disagrees" before 0.1.0
+
+    def test_a_nas_disk_without_remote_path_still_fails(self):
+        runtime = load_config(ROOT / 'config/examples/runtime.v1.example.json', environ={})
+        data = json.loads((ROOT / 'config/storage-targets.example.json').read_text())
+        for target in data['targets']:
+            target.pop('remote_path')
+        with self.assertRaisesRegex(ValueError, 'remote_path disagrees'):
+            check_runtime_consistency(runtime, parse_targets(data))

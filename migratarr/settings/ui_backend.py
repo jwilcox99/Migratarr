@@ -121,8 +121,10 @@ def service_fields(d):
         out.append(sc.Field(p + '.key', 'Pasted ' + d.credential_label, sc.SECRET,
                             'Only with "Paste the key". Leave blank to keep a saved key.', group=g))
     if any(s.startswith('docker') for s in d.sources):
+        default = d.container_setting.split('.', 1)[1] if d.container_setting else None
         out.append(sc.Field(p + '.container', 'Docker container', sc.TEXT,
-                            'Only when the key is read from a container.', group=g))
+                            'Only when the key is read from a container'
+                            + (f' (default name: {default}).' if default else '.'), group=g))
     if any(s in d.sources for s in ('config_xml', 'file', 'docker_file', 'docker_config_xml')):
         out.append(sc.Field(p + '.paths', 'File path', sc.LINES,
                             'Only when the key is read from a file. One path; a file inside a container may '

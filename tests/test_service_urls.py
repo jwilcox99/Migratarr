@@ -109,13 +109,13 @@ class PlannerUrlTests(unittest.TestCase):
     def test_planners_use_base_paths(self):
         from migratarr_validation.dry_run_parity import record
         from synthetic_library import NOW, offline_world
-        import synthetic_library
+        from migratarr import demo_library  # fake_urlopen looks route up here
         data = copy.deepcopy(EXAMPLE)
         data['urls'] = {'radarr': 'http://localhost:7878/radarr', 'sonarr': 'http://localhost:8989',
                         'jellyfin': 'http://localhost:8096/jellyfin'}
         c = RuntimeConfig(data)
         seen = []
-        route = synthetic_library.route
+        route = demo_library.route
 
         def routed(url):
             seen.append(url)
@@ -130,7 +130,7 @@ class PlannerUrlTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp, offline_world(), \
                 patch('runtime_config.get_config', return_value=c), \
-                patch.object(synthetic_library, 'route', routed), \
+                patch.object(demo_library, 'route', routed), \
                 patch('subprocess.check_output', docker), \
                 patch('sys.stderr', io.StringIO()):
             for kind in ('movie', 'tv'):

@@ -26,8 +26,9 @@ REVIEW, DONE = 'review', 'done'
 TITLES = {sc.SERVICES: 'Connect your services', sc.TOPOLOGY: 'Where your disks are',
           sc.DISKS: 'Disks and categories', sc.STREAMING: 'Streaming services', REVIEW: 'Review and save'}
 INTRO = {
-    sc.SERVICES: 'Radarr, Sonarr, Jellyfin and TMDB. "Detect" reads keys and URL bases from Radarr and '
-                 'Sonarr\'s own config.xml when it can; you can paste a key instead.',
+    sc.SERVICES: 'Radarr, Sonarr, Jellyfin and TMDB. "Detect" checks the Docker containers named below for '
+                 'Radarr\'s and Sonarr\'s config.xml (key and URL base), so set the container names first. '
+                 'You can paste a key instead.',
     sc.TOPOLOGY: 'Moves run either on a NAS over SSH, or on disks attached to this machine.',
     sc.DISKS: '"Detect" lists mounted disks and the root folders Radarr and Sonarr use, and suggests '
               'which folder holds each category.',

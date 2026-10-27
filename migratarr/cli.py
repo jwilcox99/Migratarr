@@ -7,6 +7,7 @@
     migratarr approve ...                       approve moves from the terminal
     migratarr doctor [--offline]                check settings, services and disks
     migratarr reconcile <move> --outcome ...    record that a flagged move was checked by hand
+    migratarr demo [--dir FOLDER]               try it on a made-up library, read-only
     migratarr --version
 
 Each subcommand runs the existing script unchanged, with the rest of the
@@ -26,6 +27,7 @@ COMMANDS = {  # name: (module, one-line help)
     'approve': ('migratarr.approve_execution', 'approve moves from the terminal'),
     'doctor': ('migratarr.doctor', 'check settings, services and disks'),
     'reconcile': ('migratarr.reconcile', 'record that a flagged move was checked by hand'),
+    'demo': ('migratarr.demo', 'try it on a made-up library, read-only (no services needed)'),
 }
 
 
