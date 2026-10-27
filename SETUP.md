@@ -19,6 +19,8 @@ Have these ready:
   password.
 
 Install with `pip install migratarr` (see the [README](README.md#install)).
+To see what Migratarr does before connecting anything, run `migratarr demo`:
+it plans a made-up library offline and opens the UI read-only.
 
 ## Run the wizard
 

@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/jwilcox99/Migratarr/main/assets/migratarr-lockup-dark.svg">
+    <img alt="Migratarr" src="https://raw.githubusercontent.com/jwilcox99/Migratarr/main/assets/migratarr-lockup-light.svg" width="360">
+  </picture>
+</p>
+
 # Migratarr
 
 Migratarr decides *where* your Radarr and Sonarr media should live, and moves
@@ -60,7 +67,7 @@ become an Archive candidate.
 - To move files, by default, permission to run `docker exec` in the Radarr and
   Sonarr containers: before and after every move Migratarr checks the files
   where Radarr and Sonarr see them. Non-Docker installs can check on the host
-  instead; see [Arr file checks](docs/runtime-configuration.md#arr-file-checks).
+  instead; see [Arr file checks](https://github.com/jwilcox99/Migratarr/blob/main/docs/runtime-configuration.md#arr-file-checks).
 - For moves on a NAS: SSH access to the NAS with a key used only by Migratarr,
   and Python 3 on the NAS.
 
@@ -73,6 +80,18 @@ pip install migratarr
 Install it into a virtual environment, or with `pipx install migratarr`, if
 your system Python doesn't allow `pip install`. Check it worked with
 `migratarr --version`.
+
+## Try it first
+
+```sh
+migratarr demo
+```
+
+Plans a made-up library with the real planning pipeline and opens the web UI
+read-only at `http://localhost:8767`, so you can see what a plan looks like
+before connecting anything. It needs no Radarr, Sonarr, Jellyfin or TMDB,
+uses no network, and never reads or writes your own settings. Everything
+goes in a new temporary folder (`--dir` to choose one; delete it when done).
 
 ## First run
 
@@ -102,7 +121,7 @@ With no settings yet, every page leads to the setup wizard:
 5. **Review and save:** nothing is written until you save.
 
 After saving, the wizard runs the health checks. Fix anything that failed in
-**Settings & health**, then make your first plan. [SETUP.md](SETUP.md) walks
+**Settings & health**, then make your first plan. [SETUP.md](https://github.com/jwilcox99/Migratarr/blob/main/SETUP.md) walks
 through each step.
 
 ## Where moves run
@@ -158,6 +177,7 @@ There is no undo. Start with your smallest, least important titles.
 
 | Command | What it does |
 | --- | --- |
+| `migratarr demo [--dir DIR] [--port N] [--no-ui]` | Try it on a made-up library: plans offline, UI read-only |
 | `migratarr ui [--port N] [--read-only]` | The web UI: setup, settings, plan, approve, run |
 | `migratarr plan [--check]` | Make a new plan; nothing moves. `--check` runs the checks only |
 | `migratarr status [--run RUN \| --execution ID] [--json]` | Runs, moves and their journals (read-only) |
@@ -176,7 +196,7 @@ Everything goes in one **data folder**: `$MIGRATARR_HOME` if set, otherwise
 three settings files and their backups), runs, approvals and move journals.
 
 Pasted API keys are kept apart, in `~/.config/migratarr/secrets/`, readable by
-your user only; see [SECURITY.md](SECURITY.md).
+your user only; see [SECURITY.md](https://github.com/jwilcox99/Migratarr/blob/main/SECURITY.md).
 
 ## Limitations
 
@@ -190,30 +210,30 @@ your user only; see [SECURITY.md](SECURITY.md).
   the machine running Migratarr, isn't supported.
 - Moves run from the web UI; there's no command that runs them.
 - Streaming groups are written for the US; elsewhere, add your region's
-  services ([Provider families](docs/planner-settings.md#provider-families)).
+  services ([Provider families](https://github.com/jwilcox99/Migratarr/blob/main/docs/planner-settings.md#provider-families)).
 - 0.x: settings files and commands may still change between minor versions,
-  always with a migration or a note in the [changelog](CHANGELOG.md).
+  always with a migration or a note in the [changelog](https://github.com/jwilcox99/Migratarr/blob/main/CHANGELOG.md).
 
 ## Documentation
 
-- [SETUP.md](SETUP.md): the setup wizard step by step, and editing settings by hand
-- [Settings](docs/settings.md): the settings files, version 2 and the health checks
-- [Runtime configuration](docs/runtime-configuration.md): `runtime.json` reference
-- [Storage targets](docs/storage-targets.md): disks, categories and placement
-- [Planner settings](docs/planner-settings.md): streaming, override tags and scoring
-- [Media layout](docs/media-layout.md): where Migratarr expects each title to be
-- [UI actions](docs/ui-actions.md): what each button does and checks
-- [Changelog](CHANGELOG.md)
+- [SETUP.md](https://github.com/jwilcox99/Migratarr/blob/main/SETUP.md): the setup wizard step by step, and editing settings by hand
+- [Settings](https://github.com/jwilcox99/Migratarr/blob/main/docs/settings.md): the settings files, version 2 and the health checks
+- [Runtime configuration](https://github.com/jwilcox99/Migratarr/blob/main/docs/runtime-configuration.md): `runtime.json` reference
+- [Storage targets](https://github.com/jwilcox99/Migratarr/blob/main/docs/storage-targets.md): disks, categories and placement
+- [Planner settings](https://github.com/jwilcox99/Migratarr/blob/main/docs/planner-settings.md): streaming, override tags and scoring
+- [Media layout](https://github.com/jwilcox99/Migratarr/blob/main/docs/media-layout.md): where Migratarr expects each title to be
+- [UI actions](https://github.com/jwilcox99/Migratarr/blob/main/docs/ui-actions.md): what each button does and checks
+- [Changelog](https://github.com/jwilcox99/Migratarr/blob/main/CHANGELOG.md)
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](https://github.com/jwilcox99/Migratarr/blob/main/CONTRIBUTING.md).
 
 ## Security
 
-See [SECURITY.md](SECURITY.md). Report vulnerabilities privately through
+See [SECURITY.md](https://github.com/jwilcox99/Migratarr/blob/main/SECURITY.md). Report vulnerabilities privately through
 GitHub, not in a public issue.
 
 ## License
 
-[MIT](LICENSE).
+[MIT](https://github.com/jwilcox99/Migratarr/blob/main/LICENSE).
