@@ -118,13 +118,16 @@ class SetupWizard:
         fields = self.backend.fields(step, values)
         notes = ''.join(f'<li>{e(n)}</li>' for n in self.notes.get(step, ()))
         found = f'<ul class="found">{notes}</ul>' if notes else ''
+        can = getattr(self.backend, 'can_discover', None)
+        detect = ('<button type="submit" name="action" value="detect" class="btn" formnovalidate>Detect</button>'
+                  if can is None or can(step) else '')
         back = ('<button type="submit" name="action" value="back" class="btn" formnovalidate>Back</button>'
                 if index_of(step) else '')
         inner = (f'<p class="meta">{e(INTRO.get(step, ""))}</p>{found}'
                  f'<form method="post" action="/setup/{e(step)}" class="settings">'
                  f'<input type="hidden" name="token" value="{e(ctx["token"])}">'
                  f'{render_fields(fields, values, problems)}<div class="actions">{back}'
-                 f'<button type="submit" name="action" value="detect" class="btn" formnovalidate>Detect</button>'
+                 f'{detect}'
                  f'<button type="submit" name="action" value="next" class="btn primary">Next</button>'
                  f'</div></form>')
         return self.frame(step, inner, ctx)
