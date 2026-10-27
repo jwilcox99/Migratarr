@@ -1,258 +1,146 @@
-# Storage target migration
+# Storage targets (`storage-targets.json`)
 
-The `storage_targets.py` model now supplies the planner's source roots,
-destination paths, physical disk IDs and per-target reserves. The planner requires
-`config/storage-targets.json` beneath its runtime base directory, or an explicit
-`MIGRATARR_STORAGE_TARGETS` path. Missing or invalid configuration fails before
-Arr calls and plan writes. The example is never an implicit fallback.
+`storage-targets.json` declares your disks (storage targets), the folder each
+placement category uses, and which disks may hold each category. With
+settings version 2 it is the **only** place disks are declared: `runtime.json`
+says how moves run, not which disks exist.
 
-This branch is pending real-data parity evidence before merge/deployment.
-Runtime configuration and executors still retain their existing storage settings;
-do not remove those yet. Keep the existing four target paths consistent between
-the runtime and target configurations during this intermediate migration.
+The setup wizard writes this file (step 3, *Disks and categories*), and
+**Settings & health → Disks** edits it, including adding and removing disks.
+This page is the reference for reading or editing it by hand.
 
-Load an explicit file with `load_targets(filename)` or validate an object with
-`parse_targets(data)`. `config/storage-targets.example.json` reproduces the four
-current target IDs, local and remote roots, category directories, fallback order,
-and 50 GiB reserves. Tests compare its derived values to both existing configs.
+**Location:** `$MIGRATARR_STORAGE_TARGETS` if set; otherwise the
+`storage_targets` path in `runtime.json` (absolute, or relative to
+`runtime.json`'s folder); otherwise `storage-targets.json` beside
+`runtime.json`, which is `config/storage-targets.json` in the data folder.
+An older version 1 `runtime.json` instead reads
+`<base_path>/config/storage-targets.json`. There is no fallback to an example
+file: a missing or invalid file stops Migratarr before it contacts any service
+or writes a plan. `migratarr doctor --offline` checks it.
 
-Targets contain declared configuration only. `TargetState` holds observed
-capacity and free space in bytes; a future planner probe must supply those values.
-This module performs no storage probes and writes no snapshots or media files.
+The file's own `schema_version` is `1`. (Version 2 is the `runtime.json`
+format; this file's format didn't change.)
 
-Disabled targets remain source roots but cannot appear in placement lists.
-Placement references must be enabled and support the requested media type.
-Missing `remote_path` means plan-only; no transport authorization is inferred from
-this model. Roots may be any depth and need not share a parent or end in the
-target ID; local roots cannot overlap and remote roots cannot overlap. Optional
-`arr_root` (default `/media`) is where Radarr/Sonarr see `category_paths`; see
-`docs/media-layout.md`, which the executors and planners now follow.
+## Example
 
-Reserve values are nonnegative integer GiB, with a default and optional per-target
-override. Priority defaults to 100 and accepts integers (including negative
-values); priority, storage class and tags have no placement effect. Optional
-remote paths must be omitted rather than null. An empty media-type list is valid
-for a source-only target, but cannot satisfy any placement reference.
+Two disks on a NAS (`topology: nas_ssh`). Full four-disk examples are in the
+repository: `config/storage-targets.example.json` (NAS) and
+`config/examples/storage-targets.local.example.json` (this machine's own
+disks).
 
-Gate 1 (complete): real-data planner byte parity was obtained on the live
-deployment host; both `--capture-facts` and `--replay-facts` runs reported
-`byte_identical: true` against the frozen movie/TV dry-run CSVs and a live
-Arr overrides snapshot.
-
-`python -m migratarr_validation.planner_parity` compares the planner at `c31afc6`
-with this candidate, using saved movie/TV CSVs and overrides. It runs only selected
-AST definitions, candidate loops and cumulative capacity checks; neither planner's
-CSV writes or Arr calls run. CSV serialization includes headers and row order.
-Filesystem exists/resolve/size/free results are memoized across both runs and can
-be saved with `--capture-facts` and replayed with `--replay-facts`. Capture performs
-read-only filesystem probes (including potentially slow directory-size scans).
-Observations are cached, not an atomic filesystem snapshot; pause other activity.
-
-```sh
-python3 -m migratarr_validation.planner_parity \
-  --baseline tests/fixtures/planner_before_storage_targets.py \
-  --movie-csv /path/to/frozen/movie_dry_run.csv \
-  --tv-csv /path/to/frozen/tv_dry_run.csv \
-  --overrides-json /path/to/frozen/overrides.json \
-  --runtime-config /opt/media-stack/migratarr/config/runtime.json \
-  --targets config/storage-targets.example.json \
-  --capture-facts /path/to/new/planner-facts.json
+```json
+{
+  "schema_version": 1,
+  "defaults": {"minimum_free_space_gb": 50},
+  "arr_root": "/media",
+  "targets": [
+    {
+      "id": "media01",
+      "name": "NAS disk 1",
+      "path": "/mnt/nas/media01",
+      "remote_path": "/volume1/media01",
+      "enabled": true,
+      "media_types": ["Movie", "TV"]
+    },
+    {
+      "id": "media02",
+      "name": "NAS disk 2",
+      "path": "/mnt/nas/media02",
+      "remote_path": "/volume2/media02",
+      "enabled": true,
+      "media_types": ["Movie", "TV"],
+      "minimum_free_space_gb": 100
+    }
+  ],
+  "category_paths": {
+    "Movie": {"Common": "Movies/Common", "Rare": "Movies/Rare", "Library": "Movies/Library", "Archive": "Movies/Archive"},
+    "TV": {"Current": "TV/Current", "Rare": "TV/Rare", "Library": "TV/Library", "Archive": "TV/Archive"}
+  },
+  "placement": {
+    "Movie": {"Common": ["media01"], "Rare": ["media02"], "Library": ["media01", "media02"], "Archive": ["media02"]},
+    "TV": {"Current": ["media01"], "Rare": ["media02"], "Library": ["media01", "media02"], "Archive": ["media02"]}
+  }
+}
 ```
 
-The baseline is a checksum-pinned, test-only copy of the pre-migration planner,
-not a second active implementation. Exit 0 requires identical CSV bytes; exit 1
-means differences and exit 2 means incomplete verification. Report includes code,
-input, observation and CSV hashes. Replaying the captured observations must also
-succeed. Existing live media may have moved since older CSVs were created; use
-saved observations from the same dataset when available, and do not claim an old
-historical move_plan was reproduced from today's filesystem observations.
+For this machine's own disks (`topology: local`, experimental), leave out
+every `remote_path`.
 
-After the gate passes, install the reviewed target configuration before updating
-scheduled planning. Keep code and configuration unchanged between planning and
-snapshotting. `snapshot_run.py` includes the target config and loader in its
-checksummed code snapshot. Executors are not generalized by this change;
-fifth-target plans must not be approved for execution yet.
+## Fields
 
-Gate 2 (complete): `build_execution_manifest.py`'s operator-facing cross-disk
-flow report enumerates `TARGETS.targets` instead of a hardcoded four-disk
-list, so a fifth target's flow is visible in the report instead of silently
-omitted. This did not touch `execution_manifest.csv` or `manifest_metadata.json`
-content, the manifest CSV schema, or execution semantics; those are still
-gated on gate 4 below before a fifth target may be executed.
-`migratarr_validation.manifest_parity` proved this with a real-data byte-parity
-run against a frozen run snapshot, the same way gate 1 used
-`migratarr_validation.planner_parity`.
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `schema_version` | yes | `1` |
+| `defaults.minimum_free_space_gb` | yes | Default reserve in GiB (whole number, 0 or more). Migratarr never plans a move that would leave a disk with less free space |
+| `arr_root` | no (default `/media`) | Where Radarr and Sonarr see the disks: a title is at `<arr_root>/<category folder>/<title>` inside them |
+| `targets` | yes | One entry per disk, below. At least one |
+| `category_paths` | yes | `Movie` and `TV`: the folder for each category, relative to each disk root |
+| `placement` | yes | `Movie` and `TV`: for each category, the disks that may hold it |
 
-Current gate: `runtime.json`'s `storage.media0N` block and
-`storage-targets.json`'s corresponding four targets are still two
-independently-maintained files describing the same physical roots; nothing
-previously caught them drifting apart at runtime, only a CI test comparing
-the two *example* files (`tests/test_storage_targets.py`). This does not make
-either file derive from the other, and it does not touch `runtime_config.py`'s
-disk shape contract that the executors still depend on (see
-`docs/runtime-configuration.md`) — it only turns silent drift between the two
-real deployed files into an explicit refusal.
+### Each target (disk)
 
-`storage_targets.check_runtime_consistency(runtime, targets)` checks, for
-every disk `runtime.json` declares, that the storage-targets entry with the
-same ID has the identical `local_path` and `remote_path`. `build_move_plan.py`,
-`build_execution_manifest.py` and `snapshot_run.py` all already load both
-`runtime_config` and `storage_targets`; each now calls this check immediately
-after loading `TARGETS`, so a deployment where the two files disagree fails
-before any Arr call, plan write or run snapshot rather than only being caught
-if someone happens to compare them by eye.
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `id` | yes | Short id: lowercase letter, then up to 31 lowercase letters, digits, `-` or `_` (`media01`, `disk2`). Unique |
+| `name` | yes | Display name |
+| `path` | yes | The disk's root on the machine running Migratarr |
+| `remote_path` | `nas_ssh`: required; `local`: not allowed | The same root as the NAS sees it |
+| `enabled` | yes | `false` keeps the disk as a source (titles on it are still planned) but it can't be a destination |
+| `media_types` | yes | `["Movie"]`, `["TV"]`, both, or `[]` for a source-only disk |
+| `minimum_free_space_gb` | no | This disk's reserve; default from `defaults` |
+| `priority`, `storage_class`, `tags` | no | Recorded only; they don't affect placement. `storage_class` is one of `HOT`, `PRIMARY`, `BULK`, `PROTECTED`, `ARCHIVE` or `null` |
 
-```sh
-python3 -c '
-from runtime_config import get_config
-from storage_targets import load_targets, check_runtime_consistency
-import os
-runtime = get_config()
-targets = load_targets(os.environ.get("MIGRATARR_STORAGE_TARGETS") or runtime.base_path / "config/storage-targets.json")
-check_runtime_consistency(runtime, targets)
-print("runtime.json and storage-targets.json agree")
-'
-```
+Leave out optional fields rather than setting them to `null` (except
+`storage_class`).
 
-Gate 3 (complete): `storage_targets.check_runtime_consistency` verified against
-the real deployed `runtime.json` and `storage-targets.json` on the media host; they agree.
+## Rules
 
-Current gate: this is a proof-of-concept generalization, not a live 5th-disk
-deployment — no disk was added to the real deployment. `runtime_config.py`'s
-`storage` schema now accepts any number of validly-shaped disk IDs instead of
-exactly `media01`-`media04` (a strict superset; the real 4-disk `runtime.json`
-is unchanged and still valid). `execute_movie_nas.py` and `execute_tv_nas.py`
-(the same-disk NAS rename executors) resolve the disk from each approved
-manifest row via `RUNTIME.remote_disks`, instead of hardcoding `media04`; the
-generated remote SSH program bakes in the resolved disk's remote root for that
-call rather than always `media04`'s. `execute_cross_movie.py` already read
-`RUNTIME.remote_disks` generically and needed no changes.
+- Roots are canonical absolute paths of any depth. They needn't share a parent
+  or end in the disk id.
+- No disk's `path` may equal or contain another's, and the same for
+  `remote_path`: exactly one disk must match any title's path.
+- Category ids are fixed (Movies: `Common`, `Rare`, `Library`, `Archive`; TV:
+  `Current`, `Rare`, `Library`, `Archive`); the scoring depends on them. Their
+  folders are yours to name. Each folder is relative, unique within its media
+  type, and can't be `.`, `..` or `HOLD`.
+- Every `placement` category must have a folder in `category_paths`, and list
+  at least one disk that exists, is enabled and holds that media type.
+- Radarr and Sonarr need each `<arr_root>/<category folder>` as a root folder.
+  `migratarr doctor` checks this, and moves into a category folder they don't
+  know are refused.
+- With `topology: nas_ssh`, every disk needs `remote_path`; with `local`, none
+  may have one.
 
-A genuine 5th disk (`media05`, not a relabeling of an existing one) is proven
-end-to-end offline in `tests/test_runtime_config.py` (`test_fifth_disk_is_accepted`,
-`test_fifth_disk_works_end_to_end_through_same_disk_executors`), since there
-is no real 5th disk to test live execution against.
+Free space is measured when planning; this file only declares disks.
 
-Real-data evidence: both existing local runs (`20260915T192453Z` and
-`20260915T192959Z`) predate this generalization and were exercised extensively
-during earlier sessions, so every row in both is now stale relative to the
-live deployment — media already moved, or an item now carries a
-`migratarr-lock` tag. `execute_movie_nas.py`, `execute_tv_nas.py`, and
-`execute_cross_movie.py`'s default check-only mode (no `--execute`) was run
-against one freshly-approved row of each type from the older, unexecuted
-`20260915T192453Z` manifest. All three reached the real preflight code
-path — live SSH to the NAS, live Radarr/Sonarr lookups — using the
-generalized disk lookup this gate adds, and correctly refused: a source path
-that no longer exists because that title already moved, and a movie now
-carrying `migratarr-lock`. None reached a full `CHECK_ONLY` result, because
-no untouched manifest data remains from prior sessions; getting that would
-require a fresh dry-run → plan → snapshot → manifest → approve cycle, treated
-as future work rather than blocking this proof-of-concept. The refusals
-themselves are correct preflight behavior, not gate 4 regressions, and confirm
-the generalized code exercises the same real NAS/Radarr/Sonarr paths as before.
+## Adding or removing a disk
 
-```sh
-python3 execute_movie_nas.py <execution_id>
-python3 execute_tv_nas.py <execution_id>
-python3 execute_cross_movie.py <execution_id>
-```
+In the UI: **Settings & health → Disks**, then **Add a disk**, or tick
+**Remove this disk** on one. Removing a disk only stops Migratarr managing it;
+nothing on the disk is touched.
 
-Each defaults to check-only; none of these commands pass `--execute`, so no
-file is moved, renamed, or deleted, and no Radarr/Sonarr record is updated —
-only the preflight validation runs.
+By hand: add or remove the target, update `placement`, and check with
+`migratarr doctor`. Don't change disks between planning, approving and running
+a plan: a move checks that its disk still matches the plan and refuses if not.
 
-Remaining gates:
+## Older setups (`runtime.json` version 1)
 
-1. ~~Obtain real-data byte parity for this planner integration.~~ Complete.
-2. ~~Derive manifest target IDs and prove unchanged manifest bytes.~~ Complete.
-3. ~~Migrate runtime storage settings, keeping compatibility shape validation.~~ Complete.
-4. ~~Generalize executor disk sets and the media04 pin.~~ Proof-of-concept
-   complete: offline genericity proof plus real preflight evidence against
-   stale-but-real manifests. No real 5th disk has been deployed or executed
-   against live.
+Version 1 declared each disk twice: here, and in `runtime.json`'s `storage`
+block (`local_path` / `remote_path`). Both had to agree exactly, and planning
+and snapshots refused when they didn't. The automatic migration to version 2
+removes the `storage` block and keeps the disks here; it refuses if this file
+declares a disk `runtime.json` doesn't, rather than silently adding a move
+destination. See
+[Runtime configuration](runtime-configuration.md#version-1-older-files).
 
-Adding a fifth entry is supported by the candidate planner and now visible in
-the manifest report, and the executors no longer refuse it structurally — but
-no fifth disk has been approved for live execution. Recovery incident scripts and frozen
-placement rules are unchanged.
+## History
 
-## Cross-disk TV executor and batch orchestrator (built after gate 4)
-
-Gate 4's disk-generalization work is about disk *count*, not media type — it
-left `execute_cross_movie.py`'s Movie-only cross-disk transfer capability with
-no TV equivalent, matching the Phase One boundary noted in
-`docs/phase-one-closeout.md` ("Cross-disk TV execution has not yet been
-promoted to the same validated live-execution status as Movies"). That gap is
-now closed.
-
-`execute_cross_tv.py` (PR #17) mirrors `execute_cross_movie.py`'s exact safety
-architecture — the same journal states (`COPY_INTENT` → `COPIED` →
-`SONARR_UPDATE_INTENT` → `DELETE_INTENT` → `SOURCE_REMOVED` → `SUCCESS`), the
-same staged copy → verify → update → verified-delete sequence, the same
-generalized `RUNTIME.remote_disks` lookup from gate 4 — substituting Sonarr's
-multi-episode-file verification (`episode_state()` / `verify_episode_contents()`)
-for Radarr's single-path check. `batch_cross_tv.py` (PR #18) mirrors
-`batch_cross_movies.py`: it lists pending `CROSS_DISK_TRANSFER` / `TV` rows from
-a run's manifest and, with `--execute`, approves and runs each through
-`execute_cross_tv.py` in sequence, smallest first. A later change
-(`codex/batch-cross-tv-limit`) added an optional `--limit N` to cap how many
-pending series a single `--execute` invocation processes, so a real run can be
-staged against a small subset before committing to the full pending backlog.
-
-> **Later change (2026-09-24):** batch runners no longer approve. Approval is a
-> separate, recorded step (`approve_execution.py --approve-batch ... --yes`, or
-> `--approve` per row), and `--execute` runs only rows whose approval is current
-> for the manifest hash. The live evidence below was recorded under the earlier
-> approve-and-run behavior.
-
-Real-data evidence, both on the production host (the media host), using the real
-`media01`/`media04` disks (not a hypothetical 5th disk — this validates the
-generalized cross-disk **TV** capability, not gate 4's disk-count claim):
-
-- A single, manually-invoked `execute_cross_tv.py --execute` run moved the
-  *Rick and Morty* series (23 episode files, 5.91 GiB) from
-  `media04`/TV/Library to `media01`/TV/Current — full journal from `START`
-  through source/destination hashing, 23 Sonarr per-file verifications before
-  and after the Sonarr path update, staged copy, verified deletion of the
-  source, and a final post-delete Sonarr re-verification, ending `SUCCESS`
-  (execution ID `20260923T013125Z-0001`). This also caught and fixed a real
-  bug: `remote_program()` omitted `canonical_existing` from the functions it
-  ships to the NAS host, causing a `NameError` on first live attempt; a
-  regression test (`test_generated_nas_operation_defines_every_referenced_helper`
-  in `tests/test_inventory_metadata.py`) now calls the generated
-  `nas_operation()` for both `execute_cross_movie` and `execute_cross_tv` to
-  catch this class of bug before it reaches the NAS.
-- `batch_cross_tv.py --run 20260923T013125Z --limit 2 --execute` then drove
-  the sequential orchestrator for real against the two smallest of the
-  remaining pending series, each ending its own clean `SUCCESS` journal with
-  no manual intervention between them:
-  - *South Park*, `media04`→`media01` (execution ID `20260923T013125Z-0002`).
-  - *Scott Pilgrim Takes Off*, `media01`→`media03` (execution ID
-    `20260923T013125Z-0016`) — a different disk pair and direction than both
-    the item above and the manual Rick and Morty run, confirming the
-    generalized disk lookup isn't specific to one route.
-
-Ten cross-disk TV series remain pending in that same run's manifest as of
-this writing, ranging from *Doug* (5.66 GB) up to *Supernatural* (785.59 GB);
-`batch_cross_tv.py --run 20260923T013125Z` (no `--execute`) lists the current
-pending/completed counts at any time.
-
-**Update 2026-09-25.** A further `batch_cross_tv.py --execute` session on the
-production host (still the earlier approve-and-run code) finished with
-`BATCH COMPLETE`. Its last item was `20260923T013125Z-0009` (`SUCCESS`). Status
-listing afterwards (`batch_cross_tv.py --run 20260923T013125Z`, read-only):
-
-- Completed: 12 cross-disk TV series, each with a `SUCCESS` journal bound to
-  the manifest hash.
-- Remaining: 2, the two largest: *Friday Night Lights*
-  (`20260923T013125Z-0014`, 160.06 GB) and *Supernatural*
-  (`20260923T013125Z-0015`, 785.59 GB).
-
-**Count reconciled (2026-09-25).** `migratarr_status.py --run 20260923T013125Z` lists
-all 16 TV rows of the manifest. Two of them are `SAME_DISK_RENAME`, which the
-cross-disk batch doesn't count: `-0006` *A Pup Named Scooby-Doo* (check-only run,
-not executed) and `-0007` *My Brother, My Brother and Me* (unapproved, not
-started). That leaves 14 cross-disk TV series: 12 `SUCCEEDED` (234.78 GB),
-*Friday Night Lights* `-0014` in progress (its check-only preflight was running at
-17:02 UTC), and *Supernatural* `-0015` approved but not started. The "ten
-pending" above was one short: 11 were pending after the first 3 completed.
+Disks were first hard-coded (four NAS disks). They moved into this file in
+September 2026 in four steps, each checked against real data: the planner
+produced byte-identical plans, the manifest report listed every configured
+disk, `runtime.json` and this file were checked for agreement, and the
+executors were changed to work out the disk from each approved move instead
+of assuming one. Cross-disk TV moves and the batch runners were then
+validated on a real library. Settings version 2 (October 2026) made this file
+the only place disks are declared. Details and evidence are in the git
+history; the parity tools are in the `migratarr_validation` package.

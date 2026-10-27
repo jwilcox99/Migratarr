@@ -1,309 +1,209 @@
 # Migratarr
 
-Migratarr manages *where* your media library physically lives, not what's in
-it. It works alongside Radarr and Sonarr (which manage acquisition and
-metadata) and Jellyfin (which serves playback) to move movies and TV
-between storage tiers — based on how hard a title would be to re-acquire,
-where it's streaming, how it's actually being watched, and how much space
-your disks have — instead of leaving everything on one volume forever.
+Migratarr decides *where* your Radarr and Sonarr media should live, and moves
+it there once you approve. It works alongside Radarr and Sonarr (which manage
+what's in your library) and Jellyfin (which plays it), and sorts movies and TV
+across your disks by how hard each title would be to get again, whether it's
+on a streaming service you pay for, and how your household actually watches
+it.
 
-> **Status: early-stage, personally operated.** Migratarr currently runs
-> against one home media stack. As of the Phase One closeout
-> (`docs/phase-one-closeout.md`, 2026-09-19), same-disk Movie/TV moves
-> *and* a live-validated cross-disk Movie executor are on `main`. Since
-> then, a live-validated cross-disk **TV** executor (`execute_cross_tv.py`)
-> and batch orchestrators for both cross-disk Movie and TV moves
-> (`batch_cross_movies.py`, `batch_cross_tv.py`) have also landed and been
-> exercised against real production data (see [Project status](#project-status)).
-> A read-only validation/config layer (`migratarr_validation/`,
-> `config/legacy-*.json`) is also on `main` but not yet wired into live
-> execution. Read this whole README, and particularly
-> [Safety model](#safety-model), before pointing it at a library you care about.
+Every move is planned first. Nothing moves until you review the plan and
+approve it.
+
+> **Status: 0.1.0, the first public release.** Migratarr was built for one
+> home media stack and has moved real libraries there over a NAS. Moving
+> files between disks attached to the same machine is new in 0.1.0 and
+> **experimental**. Linux only. Read [Safety model](#safety-model) before
+> pointing it at a library you care about.
+
+## Who it's for
+
+You run Radarr and Sonarr (and Jellyfin) at home, your media is spread over
+several disks, and you'd like the titles you'd struggle to replace on the
+disks you trust most, without moving thousands of folders by hand.
 
 ## What it does
 
-Migratarr evaluates replacement difficulty, streaming availability, and
-usage to recommend a logical placement category. Movies also receive a
-collection bonus:
+For each movie and series, Migratarr looks at:
 
-- **Replacement difficulty** — how many independent releases still exist
-  for this title (queried through Radarr/Sonarr's indexers). More viable
-  releases suggest easier replacement; this is an estimate, not a
-  guarantee that a title can be re-acquired.
-- **Streaming availability** — whether the title is on a service you're
-  already subscribed to, free-with-ads, rental/purchase-only, or absent
-  entirely from US streaming (via TMDB watch-provider data).
-- **Usage** — Jellyfin play recency, repeat plays, and how many distinct
-  household members have watched it, with a grace period for newly added
-  titles that haven't had a chance to be watched yet.
-- **Franchise/collection membership** — small bonus for titles in a
-  collection where related entries are already protected.
+- **Replacement difficulty:** how many releases Radarr or Sonarr can still
+  find. An estimate, not a guarantee.
+- **Streaming:** whether it's on a service you subscribe to, free with ads,
+  rent/buy only, or not streaming in your region (from TMDB).
+- **Usage:** Jellyfin plays, how recent, repeat plays and how many people in
+  the household watched it, with a grace period for new additions.
+- **Collections (movies):** a small bonus when related films are already
+  protected.
 
-Movies use **Common**, **Library**, **Rare**, and **Archive**; TV uses
-**Current**, **Library**, **Rare**, and **Archive**. Logical categories map
-to one or more eligible physical disks through the planner. A title
-that's hard to replace *and* has no streaming fallback gets protected in
-Rare even if nobody's watched it lately; something with abundant
-  availability and no recent plays may be an Archive/Common candidate.
+From that it picks a placement category:
 
-Nothing is moved automatically. Migratarr produces a plan, you review and
-approve it, and only then does an executor move files and update
-Radarr/Sonarr's records to match.
+| Movies | TV |
+| --- | --- |
+| Common | Current |
+| Library | Library |
+| Rare | Rare |
+| Archive | Archive |
 
-## How it works (pipeline)
+You decide which disks hold each category and which folder each one uses. A
+title that's hard to replace and isn't streaming anywhere stays in Rare even
+if nobody has watched it lately; a widely available title nobody plays may
+become an Archive candidate.
 
-The normal workflow follows this order. Stages read saved outputs and/or
-live service state and write reports, caches, snapshots, manifests, or
-approvals. `migratarr_plan.py` runs steps 1–5 as one command (see Usage);
-approving and executing stay separate, deliberate steps.
+## Requirements
 
-| # | Script | What it does |
-|---|--------|---------------|
-| 1 | `dry_run_movies.py` / `dry_run_tv.py` | Score every movie/series and write `movie_dry_run.csv` / `tv_dry_run.csv`. Read-only against Radarr/Sonarr/Jellyfin/TMDB. |
-| 2 | `build_move_plan.py` | Turn score-based recommendations into concrete source→destination paths, resolve which physical disk to use, check free space, and write `move_plan.csv`. Still read-only. |
-| 3 | `audit_overrides.py` | Optional. Lists the override tags configured in `config/planner.json` (default `migratarr-*`) that are currently set in Radarr/Sonarr, so you can see what's being manually pinned before you plan around it. Other `migratarr-*` tags are flagged as unrecognized. |
-| 4 | `snapshot_run.py` | Copies `movie_dry_run.csv`, `tv_dry_run.csv`, `move_plan.csv`, and selected current code files into a read-only, checksummed run under `runs/<timestamp>/`. Keep the code unchanged between planning and snapshotting. |
-| 5 | `build_execution_manifest.py` | Turns the frozen snapshot's eligible rows into a manifest with one stable `execution_id` per proposed move, hashed and stored under `manifests/<run>/`. |
-| 6 | `approve_execution.py` | Human review. Lists manifest rows and lets you `--approve <execution_id>` one at a time, or `--approve-batch --media TV --transfer CROSS_DISK_TRANSFER [--limit N]` to approve every eligible pending row of one kind at once (smallest first; shows a preview and approves nothing until you add `--yes`). Either way it writes one hash-bound APPROVE entry per row; **moves no files**. |
-| 7 | `execute_movie_nas.py` / `execute_tv_nas.py` (same-disk) / `execute_cross_movie.py` / `execute_cross_tv.py` (cross-disk) | Takes one approved `execution_id`, re-verifies everything (manifest hash, approval hash, live Radarr/Sonarr state, full file-content hash), performs the move, and updates Radarr/Sonarr. Defaults to check-only — pass `--execute` to actually move files. |
-| 8 | `batch_cross_movies.py` / `batch_cross_tv.py` (optional) | Lists every pending cross-disk Movie/TV row from a run's manifest as APPROVED or AWAITING APPROVAL and, with `--execute`, runs each **already-approved** row through its executor in sequence (smallest first), re-checking the approval before each one. It never approves anything itself — approve first with step 6. `--limit N` (TV) caps how many approved rows it processes in one invocation. Without `--execute` it only lists — no copies, updates, or deletions. |
-| — | `migratarr_status.py` (any time) | Read-only status: lists runs, and with `--run <run_id>` shows every manifest row's approval and execution state (succeeded, unfinished, needs reconciliation, stopped safely, checked, not started) with totals; `--execution <id>` prints one move's journal timeline; `--json` for scripts. Never approves, moves, writes or locks anything. |
-| — | `migratarr_ui.py` (any time) | Web UI on `127.0.0.1:8765` for the whole cycle: **plan** a run (runs `migratarr_plan.py` in the background), **confirm** moves (review selected rows with sizes, disk space after and folder-permission problems, then record the same hash-bound approvals as step 6), and **run** them (one background job runs each approved row through its step-7 executor, check-only then live, smallest first; stop after any move). Also shows each run's moves grouped by what needs doing, live disk space, and every move's journal. Pages never write; `--read-only` turns the actions off. See `docs/ui-actions.md`. |
-| — | `recover_cross_published.py <execution_id>` (only if needed) | Finishes a cross-disk move whose NAS copy was published but whose NAS call timed out (`NEEDS_RECONCILIATION` ending in `COPY_INTENT` → `STOPPED TimeoutExpired`). Check-only by default; refuses unless source, destination and Arr state all still match. See `docs/recover-published-copy.md`. |
+- A Linux machine with Python 3.10 or newer that can see your media disks.
+  Migratarr uses only the standard library.
+- Radarr and Sonarr (Sonarr v4 recommended), Jellyfin, and a
+  [TMDB API Read Access Token](https://www.themoviedb.org/settings/api).
+- Radarr's and Sonarr's root folders already pointing at the disks and
+  category folders Migratarr will use.
+- To move files, by default, permission to run `docker exec` in the Radarr and
+  Sonarr containers: before and after every move Migratarr checks the files
+  where Radarr and Sonarr see them. Non-Docker installs can check on the host
+  instead; see [Arr file checks](docs/runtime-configuration.md#arr-file-checks).
+- For moves on a NAS: SSH access to the NAS with a key used only by Migratarr,
+  and Python 3 on the NAS.
 
-`movie_placement_v1.py` / `tv_placement_v1.py` are frozen, checksum-pinned
-copies of the scoring logic from the point it was first validated
-(`movie_placement_v1.sha256` / `tv_placement_v1.sha256`), kept for
-reproducing past decisions. They are not part of the pipeline you run.
-
-## Prerequisites
-
-- Linux host with **Python 3.10+** — standard library only, nothing to
-  `pip install`. (`migratarr_validation/` uses PEP 604 `X | None` union
-  annotations, evaluated at import time; 3.9 will fail to import it.)
-- By default, Docker with `docker exec` access to your Radarr and Sonarr
-  containers: the executors verify files as Radarr/Sonarr see them from inside
-  the container, and API keys are read straight out of each service's config
-  (Radarr/Sonarr `config.xml`, a Jellyfin secret in a `homepage` container)
-  rather than stored anywhere. Non-Docker installs choose other sources in
-  `runtime.json`: [Service credentials](docs/runtime-configuration.md#service-credentials)
-  and [Arr file checks](docs/runtime-configuration.md#arr-file-checks).
-- A [TMDB](https://www.themoviedb.org/settings/api) API **Read Access
-  Token**, by default exported as `TMDB_TOKEN` (see [Usage](#usage)).
-- SSH access to your NAS with a dedicated key, if you want the executors
-  to perform moves remotely rather than on the media host's local mounts.
-- Radarr/Sonarr root folders and Jellyfin libraries already pointed at
-  the disks Migratarr will place things on.
-
-## Configuration
-
-Runtime scripts use a required, validated `config/runtime.json` file and
-`config/storage-targets.json`, where your disks are declared. Start with:
+## Install
 
 ```sh
-cp config/runtime.example.json config/runtime.json
-cp config/storage-targets.example.json config/storage-targets.json
-python3 -c 'from runtime_config import get_config; get_config(); print("Runtime config valid")'
+pip install migratarr
 ```
 
-For a single machine with local disks (no NAS), start from
-`config/examples/runtime.local.example.json` and
-`storage-targets.local.example.json` instead. Existing version 1
-`runtime.json` files keep working and are migrated once, automatically, when
-the web UI starts; see [Settings](docs/settings.md).
+Install it into a virtual environment, or with `pipx install migratarr`, if
+your system Python doesn't allow `pip install`. Check it worked with
+`migratarr --version`.
 
-Replace the example's host, NAS and disk values with your own before use. See
-[Runtime configuration](docs/runtime-configuration.md) for all fields, environment
-overrides, retained layout restrictions, validation errors and migration steps.
-No credentials belong in the config. The deployment file is ignored by Git.
+## First run
 
-The dry-run planners also require `config/planner.json`: the streaming
-services you subscribe to and your TMDB watch-provider region. Start from the
-example (Hulu + Peacock, `US`) and edit it for yourself; see
-[Planner settings](docs/planner-settings.md).
+Run Migratarr as a user that can read and write your media folders, then:
 
 ```sh
-cp config/planner.example.json config/planner.json
-python3 -c 'from planner_settings import load_settings; load_settings(); print("Planner settings valid")'
+migratarr ui
 ```
 
-`config/legacy-storage.json` and `legacy-rules.json` remain separate read-only
-validation policy. Scoring, category placement policy and executor semantics are
-unchanged. Safe unit tests run in GitHub Actions and locally with
-`python3 -m unittest discover -s tests -v`.
+It prints the address, `http://localhost:8765`. The UI listens on this machine
+only (127.0.0.1). If Migratarr runs on a server, open an SSH tunnel from your
+own computer and browse to the same address:
 
-See [SETUP.md](SETUP.md) for what still assumes this deployment's shape
-before running this against a library you care about.
-
-## Usage
-
-```bash
-export TMDB_TOKEN='YOUR_TMDB_READ_ACCESS_TOKEN'   # or a file source: docs/runtime-configuration.md
-
-# Plan: preflight (config, credentials, clean git), then every planning step,
-# stopping at the first failure. Run it inside tmux; the dry runs take a while.
-python3 migratarr_plan.py            # or --check for the preflight only
-python3 approve_execution.py --list-same-disk
-EXECUTION_ID='REPLACE_WITH_SELECTED_MOVIE_EXECUTION_ID'
-python3 approve_execution.py --approve "$EXECUTION_ID"
-
-# Dry-run the approved move first (default is check-only):
-python3 execute_movie_nas.py "$EXECUTION_ID"
-# Then actually move it:
-python3 execute_movie_nas.py "$EXECUTION_ID" --execute
+```sh
+ssh -L 8765:localhost:8765 media-host.example
 ```
 
-`build_move_plan.py` and `snapshot_run.py` also refuse dry-run or plan files
-more than 12 hours old, and `snapshot_run.py` refuses a plan older than either
-dry run (`pipeline_inputs.py`), so a failed step can't silently hand the next one
-an earlier session's file. `MIGRATARR_ALLOW_STALE_INPUTS=1` overrides this, with
-a warning.
+With no settings yet, every page leads to the setup wizard:
 
-To plan, confirm and run from a browser instead, start the UI on the media
-host and open it through an SSH tunnel (it listens on 127.0.0.1 only and
-answers only `localhost` host names):
+1. **Connect your services:** Radarr, Sonarr, Jellyfin and TMDB. Detect reads
+   Radarr's and Sonarr's keys from their own config; or paste a key.
+2. **Where your disks are:** on a NAS over SSH, or on this machine's own
+   disks (experimental). Also the data folder.
+3. **Disks and categories:** your disks, the folder for each category, and
+   which disks hold each category.
+4. **Streaming services:** your TMDB region and the services you pay for.
+5. **Review and save:** nothing is written until you save.
 
-```bash
-export TMDB_TOKEN='YOUR_TMDB_READ_ACCESS_TOKEN'       # planning jobs inherit the UI's environment
-python3 migratarr_ui.py                               # on the media host, e.g. in tmux
-ssh -L 8765:localhost:8765 <user>@<media host>        # on your computer
-# then open http://localhost:8765
-```
+After saving, the wizard runs the health checks. Fix anything that failed in
+**Settings & health**, then make your first plan. [SETUP.md](SETUP.md) walks
+through each step.
 
-1. **Plan:** "Plan a new run" on the Runs page.
-2. **Confirm:** on the run page, tick moves (or "Review all"), check the review
-   page, then "Approve N moves".
-3. **Run:** "Run N approved moves", check the order, then "Start moving". The
-   job page follows it live and can stop it after the current move.
+## Where moves run
 
-Jobs run as their own process, so closing the browser or restarting the UI
-doesn't stop them. `python3 migratarr_ui.py --read-only` is the view-only
-version. Details and safety checks: [docs/ui-actions.md](docs/ui-actions.md).
+| | How it works | Status |
+| --- | --- | --- |
+| **NAS over SSH** | Migratarr runs on a machine that mounts the NAS disks and sends each move to the NAS over SSH, so files are copied on the NAS rather than over the network | Used on a real library |
+| **This machine's own disks** | Moves run directly on disks attached to the machine running Migratarr | **Experimental**: not yet run end to end against a real Radarr and Sonarr |
 
-To move a whole set of cross-disk rows, approve them as one batch, then run
-the batch:
+Both use the same plan, approval and safety checks.
 
-```bash
-RUN='REPLACE_WITH_RUN_ID'
-python3 approve_execution.py --run "$RUN" --approve-batch --media TV --transfer CROSS_DISK_TRANSFER          # preview
-python3 approve_execution.py --run "$RUN" --approve-batch --media TV --transfer CROSS_DISK_TRANSFER --yes    # record approvals
-python3 batch_cross_tv.py --run "$RUN"             # status: approved vs awaiting approval
-python3 batch_cross_tv.py --run "$RUN" --execute   # moves approved rows only
-```
+## Using it
 
-Set `EXECUTION_ID` to the Movie row you selected before running
-the approval and executor commands. The example uses the same-disk NAS
-Movie executor; select a row its configured disk mapping supports.
+The web UI covers the whole cycle:
+
+1. **Plan:** "Plan a new run". Planning is read-only: it scores your library,
+   proposes moves and freezes the result as a run. A large library can take a
+   while.
+2. **Review and approve:** pick moves (or "Review all"), check sizes, free
+   space afterwards and folder permissions, then approve them.
+3. **Run:** "Run N approved moves", check the order, then "Start moving".
+   Each move is checked again just before it runs. You can stop after the
+   current move.
+
+Jobs keep running if you close the browser or restart the UI.
+`migratarr ui --read-only` shows everything with every action switched off.
 
 ## Safety model
 
-This is the part to actually read before pointing Migratarr at a library
-you care about.
+- **Plan, review, approve, run.** Planning never touches media files. Only an
+  approved move can run, and you start it.
+- **No plan while a health check fails.** `migratarr plan` and the UI refuse
+  to plan until every check passes (warnings are fine).
+- **Plans are frozen.** Each run is a read-only, checksummed snapshot of the
+  plan and the code that made it.
+- **Approvals are tied to the exact plan.** If the plan changes after you
+  approve, the move refuses to run.
+- **Every move is checked again first:** the plan and approval, what Radarr or
+  Sonarr say about that item right now, and a SHA-256 hash of every file.
+- **Moves don't overwrite.** A move on one disk is a rename that never
+  replaces an existing folder. A move between disks copies to a staging
+  folder, verifies, publishes, updates Radarr or Sonarr, and deletes the
+  source only after checking the copy.
+- **Everything is journaled.** Each move writes a journal before and after
+  every change. A move that fails part way is never retried automatically:
+  you check it and record what you found with `migratarr reconcile`.
+- **Settings changes are careful.** Saving makes a backup, and is refused
+  while a job or move is running.
 
-- **Nothing moves until you run an executor with `--execute`.** No
-  earlier stage touches a source or destination media file — but they do
-  write more than just CSVs/JSON: the placement scripts cache external
-  API lookups as JSON under `cache/`, and
-  `snapshot_run.py` writes a whole `runs/<timestamp>/` directory (copied
-  CSVs, copied code, `metadata.json`, `SHA256SUMS`).
-- **Snapshots are read-only and checksummed.** `snapshot_run.py` removes
-  write permissions after copying the inputs, and manifest creation checks
-  their hashes. These safeguards detect accidental changes; an owner or
-  privileged process can still change permissions, files, and checksums.
-- **Approval is per-item and hash-bound.** Approving execution ID `X`
-  records the manifest's hash at that moment; the executor refuses to run
-  if the manifest has changed since.
-- **The executor re-verifies everything immediately before moving
-  anything**: the manifest hash, the approval record, live Radarr/Sonarr
-  state for that exact item, and a full SHA-256 hash of the source
-  directory's contents.
-- **Same-disk renames are collision-safe** (`renameat2` with
-  `RENAME_NOREPLACE`, without overwriting an existing destination) and are verified
-  by content hash again after the move, on both the local and
-  Radarr/Sonarr-visible paths.
-- **Every attempt is journaled** to `execution_logs/<execution_id>.jsonl`
-  before and after any mutation. A failed live attempt refuses to be
-  retried automatically — it requires manual reconciliation (or, for one
-  specifically diagnosed failure mode, `--resume-nfs-refusal`).
-- **Live execution coverage still isn't full parity with the planner.**
-  `execute_movie_nas.py` / `execute_tv_nas.py` perform same-disk renames on
-  one disk (see `remote_path()`); `execute_cross_movie.py` and
-  `execute_cross_tv.py` (both on `main`, live-validated) cover cross-disk
-  **Movie** and **TV** transfers via staged copy → verify → atomic
-  publish/Radarr-or-Sonarr update → verified delete. Read a plan's
-  `transfer_type` and `status` columns before assuming an executor can act
-  on a row.
+There is no undo. Start with your smallest, least important titles.
 
-## Project status
+## Commands
 
-As of the **Phase One closeout** (`docs/phase-one-closeout.md`,
-2026-09-19), `main` has:
+| Command | What it does |
+| --- | --- |
+| `migratarr ui [--port N] [--read-only]` | The web UI: setup, settings, plan, approve, run |
+| `migratarr plan [--check]` | Make a new plan; nothing moves. `--check` runs the checks only |
+| `migratarr status [--run RUN \| --execution ID] [--json]` | Runs, moves and their journals (read-only) |
+| `migratarr approve ...` | Approve moves from the terminal: `--list`, `--approve ID`, `--approve-batch --media TV --transfer CROSS_DISK_TRANSFER [--limit N] [--yes]`, `--revoke ID`, `--status` |
+| `migratarr doctor [--offline] [--json] [--migrate]` | Check settings, services, disks and the NAS; shows the data folder |
+| `migratarr reconcile ID --outcome ... --note ...` | Record that a move flagged for checking was checked by hand |
 
-- A working, validated pipeline for **same-disk Movie and TV moves**.
-- A live-validated **cross-disk Movie executor** (`execute_cross_movie.py`
-  — staged copy, destination verification, Radarr path update, verified
-  source removal, full journal), plus `batch_cross_movies.py` and two
-  incident-specific recovery scripts (`recover_cross_0102.py`,
-  `recover_cross_0116.py`) from real runs.
-- A live-validated **cross-disk TV executor** (`execute_cross_tv.py`),
-  mirroring the Movie executor's safety architecture with Sonarr
-  multi-episode-file verification, plus `batch_cross_tv.py`. Both have
-  moved real series end-to-end on the production host — a single
-  `execute_cross_tv.py` run and a multi-series `batch_cross_tv.py --execute`
-  run (see `docs/storage-targets.md` for the exact evidence).
-- Storage-target configuration (`storage_targets.py`,
-  `config/storage-targets.json`) has replaced hardcoded planner/executor
-  disk assumptions across four migration gates (`docs/storage-targets.md`):
-  planner byte parity, manifest target IDs, `runtime.json`/
-  `storage-targets.json` consistency checking, and executor disk
-  generalization. `runtime_config.py` now accepts any number of validly-shaped
-  disk IDs instead of exactly `media01`-`media04`; the real deployment is
-  still four disks, but the four-disk assumption is no longer load-bearing
-  in the code.
-- A standalone, read-only **validation engine** (`migratarr_validation/`)
-  with planner characterization tests, parity checks against real server
-  data, capture/audit tooling, and the project's first automated tests
-  (`tests/`) — checked for byte-for-byte parity with the legacy planner
-  (`docs/validation-engine.md`) but **not yet the live planner/executor
-  gate**.
-- `config/legacy-storage.json` / `config/legacy-rules.json` — a first cut
-  at moving storage layout and override policy into versioned JSON config.
-  Still scoped "legacy," not wired into a live run.
+`migratarr <command> --help` lists each command's options. Moves are started
+from the web UI.
 
-The branches these came from (`cross-disk-transfers`,
-`feature/validation-engine`) are both merged ancestors of `main` — don't
-build against them separately.
+## Where settings and data live
 
-`execute_movie.py` also remains in the tree: an earlier, non-NAS-transport
-version of the same-disk Movie executor (no SSH remote-execution path).
-It predates `execute_movie_nas.py` and isn't part of the documented
-pipeline above.
+Everything goes in one **data folder**: `$MIGRATARR_HOME` if set, otherwise
+`~/.local/share/migratarr`. (Running from a git clone, the clone itself.)
+`migratarr doctor` prints which folder is in use. It holds `config/` (the
+three settings files and their backups), runs, approvals and move journals.
 
-The next checkpoint, per the closeout's Phase Two handoff, is a unified
-execution core that removes the Movie/TV and same-disk/cross-disk
-duplication, with the validation engine promoted to the live
-pre-execution gate.
+Pasted API keys are kept apart, in `~/.config/migratarr/secrets/`, readable by
+your user only; see [SECURITY.md](SECURITY.md).
 
-## Known limitations
+## Limitations
 
-- `migratarr_plan.py` drives planning end to end, and `batch_cross_movies.py` /
-  `batch_cross_tv.py` sequence one media type's cross-disk moves, but approval
-  and execution are still separate commands per media and transfer type.
-- Five separate executors (`execute_movie.py`, `execute_movie_nas.py`,
-  `execute_tv_nas.py`, `execute_cross_movie.py`, `execute_cross_tv.py`).
-  Low-level safety primitives are shared (`executor_command.py`,
-  `executor_inventory.py`, `executor_manifest.py`, `executor_nfs.py`), but
-  each executor's preflight/move/verify flow is still its own copy (see the
-  Phase Two handoff in `docs/phase-one-closeout.md`).
-- CI (`.github/workflows/tests.yml`) runs only the safe unit tests in `tests/`.
-  Nothing that touches a real Radarr/Sonarr/Jellyfin/NAS stack runs
-  automatically; live behavior is validated by hand and recorded in `docs/`.
-- `migratarr_validation/` is read-only and not yet the live gate for
-  planning or execution.
-- Runtime configuration supports one host/NAS pairing. Disk count, root
-  depth and category folder names are configuration (`docs/media-layout.md`),
-  but the executor topology itself (one media host, one NAS reached
-  over SSH) isn't otherwise generalized.
+- Linux only.
+- Moves on this machine's own disks are experimental.
+- One machine runs Migratarr, and it must see the disks. With a NAS, that's
+  one NAS reached over SSH.
+- Radarr and Sonarr must see the media under the same folder layout: one root,
+  then a category folder, then the title.
+- Radarr or Sonarr on a different machine, with no view of their media from
+  the machine running Migratarr, isn't supported.
+- Moves run from the web UI; there's no command that runs them.
+- Streaming groups are written for the US; elsewhere, add your region's
+  services ([Provider families](docs/planner-settings.md#provider-families)).
+- 0.x: settings files and commands may still change between minor versions,
+  always with a migration or a note in the [changelog](CHANGELOG.md).
+
+## Documentation
+
+- [SETUP.md](SETUP.md): the setup wizard step by step, and editing settings by hand
+- [Settings](docs/settings.md): the settings files, version 2 and the health checks
+- [Runtime configuration](docs/runtime-configuration.md): `runtime.json` reference
+- [Storage targets](docs/storage-targets.md): disks, categories and placement
+- [Planner settings](docs/planner-settings.md): streaming, override tags and scoring
+- [Media layout](docs/media-layout.md): where Migratarr expects each title to be
+- [UI actions](docs/ui-actions.md): what each button does and checks
+- [Changelog](CHANGELOG.md)
 
 ## Contributing
 
@@ -311,9 +211,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Security
 
-See [SECURITY.md](SECURITY.md) — in particular, if you're forking or
-publishing your own copy, scrub the NAS hostname/IP, SSH username, and any
-container-specific paths committed for this deployment.
+See [SECURITY.md](SECURITY.md). Report vulnerabilities privately through
+GitHub, not in a public issue.
 
 ## License
 
