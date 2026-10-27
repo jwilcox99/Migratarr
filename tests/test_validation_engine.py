@@ -21,7 +21,7 @@ from migratarr_validation.parity import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PLANNER = ROOT / "build_move_plan.py"
+PLANNER = ROOT / "migratarr" / "build_move_plan.py"
 LEGACY_FUNCTIONS = {
     "dir_size_bytes", "gb", "target_path_for", "projected_free_for",
     "choose_destination_root", "evaluate_move", "apply_override",

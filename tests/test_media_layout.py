@@ -193,7 +193,7 @@ class PlannerCategoryTests(unittest.TestCase):
         layout = MediaLayout(RUNTIME, TARGETS)
         for script, media in (('dry_run_movies', 'Movie'), ('dry_run_tv', 'TV')):
             old = planner_current_bucket(FIXTURE / f'{script}_before_media_layout.py')
-            new = planner_current_bucket(ROOT / f'{script}.py', layout)
+            new = planner_current_bucket(ROOT / 'migratarr' / f'{script}.py', layout)
             folder, cats = MEDIA[media]
             for category in cats:
                 good = f'/media/{folder}/{category}/Some Title'
@@ -368,4 +368,4 @@ class CustomLayoutTests(unittest.TestCase):
                 ('dry_run_movies', 'Movie', '/media/Movies/Rare/Title', 'Unknown'),
                 ('dry_run_tv', 'TV', '/library/cold/shows/Show', 'Archive')):
             with self.subTest(path=path):
-                self.assertEqual(planner_current_bucket(ROOT / f'{script}.py', layout)(path), expected)
+                self.assertEqual(planner_current_bucket(ROOT / 'migratarr' / f'{script}.py', layout)(path), expected)

@@ -109,14 +109,14 @@ def config_checks(report):
 
 def _endpoint(descriptor, runtime):
     """(api_root, key) or raise SecretError; TMDB has no configurable URL."""
-    from service_keys import read_credential, service_endpoint
+    from migratarr.service_keys import read_credential, service_endpoint
     if descriptor.url_setting is None:
         return descriptor.probe.base_url, read_credential(descriptor.id, runtime)[0]
     return service_endpoint(descriptor.id, runtime)
 
 
 def service_check(descriptor, runtime, http=http_get):
-    from service_keys import SecretError, describe
+    from migratarr.service_keys import SecretError, describe
     cid, label = 'service.' + descriptor.id, descriptor.label
     try:
         root, key = _endpoint(descriptor, runtime)

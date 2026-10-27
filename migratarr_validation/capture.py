@@ -20,10 +20,11 @@ ROOT = Path(__file__).resolve().parents[1]
 # Reviewed for planner settings (streaming, scoring), media layout and service keys: the
 # scripts also read config/planner.json, config/storage-targets.json and credentials via
 # service_keys (docker exec cat, no shell), incl. service base URLs; their only writes
-# remain OUTPUT and CACHE_DIR.
+# remain OUTPUT and CACHE_DIR. Re-pinned 2026-10-27 after the move into migratarr/: only the
+# four imports changed (to migratarr.<module>).
 SCRIPTS = {
-    "movie": ("dry_run_movies.py", "1630fdd3053910e88fe5b56722cff9128110be9a53708735aabd0f0e6426f1eb"),
-    "tv": ("dry_run_tv.py", "e688f3f0caed673b9ec8d5756476be79e808a2c61958bb12e8404b285c72ccb3"),
+    "movie": ("dry_run_movies.py", "953e8dae0a7b9a88f1112e8cb3ba4db867971ccf64ccdfadd471282524d12892"),
+    "tv": ("dry_run_tv.py", "040f5e4bd5caa2e407ef56dd58ac0fb0b797e5e4423c55d7a6c94957b73b84f8"),
 }
 
 
@@ -33,7 +34,7 @@ def sha256(path):
 
 def checked_tree(kind):
     name, expected = SCRIPTS[kind]
-    path = ROOT / name
+    path = ROOT / 'migratarr' / name
     source = path.read_bytes()
     # Git stores LF; Windows checkouts may use CRLF. These are the only
     # differing bytes permitted by this source-integrity check.
@@ -108,7 +109,7 @@ def capture(directory):
             rows = sum(1 for _ in reader)
         inputs[kind] = {"path": str(path), "rows": rows, "sha256": sha256(path)}
     result = {"status": "complete", "inputs": inputs,
-              "scripts_sha256": {kind: sha256(ROOT / name)
+              "scripts_sha256": {kind: sha256(ROOT / 'migratarr' / name)
                                  for kind, (name, _) in SCRIPTS.items()}}
     (directory / "capture.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     return result

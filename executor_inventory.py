@@ -1,25 +1,13 @@
-"""Read-only inventory metadata primitives, also embedded in NAS helpers."""
-import stat
+"""Compatibility wrapper: the code is in migratarr/executor_inventory.py (since 0.1.0).
 
+Keeps `python3 executor_inventory.py` and `import executor_inventory` working in a git clone. Not installed by pip:
+an installed copy uses the `migratarr` command instead.
+"""
+import importlib
+import runpy
+import sys
 
-def scan_metadata(root, require):
-    """Collect names/types/size/inode/mtime; reject links and nested devices."""
-    device = root.stat().st_dev
-    found = {}
-    def visit(folder):
-        for p in sorted(folder.iterdir()):
-            s = p.lstat()
-            require(s.st_dev == device and not stat.S_ISLNK(s.st_mode), 'Link or nested device found')
-            key = p.relative_to(root).as_posix()
-            if stat.S_ISDIR(s.st_mode):
-                found[key] = ['directory']
-                visit(p)
-            else:
-                require(stat.S_ISREG(s.st_mode), 'Nonregular file found')
-                found[key] = [s.st_size, s.st_ino, s.st_mtime_ns]
-    visit(root)
-    return found
-
-
-def metadata_from_inventory(items):
-    return {k: v if len(v) == 1 else [v[0], v[2], v[3]] for k, v in items.items()}
+if __name__ == '__main__':
+    runpy.run_module('migratarr.executor_inventory', run_name='__main__')  # argv[0] stays this script's name
+else:
+    sys.modules[__name__] = importlib.import_module('migratarr.executor_inventory')

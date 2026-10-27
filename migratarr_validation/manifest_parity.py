@@ -20,7 +20,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 
-MANIFEST_BUILDER = Path(__file__).resolve().parents[1] / "build_execution_manifest.py"
+MANIFEST_BUILDER = Path(__file__).resolve().parents[1] / "migratarr" / "build_execution_manifest.py"
 PREAMBLE_NAMES = {"RUNTIME", "BASE", "RUNS", "MANIFESTS", "TARGETS"}
 
 

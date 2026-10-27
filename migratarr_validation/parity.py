@@ -23,7 +23,7 @@ from .engine import MoveRequest, ValidationEngine, ValidationPolicy
 from .rules import load_rule_policy, validate_rule_references
 
 
-PLANNER = Path(__file__).resolve().parents[1] / "build_move_plan.py"
+PLANNER = Path(__file__).resolve().parents[1] / "migratarr" / "build_move_plan.py"
 CONSTANTS = {"DESTINATION_ROOTS", "MIN_FREE_AFTER_GB", "PROJECTED_FREE", "TARGET_BY_ID",
              "OVERRIDE_TAGS", "LOCK_TAG", "RADARR_URL", "SONARR_URL"}
 
@@ -47,15 +47,15 @@ def load_legacy(runtime=None, targets=None, planner=None, settings=None):
     from runtime_config import load_config
     # Offline parity remains pinned to the documented Phase One deployment.
     # Live callers explicitly supply their deployed configuration.
-    runtime = runtime or load_config(PLANNER.parent / 'config' / 'examples' / 'runtime.v1.example.json', environ={})
+    runtime = runtime or load_config(PLANNER.parents[1] / 'config' / 'examples' / 'runtime.v1.example.json', environ={})
     from planner_settings import load_settings
-    settings = settings or load_settings(PLANNER.parent / 'config' / 'planner.example.json')
+    settings = settings or load_settings(PLANNER.parents[1] / 'config' / 'planner.example.json')
     from service_keys import service_endpoint
     namespace = {"RUNTIME": runtime, "PLANNER_SETTINGS": settings, "service_endpoint": service_endpoint, "Path": Path, "os": os, "csv": csv, "json": json,
                  "subprocess": subprocess, "urllib": urllib}
     if any(_assigned_name(node) == 'TARGETS' for node in tree.body):
         from storage_targets import load_targets
-        namespace['TARGETS'] = targets or load_targets(PLANNER.parent / 'config/storage-targets.example.json')
+        namespace['TARGETS'] = targets or load_targets(PLANNER.parents[1] / 'config/storage-targets.example.json')
     nodes = [
         node for node in tree.body
         if isinstance(node, ast.FunctionDef) or _assigned_name(node) in CONSTANTS

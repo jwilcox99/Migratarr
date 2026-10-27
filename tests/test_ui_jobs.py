@@ -36,7 +36,7 @@ class FakeExecutors:
 
     def __call__(self, command, cwd=None, env=None):
         assert command[1] == '-m', command  # run as a module, so an installed copy works
-        script, execution_id = command[2] + '.py', command[3]
+        script, execution_id = command[2].removeprefix('migratarr.') + '.py', command[3]
         live = '--execute' in command
         self.calls.append((script, execution_id, live))
         if self.on_call:

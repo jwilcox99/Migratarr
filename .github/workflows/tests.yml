@@ -68,5 +68,7 @@ jobs:
           curl -sfL http://localhost:8799/setup | grep -q "Connect your services"
           kill $ui
           # Nothing was written into the installed package.
-          site=$(/tmp/venv/bin/python -c 'import migratarr_ui, os; print(os.path.dirname(migratarr_ui.__file__))')
+          site=$(/tmp/venv/bin/python -c 'import migratarr, os; print(os.path.dirname(os.path.dirname(migratarr.__file__)))')
+          # Only the package is installed: no top-level modules beside it.
+          test -z "$(ls "$site" | grep -E '^(read_api|runtime_config|migratarr_ui|migratarr_validation)')"
           test ! -e "$site/config"

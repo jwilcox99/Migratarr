@@ -1,55 +1,13 @@
-#!/usr/bin/env python3
-"""Record that a flagged move was checked by hand (reconcile_store.py).
+"""Compatibility wrapper: the code is in migratarr/reconcile.py (since 0.1.0).
 
-    python3 migratarr_reconcile.py 20261023T212605Z-0031 --outcome not_moved \
-        --note "NAS copy ended silently; source intact, Radarr unchanged, staging folder removed by hand"
-    python3 migratarr_reconcile.py 20261023T212605Z-0031 --show
-
-Outcomes: moved, not_moved, other. Only moves in NEEDS_RECONCILIATION, or
-UNFINISHED with nothing running, can be recorded. Changes no media, Arr
-record, journal or approval; the move becomes RECONCILED and is never run
-again from this manifest. Any later journal entry undoes the record.
+Keeps `python3 migratarr_reconcile.py` and `import migratarr_reconcile` working in a git clone. Not installed by pip:
+an installed copy uses the `migratarr` command instead.
 """
-import argparse
-import json
-from pathlib import Path
+import importlib
+import runpy
 import sys
 
-import read_api
-import reconcile_store
-
-
-def main(argv=None, out=sys.stdout):
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('execution_id')
-    parser.add_argument('--outcome', choices=sorted(reconcile_store.OUTCOMES))
-    parser.add_argument('--note', help='What you checked and found')
-    parser.add_argument('--show', action='store_true', help='Print the state and any record; change nothing')
-    parser.add_argument('--base', type=Path, help='Migratarr base path (default: runtime.json base_path)')
-    args = parser.parse_args(argv)
-    if args.base is None:
-        from runtime_config import get_config
-        args.base = get_config().base_path
-    match = read_api.EXECUTION_ID.fullmatch(args.execution_id)
-    if not match:
-        parser.error('invalid execution ID')
-    try:
-        manifest = read_api.get_manifest(args.base, match.group(1))
-        state = read_api.execution_state(args.base, args.execution_id, manifest['manifest_hash'])
-        if args.show or not args.outcome:
-            if not args.show:
-                parser.error('--outcome and --note are required (or use --show)')
-            print(json.dumps(dict(state=state, record=reconcile_store.read_record(args.base, args.execution_id)),
-                             indent=2), file=out)
-            return 0
-        entry = reconcile_store.record(args.base, args.execution_id, args.outcome, args.note,
-                                       manifest_hash=manifest['manifest_hash'], source='cli')
-    except (read_api.ReadError, reconcile_store.ReconcileError) as exc:
-        print('Not recorded: ' + str(exc), file=sys.stderr)
-        return 1
-    print(f'RECONCILED: {args.execution_id} ({entry["outcome"]}; was {entry["state_before"]})', file=out)
-    return 0
-
-
 if __name__ == '__main__':
-    sys.exit(main())
+    runpy.run_module('migratarr.reconcile', run_name='__main__')  # argv[0] stays this script's name
+else:
+    sys.modules[__name__] = importlib.import_module('migratarr.reconcile')

@@ -18,7 +18,11 @@ import os
 from pathlib import Path
 import sys
 
-CODE = Path(__file__).resolve().parents[1]  # the folder holding the top-level modules
+PACKAGE = Path(__file__).resolve().parent  # migratarr/: every module (since 0.1.0)
+CODE = PACKAGE.parent  # the clone, or site-packages: the working directory for `python -m migratarr.<x>`
+# Old top-level script names whose module dropped the "migratarr_" prefix in the package.
+RENAMED = {'migratarr_cli': 'cli', 'migratarr_doctor': 'doctor', 'migratarr_jobs': 'jobs', 'migratarr_plan': 'plan',
+           'migratarr_reconcile': 'reconcile', 'migratarr_status': 'status', 'migratarr_ui': 'ui'}
 
 
 def is_clone(code=None):
@@ -47,25 +51,26 @@ def config_dir(environ=None):
 
 
 def module_name(script):
-    """'execute_cross_tv.py' -> 'execute_cross_tv'."""
-    return Path(script).stem
+    """'execute_cross_tv.py' -> 'migratarr.execute_cross_tv'; 'migratarr_jobs.py' -> 'migratarr.jobs'."""
+    stem = Path(script).stem
+    return 'migratarr.' + RENAMED.get(stem, stem)
 
 
 def module_command(script, *args, python=None):
-    """The command that runs a top-level script as a module: works from a clone and when installed."""
+    """The command that runs one of Migratarr's scripts as a module: works from a clone and when installed."""
     return [python or sys.executable, '-m', module_name(script), *map(str, args)]
 
 
 def version():
-    from migratarr_cli import __version__
+    from migratarr.cli import __version__
     return __version__
 
 
 def code_digest(names, code=None):
-    """sha256 over the named top-level modules' bytes (name and content), for run snapshots."""
+    """sha256 over the named modules' bytes (name and content), for run snapshots."""
     h = hashlib.sha256()
     for name in sorted(names):
-        path = (code or CODE) / name
+        path = (code or PACKAGE) / name
         h.update(name.encode() + b'\0')
         h.update(path.read_bytes() if path.exists() else b'<missing>')
         h.update(b'\0')

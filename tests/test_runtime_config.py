@@ -243,9 +243,9 @@ class RuntimeWiringTests(unittest.TestCase):
                         self.assertEqual(batch.run_batch(base, '20260915T192959Z', True, runner), 0)
                     # The batch never approves: check-only, then --execute, nothing else.
                     self.assertEqual(len(calls), 2)
-                    self.assertEqual(calls[0][0][1:3], ['-m', executor_name[:-3]])
+                    self.assertEqual(calls[0][0][1:3], ['-m', 'migratarr.' + executor_name[:-3]])
                     self.assertNotIn('--execute', calls[0][0])
-                    self.assertEqual(calls[1][0][1:3], ['-m', executor_name[:-3]])
+                    self.assertEqual(calls[1][0][1:3], ['-m', 'migratarr.' + executor_name[:-3]])
                     self.assertIn('--execute', calls[1][0])
                     self.assertFalse(any('approve_execution.py' in part
                                          for command, _ in calls for part in command))
@@ -272,7 +272,7 @@ class RuntimeWiringTests(unittest.TestCase):
             with patch.object(batch, 'pending_series', return_value=(rows, 0, 'hash')):
                 self.assertEqual(batch.run_batch(base, '20260915T192959Z', True, runner, limit=2), 0)
             self.assertEqual(len(calls), 4)
-            executed = {command[3] for command in calls if command[1:3] == ['-m', 'execute_cross_tv']}
+            executed = {command[3] for command in calls if command[1:3] == ['-m', 'migratarr.execute_cross_tv']}
             self.assertEqual(executed, {'20260915T192959Z-0001', '20260915T192959Z-0002'})
 
 

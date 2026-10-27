@@ -50,7 +50,7 @@ class DryRunParityTests(unittest.TestCase):
 
     def replay_rows(self, out, kind):
         from migratarr_validation.dry_run_parity import replay
-        data, misses = replay(ROOT / f'dry_run_{"movies" if kind == "movie" else "tv"}.py',
+        data, misses = replay(ROOT / 'migratarr' / f'dry_run_{"movies" if kind == "movie" else "tv"}.py',
                               json.loads(out.read_text(encoding='utf-8')))
         self.assertEqual(misses, [])
         return list(csv.DictReader(io.StringIO(data.decode('utf-8'))))

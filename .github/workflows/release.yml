@@ -1,5 +1,5 @@
 name: Release
-# Tag vX.Y.Z on main to publish: checks the tag matches the version in migratarr_cli.py,
+# Tag vX.Y.Z on main to publish: checks the tag matches the version in migratarr/cli.py,
 # runs the tests, builds, publishes to PyPI (trusted publishing: no token stored here)
 # and creates the GitHub release from that version's CHANGELOG section.
 on:
@@ -17,7 +17,7 @@ jobs:
           python-version: '3.12'
       - name: Tag matches the package version
         run: |
-          version=$(python -c 'import migratarr_cli; print(migratarr_cli.__version__)')
+          version=$(python -c 'import migratarr.cli; print(migratarr.cli.__version__)')
           test "v$version" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != version $version"; exit 1; }
       - run: python -m unittest discover -s tests
       - run: |

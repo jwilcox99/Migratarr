@@ -119,7 +119,7 @@ class PipelineScriptTests(unittest.TestCase):
                 self.assertFalse((self.f.base / 'runs').exists(), 'no run directory before refusing')
 
     def test_snapshot_records_the_check_with_the_run_code(self):
-        source = (ROOT / 'snapshot_run.py').read_text()
+        source = (ROOT / 'migratarr' / 'snapshot_run.py').read_text()
         self.assertIn('"pipeline_inputs.py",', source.split('CODE_FILES = [', 1)[1].split(']', 1)[0])
 
 
