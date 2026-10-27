@@ -35,6 +35,29 @@ INTRO = {
 }
 
 
+def review_rows(fields, values):
+    """(label, text) for what the user actually set: blank, unticked and "add a disk" fields are left
+    out, choices show their labels, and each label carries its group so repeated names stay clear."""
+    rows = []
+    for f in fields:
+        value = values.get(f.path)
+        if f.kind == sc.SECRET:
+            if value in (None, ''):
+                continue
+        elif value in (None, '', []) or (f.kind == sc.BOOL and not value and f.path.endswith('.remove')):
+            continue
+        if f.path.startswith('disks._new.'):
+            continue
+        if f.kind == sc.CHOICE:
+            value = dict(f.choices).get(value, value)
+        elif f.kind == sc.MULTI:
+            names = dict(f.choices)
+            value = [names.get(v, v) for v in value]
+        text = change_text(sc.Change(f.path, f.label, None, value, f.kind == sc.SECRET), 'after')
+        rows.append(((f.group + ': ' if f.group else '') + f.label, text))
+    return rows
+
+
 def index_of(step):
     return (STEPS + (REVIEW,)).index(step)
 
@@ -110,9 +133,8 @@ class SetupWizard:
         parts = []
         for step in STEPS:
             values = self.draft.get(step, {})
-            rows = ''.join(
-                f'<tr><td>{e(f.label)}</td><td>{e(change_text(sc.Change(f.path, f.label, None, values.get(f.path), f.kind == sc.SECRET), "after"))}</td></tr>'
-                for f in self.backend.fields(step, values))
+            rows = ''.join(f'<tr><td>{e(label)}</td><td>{e(text)}</td></tr>'
+                           for label, text in review_rows(self.backend.fields(step, values), values))
             parts.append(f'<h2>{e(TITLES[step])} <a class="hint" href="/setup/{e(step)}">Change</a></h2>'
                          f'<table class="diff"><tbody>{rows}</tbody></table>')
         checks = self.health.run_checks(self.draft) if self.health else []
