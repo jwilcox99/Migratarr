@@ -5,26 +5,37 @@ All notable changes to Migratarr. The format follows
 [Semantic Versioning](https://semver.org/) (0.x: settings files and commands
 may still change between minor versions, always with a migration or a note here).
 
-## [Unreleased] — toward 0.1.0
+## [Unreleased]
 
-First public release: set up and run Migratarr on your own stack without
-hand-editing JSON. Tracked in `reviews/2026-10-26-public-setup-plan.md`.
+## [0.1.0] — unreleased
+
+First public release: install with pip, set up and run Migratarr on your own
+stack in the browser without hand-editing JSON. Every move is still planned,
+reviewed and approved before anything runs.
 
 ### Added
 - `pip install migratarr`: an installed copy keeps settings, runs and logs in one data
   folder, `$MIGRATARR_HOME` (default `~/.local/share/migratarr`). A git clone keeps
   using the clone, so existing setups don't change. `migratarr doctor` shows which.
-- `migratarr` command: `ui`, `plan`, `status`, `approve`, `doctor`, `reconcile`.
+- `migratarr` command: `ui`, `plan`, `status`, `approve`, `doctor`, `reconcile`, `demo`.
+- First-run setup in the web UI: services, where moves run, disks and categories,
+  streaming, then review and save. Detect reads Radarr's and Sonarr's keys from
+  their containers.
+- Settings pages in the web UI: edit a section, review the exact change, save with
+  a backup. Saves are refused while a job runs or if the files changed since review.
+  Pasted keys are stored owner-only and never shown back.
+- Health checks (`migratarr doctor`, and the Settings & health page). Settings may be
+  saved with failing checks, but planning is refused until none fail (warnings are fine).
+- **Experimental:** moves between disks attached to the machine running Migratarr
+  (no NAS), through the same plan, approval and safety checks as NAS moves.
 - `migratarr demo`: plans a made-up library with the real pipeline, offline, and
   opens the UI read-only. No Radarr, Sonarr, Jellyfin or TMDB needed.
-- Settings pages and first-run setup in the web UI; planning is refused while any
-  health check fails (warnings are fine).
-
-### Fixed
-- Planning on "this machine's own disks" (topology local) stopped at the storage
-  consistency check ("remote_path disagrees"); local disks have no NAS path.
+- `examples/local-test/`: throwaway Radarr, Sonarr and Jellyfin containers for trying
+  local-disk moves without touching a real library.
 
 ### Changed
+- Settings version 2: one definition per disk. Version 1 files are migrated
+  automatically, with a backup.
 - All code is in the `migratarr` package; an install adds only `migratarr` to
   site-packages. In a clone, `python3 <script>.py` keeps working through small
   wrapper files. Commands that need settings print what's missing instead of a
@@ -33,19 +44,11 @@ hand-editing JSON. Tracked in `reviews/2026-10-26-public-setup-plan.md`.
   install. Run snapshots record the Migratarr version and a hash of the code; the git
   commit and the clean-tree check apply only to a clone.
 
-### Built, switched on when the settings layer lands
-- Settings pages in the web UI: edit a section, review the exact change, save
-  with a backup. Saves are refused while a job runs or if the files changed
-  since review. Pasted keys are never shown back.
-- First-run setup in the web UI: services, where moves run, disks and
-  categories, streaming, then review and save; a first plan only after the
-  health checks pass.
-
-### Planned before 0.1.0
-- One definition per disk (settings v2) with automatic, backed-up migration.
-- `migratarr doctor` and the health checks behind the Settings page.
-- Moves on this machine's own disks (no NAS) through the unified execution engine.
-- Demo mode on a synthetic library; rewritten SETUP and README.
+### Fixed
+- Planning on "this machine's own disks" stopped at the storage consistency check
+  ("remote_path disagrees"); local disks have no NAS path.
+- Setup wizard: a busy port is reported with the next free port to try instead of a
+  traceback; missing NAS fields and a host/user mix-up are reported on the field.
 
 ## History before 0.1.0 (personally operated, not released)
 

@@ -33,25 +33,26 @@ branches to push).
 
 ## To do, in order
 
-1. - [x] **Package layout** (Claude): move the top-level modules into the `migratarr` package so an
-         install doesn't add ~50 generic module names (`read_api`, `storage_targets`, ...) to
-         site-packages. Keep `python3 <script>.py` working in a clone for existing setups
-2. - [ ] **Docs** (Claude):
-         - README: what it is, `pip install migratarr`, first run, both topologies, screenshots
-         - `SETUP.md`: the wizard first; hand-edited JSON as the advanced path
-         - `SECURITY.md`: pasted keys go to an owner-only folder; what the UI shows and never shows
-         - `docs/runtime-configuration.md`, `docs/storage-targets.md`: settings version 2
+1. - [x] **Package layout** (Claude): all code in the `migratarr` package; `python3 <script>.py`
+         keeps working in a clone (PR #11)
+2. - [x] **Docs** (Claude): README, `SETUP.md`, `SECURITY.md`, settings version 2 docs (PR #10);
+         `migratarr demo` and the logo in the README, absolute links so the README also works
+         on PyPI (release-prep branch). Still open: UI screenshots (Josh, from `migratarr demo`)
 3. - [ ] **Real-world checks** (Josh, with steps from Claude):
          - Fresh machine or VM: install the built wheel, run the wizard, make a first plan
-         - One real move on local disks against throwaway Radarr and Sonarr containers
-4. - [x] **Demo mode** (Claude): `migratarr demo` plans the synthetic library into a temporary
-         folder and opens the UI read-only, so nothing can move. Needs the planners to take an
-         injected HTTP opener outside tests, and the synthetic library moved out of `tests/`
-5. - [ ] **Version** (Claude): `0.1.0` in `migratarr_cli.__version__`, CHANGELOG section dated
-6. - [ ] **Go public** (Josh): rerun the scrub on the final `main`, then the scrub plan's remaining
-         steps (`reviews/2026-09-24-history-scrub-plan.md`)
-7. - [ ] **New repo settings** (Josh): `main` and `v*` tag rulesets, private vulnerability
+         - One real move on local disks with `examples/local-test/` (PR #13)
+4. - [x] **Demo mode** (Claude): `migratarr demo` (PR #12)
+5. - [x] **Version** (Claude): `0.1.0rc1` in `migratarr/cli.py`; CHANGELOG `[0.1.0]` section;
+         release.yml handles pre-release tags (notes from `[0.1.0]`, marked pre-release) and
+         stops the notes at the next heading
+6. - [ ] **Public history** (Josh): the repo is already publicly readable with its full history.
+         Decide whether the scrub plan (`reviews/2026-09-24-history-scrub-plan.md`, private)
+         still applies, and do it before anything is published to PyPI
+7. - [ ] **Repo settings** (Josh): `main` and `v*` tag rulesets, private vulnerability
          reporting, the `pypi` environment
 8. - [ ] **PyPI** (Josh): trusted publisher for project `migratarr` — owner `jwilcox99`, repository
          `Migratarr`, workflow `release.yml`, environment `pypi`
-9. - [ ] **Tag `v0.1.0`** (Josh) on the public repo; the release workflow publishes
+9. - [ ] **Release candidate** (Josh): tag `v0.1.0rc1`; check the PyPI page, then
+         `pipx install --pip-args=--pre migratarr` on the VM, `migratarr demo`, wizard, first plan
+10. - [ ] **Release** (Claude, then Josh): `__version__ = '0.1.0'`, date the `[0.1.0]` section
+          (`## [0.1.0] — YYYY-MM-DD`); Josh tags `v0.1.0`
