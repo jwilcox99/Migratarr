@@ -5,7 +5,8 @@
     migratarr plan [--check]                    make a new plan (nothing moves)
     migratarr status [...]                      runs, moves and timelines (read-only)
     migratarr approve ...                       approve moves from the terminal
-    migratarr doctor                            check settings, services and disks
+    migratarr doctor [--offline]                check settings, services and disks
+    migratarr reconcile <move> --outcome ...    record that a flagged move was checked by hand
     migratarr --version
 
 Each subcommand runs the existing script unchanged, with the rest of the
@@ -24,6 +25,7 @@ COMMANDS = {  # name: (module, one-line help)
     'status': ('migratarr_status', 'runs, moves and timelines (read-only)'),
     'approve': ('approve_execution', 'approve moves from the terminal'),
     'doctor': ('migratarr_doctor', 'check settings, services and disks'),
+    'reconcile': ('migratarr_reconcile', 'record that a flagged move was checked by hand'),
 }
 
 

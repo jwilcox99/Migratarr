@@ -40,7 +40,7 @@ class CliTests(unittest.TestCase):
     def test_help_lists_commands(self):
         code, out, _ = run()
         self.assertEqual(code, 0)
-        for name in ('ui', 'plan', 'status', 'approve', 'doctor'):
+        for name in ('ui', 'plan', 'status', 'approve', 'doctor', 'reconcile'):
             self.assertIn(name, out)
 
     def test_version(self):
@@ -66,11 +66,11 @@ class CliTests(unittest.TestCase):
         code, _, err = run('fake', '--fail')
         self.assertEqual((code, err), (1, 'it failed\n'))
 
-    def test_every_listed_module_exists_except_phase_2_doctor(self):
+    def test_every_listed_command_exists(self):
         import importlib.util
         missing = {name for name, (module, _) in migratarr_cli.COMMANDS.items()
                    if name not in ('fake', 'gone') and importlib.util.find_spec(module) is None}
-        self.assertLessEqual(missing, {'doctor'})
+        self.assertEqual(missing, set())
 
 
 class PackagingTests(unittest.TestCase):
@@ -80,6 +80,15 @@ class PackagingTests(unittest.TestCase):
         text = (root / 'pyproject.toml').read_text(encoding='utf-8')
         listed = set(re.findall(r'^\s+"([A-Za-z0-9_]+)",$', text.split('py-modules = [', 1)[1].split(']', 1)[0], re.M))
         self.assertEqual(listed, {p.stem for p in root.glob('*.py')})
+
+    def test_pyproject_lists_every_package(self):
+        import re
+        root = Path(__file__).resolve().parents[1]
+        text = (root / 'pyproject.toml').read_text(encoding='utf-8')
+        listed = set(re.findall(r'"([A-Za-z0-9_.]+)"', re.search(r'^packages = \[(.*?)\]', text, re.M).group(1)))
+        found = {'.'.join(p.parent.relative_to(root).parts) for p in root.glob('**/__init__.py')
+                 if 'tests' not in p.parts and not any(part.startswith('.') for part in p.parts)}
+        self.assertEqual(listed, found)
 
 
 if __name__ == '__main__':

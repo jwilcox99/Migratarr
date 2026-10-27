@@ -29,7 +29,7 @@ Source = "https://github.com/jwilcox99/Migratarr"
 Issues = "https://github.com/jwilcox99/Migratarr/issues"
 
 [tool.setuptools]
-packages = ["migratarr_validation"]
+packages = ["migratarr", "migratarr.engine", "migratarr.settings", "migratarr_validation"]
 py-modules = [
     "approval_store",
     "approve_execution",
@@ -52,14 +52,17 @@ py-modules = [
     "executor_nfs",
     "media_layout",
     "migratarr_cli",
+    "migratarr_doctor",
     "migratarr_jobs",
     "migratarr_plan",
+    "migratarr_reconcile",
     "migratarr_status",
     "migratarr_ui",
     "movie_placement_v1",
     "pipeline_inputs",
     "planner_settings",
     "read_api",
+    "reconcile_store",
     "recover_cross_0102",
     "recover_cross_0116",
     "recover_cross_published",
