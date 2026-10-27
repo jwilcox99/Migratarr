@@ -44,7 +44,7 @@ branches to push).
 3. - [ ] **Real-world checks** (Josh, with steps from Claude):
          - Fresh machine or VM: install the built wheel, run the wizard, make a first plan
          - One real move on local disks against throwaway Radarr and Sonarr containers
-4. - [ ] **Demo mode** (Claude): `migratarr demo` plans the synthetic library into a temporary
+4. - [x] **Demo mode** (Claude): `migratarr demo` plans the synthetic library into a temporary
          folder and opens the UI read-only, so nothing can move. Needs the planners to take an
          injected HTTP opener outside tests, and the synthetic library moved out of `tests/`
 5. - [ ] **Version** (Claude): `0.1.0` in `migratarr_cli.__version__`, CHANGELOG section dated

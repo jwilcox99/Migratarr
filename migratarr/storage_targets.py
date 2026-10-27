@@ -271,5 +271,8 @@ def check_runtime_consistency(runtime, targets):
         target = by_id[disk]
         _require(str(target.path) == entry['local_path'],
                  disk + ' local_path disagrees between runtime and storage targets')
-        _require(target.remote_path is not None and str(target.remote_path) == entry['remote_path'],
+        # Topology local has no NAS: runtime_config uses each disk's own path as its "remote" path.
+        remote = target.remote_path if target.remote_path is not None else (
+            target.path if getattr(runtime, 'topology', 'nas_ssh') == 'local' else None)
+        _require(remote is not None and str(remote) == entry['remote_path'],
                  disk + ' remote_path disagrees between runtime and storage targets')

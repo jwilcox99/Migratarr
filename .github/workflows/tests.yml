@@ -67,6 +67,9 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' http://localhost:8799/)" = "303 http://localhost:8799/setup"
           curl -sfL http://localhost:8799/setup | grep -q "Connect your services"
           kill $ui
+          # The demo runs the real planning pipeline on a made-up library, offline.
+          /tmp/venv/bin/migratarr demo --dir /tmp/migratarr-demo --no-ui
+          ls /tmp/migratarr-demo/runs
           # Nothing was written into the installed package.
           site=$(/tmp/venv/bin/python -c 'import migratarr, os; print(os.path.dirname(os.path.dirname(migratarr.__file__)))')
           # Only the package is installed: no top-level modules beside it.
