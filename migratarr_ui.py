@@ -1375,19 +1375,76 @@ def make_handler(app):
     return Handler
 
 
-def load_context(base=None):
-    """Base path, disk paths and reserves from the deployment config."""
-    from runtime_config import get_config
-    runtime = get_config()
+def load_context(base=None, environ=None):
+    """Base path, disk paths and reserves from the deployment config (``environ``: tests, the settings backend)."""
+    from runtime_config import get_config, load_config
+    runtime = get_config() if environ is None else load_config(environ=environ)
     reserves = {}
     try:
-        import os
         from storage_targets import deployed_targets_path, load_targets
-        targets = load_targets(deployed_targets_path(runtime))
+        targets = load_targets(deployed_targets_path(runtime, environ))
         reserves = {t.id: t.minimum_free_space_gb for t in targets.targets}
     except Exception as exc:  # reserves are a display nicety; the page works without them
         print('Reserves not shown: ' + str(exc), file=sys.stderr)
     return Path(base) if base else runtime.base_path, runtime.storage, reserves
+
+
+def reload_context(base=None, environ=None):
+    """load_context after the settings files changed (the loaders cache what they read)."""
+    from planner_settings import get_settings
+    from runtime_config import get_config
+    get_config.cache_clear()
+    get_settings.cache_clear()
+    return load_context(base, environ)
+
+
+def build_app(base=None, actions=True, backend=None):
+    """The UI with its settings pages, first-run wizard and plan gate (handoff §3-4).
+
+    - settings files missing: the wizard (every page redirects to /setup);
+    - present but invalid: Settings & health with edit forms; plan, approve and run refused;
+    - valid: the normal UI. Planning is refused while any health check fails.
+    After a save or setup the new disks, reserves and base path are used without a restart.
+    """
+    import os
+    import settings_contract as sc
+    import settings_ui
+    import setup_wizard
+    from migratarr import health
+    from migratarr.settings.ui_backend import UiBackend
+    backend = backend or UiBackend(os.environ, base=base)
+    pages = settings_ui.SettingsPages(backend, backend)
+    wizard = setup_wizard.SetupWizard(backend, backend)
+    gate = lambda: [c for c in backend.run_checks() if c.status == sc.FAIL]  # the checks doctor runs
+    report = backend.report()
+    environ = backend.environ if backend.environ is not os.environ else None
+    common = dict(actions=actions, settings=pages, wizard=wizard, plan_gate=gate, load_settings=backend.report,
+                  health=lambda report: health.run_checks(report, environ=backend.environ, http=backend.http,
+                                                          run=backend.run))
+    if report.missing:
+        print('Not set up yet: open the UI to set up Migratarr (missing: ' + ', '.join(report.missing) + ').',
+              file=sys.stderr)
+        app = App(base or backend.base_of(report), **common)
+    else:
+        try:
+            ctx_base, storage, reserves = load_context(base, environ)
+            app = App(ctx_base, storage, reserves, **common)
+        except ValueError as exc:  # ConfigError, storage targets: show what's wrong instead of exiting
+            print('Settings problem; starting on Settings & health: ' + str(exc), file=sys.stderr)
+            app = App(base or backend.base_of(report), setup=True, **common)
+
+    def reload(_result=None):
+        try:
+            new_base, storage, reserves = reload_context(base, environ)
+        except ValueError as exc:
+            print('Settings saved but do not load yet: ' + str(exc), file=sys.stderr)
+            app.setup = True
+            return
+        app.reload(storage, reserves, new_base)
+        app.gate_failures = None
+
+    pages.on_saved = wizard.on_created = app.on_reload = reload
+    return app
 
 
 def main(argv=None):
@@ -1400,12 +1457,7 @@ def main(argv=None):
     # One-time move of runtime.json to version 2 (docs/settings.md); never blocks startup.
     from migratarr.settings import migrate_if_needed
     migrate_if_needed(log=lambda message: print(message, file=sys.stderr, flush=True))
-    try:
-        base, storage, reserves = load_context(args.base)
-        app = App(base, storage, reserves, actions=not args.read_only)
-    except ValueError as exc:  # ConfigError, storage targets: show what's wrong instead of exiting
-        print('Settings problem; starting with only the Settings & health page: ' + str(exc), file=sys.stderr)
-        app = App(args.base or Path(__file__).resolve().parent, setup=True)
+    app = build_app(args.base, actions=not args.read_only)
     server = ThreadingHTTPServer(('127.0.0.1', args.port), make_handler(app))
     mode = 'read-only view' if args.read_only else 'UI (plan, confirm, run)'
     print(f'Migratarr {mode} on http://localhost:{args.port}  (Ctrl+C to stop; running jobs keep going)\n'

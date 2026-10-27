@@ -13,9 +13,10 @@ moves anything: the result is a new run and manifest with every row
 unapproved, and the commands to review it.
 
 Preflight refuses before any step when the runtime config or planner settings
-are invalid, a service credential can't be read, or the repository has
-uncommitted changes (the snapshot records the code it ran; --allow-dirty
-overrides that one check).
+are invalid, a service credential can't be read, any health check fails (the
+same checks as `migratarr doctor` and the UI's plan gate; warnings are fine),
+or the repository has uncommitted changes (the snapshot records the code it
+ran; --allow-dirty overrides that one check).
 """
 import argparse
 import subprocess
@@ -41,6 +42,12 @@ def banner(text):
     print('\n' + '=' * 72 + '\n' + text + '\n' + '=' * 72, flush=True)
 
 
+def health_failures():
+    """Failing health checks: one list for this command, `migratarr doctor` and the UI (decision 2026-10-26)."""
+    from migratarr import health, settings
+    return [c for c in health.run_checks(settings.load()) if c.status == health.FAIL]
+
+
 def preflight(repo, allow_dirty):
     """Return (problems, base path); no problems means every step can start."""
     problems = []
@@ -60,6 +67,10 @@ def preflight(repo, allow_dirty):
             read_key(service, runtime)
         except SecretError as exc:  # messages name the source, never the value
             problems.append(str(exc))
+    if not problems:  # the health checks contact every service; only worth it once the basics pass
+        for check in health_failures():
+            problems.append(f'Health check failed: {check.label}: {check.detail}'
+                            + (f' ({check.fix})' if check.fix else ''))
     try:
         status = subprocess.run(['git', 'status', '--porcelain'], cwd=repo, capture_output=True,
                                 text=True, check=True).stdout
@@ -124,7 +135,7 @@ def main(argv=None, steps=STEPS, repo=REPO):
     if problems:
         print('PREFLIGHT FAILED: no step was run, nothing was written.')
         return 2
-    print('Preflight OK: config, planner settings, credentials and git status.')
+    print('Preflight OK: config, planner settings, credentials, health checks and git status.')
     if args.check:
         return 0
 

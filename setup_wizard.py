@@ -58,6 +58,9 @@ class SetupWizard:
     def values(self, step):
         if step not in self.draft:
             self.draft[step] = dict(self.backend.defaults(step))
+        normalize = getattr(self.backend, 'normalize', None)
+        if normalize:  # e.g. the disks step follows the topology chosen earlier
+            self.draft[step] = normalize(step, self.draft[step], dict(self.draft))[0]
         return self.draft[step]
 
     # ------------------------------------------------------------ pages
@@ -163,7 +166,14 @@ class SetupWizard:
             raise sc.SettingsError('There is no setup step called ' + str(step) + '.')
         current = self.values(step)
         values, problems = parse_form(self.backend.fields(step, current), form_data, current)
+        notes = []
+        normalize = getattr(self.backend, 'normalize', None)
+        if normalize and not sc.blocking(problems):
+            values, notes = normalize(step, values, dict(self.draft))
         self.draft[step] = values
+        if notes and action == 'next':  # e.g. a disk was added: show it before moving on
+            self.done.discard(step)
+            return 200 if not sc.blocking(notes) else 400, self.render_step(step, values, notes, ctx)
         if action == 'back':
             return 'redirect', '/setup/' + STEPS[max(index_of(step) - 1, 0)]
         if action == 'detect':

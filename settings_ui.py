@@ -276,8 +276,17 @@ class SettingsPages:
     def review(self, section_id, form_data, ctx):
         self.section(section_id)
         current = self.backend.current(section_id)
-        fields = self.backend.fields(section_id, current)
+        # Fields can depend on values (one group per disk): use the shape of the form that was posted,
+        # which may hold a disk added (or lack one removed) since the files were read.
+        posted = {k[2:] for k in form_data if k.startswith('f:')}
+        shape = {k: current.get(k) for k in posted} if posted else current
+        fields = self.backend.fields(section_id, shape)
         values, problems = parse_form(fields, form_data, current)
+        normalize = getattr(self.backend, 'normalize', None)
+        if normalize and not sc.blocking(problems):
+            values, notes = normalize(section_id, values)
+            if notes:  # e.g. a disk was added: show it (and its placement choices) before reviewing
+                return (400 if sc.blocking(notes) else 200), self.edit(section_id, ctx, values, notes)
         if not sc.blocking(problems):
             problems += self.backend.validate(section_id, values)
         if sc.blocking(problems):
