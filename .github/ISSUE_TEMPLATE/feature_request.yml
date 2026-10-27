@@ -1,0 +1,21 @@
+name: Feature request
+description: A change to how Migratarr plans, moves, or is set up.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe your setup and the outcome you want, not only the feature.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety
+      options:
+        - label: This keeps "nothing moves until I approve it" true.

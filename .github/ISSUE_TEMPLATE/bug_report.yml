@@ -1,0 +1,48 @@
+name: Bug report
+description: Something went wrong while setting up, planning or moving.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never paste API keys, tokens, or SSH keys.** `migratarr doctor` output is safe to paste: it names where a key comes from, never the key.
+        If files moved that you did not approve, or a move left files in two places, stop running moves and say so in the first line.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: 1. Open Settings → Disks ... 2. ...
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `migratarr doctor`
+      render: text
+  - type: dropdown
+    id: topology
+    attributes:
+      label: Where moves run
+      options: [NAS over SSH, This machine's disks, Not set up yet]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Migratarr version (`migratarr --version`) or commit
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: OS and Python version
+      placeholder: Ubuntu 24.04, Python 3.12
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines (execution_logs/*.jsonl or job log), secrets removed
+      render: text

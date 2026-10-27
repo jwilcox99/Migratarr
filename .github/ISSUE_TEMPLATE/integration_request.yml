@@ -1,0 +1,27 @@
+name: Integration request
+description: Support for another service (media server, download manager, metadata source).
+labels: [integration]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Today Migratarr talks to Radarr, Sonarr, Jellyfin and TMDB. Each service is one descriptor in the service registry (its settings fields, where its key can come from, and its health check), so a new one is mostly a new descriptor plus what Migratarr should read from it.
+  - type: input
+    id: service
+    attributes:
+      label: Service and version
+      placeholder: Plex Media Server 1.40
+    validations:
+      required: true
+  - type: textarea
+    id: role
+    attributes:
+      label: What should Migratarr use it for?
+      description: For example "play history instead of Jellyfin", or "streaming availability instead of TMDB".
+    validations:
+      required: true
+  - type: textarea
+    id: api
+    attributes:
+      label: API and authentication
+      description: Link to its API docs and how it authenticates (API key header, token, config file). Don't paste a real key.

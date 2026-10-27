@@ -25,18 +25,15 @@ from executor_manifest import digest, load_approved_plan
 from executor_nfs import verify_after_rename
 from executor_command import NAS_IDLE_TIMEOUT, run_command
 from executor_inventory import scan_metadata, metadata_from_inventory
+from migratarr.engine import nas_side, primitives, transport
+
+# Shared code, bound into this module so it resolves names (inventory, nas_pair,
+# RUNTIME, ...) here, exactly as when it was defined in this file.
+primitives.bind(globals(), nas_side.Refused, nas_side.require, nas_side.canonical_existing, nas_side.file_metadata, nas_side.inventory_metadata, nas_side.rename_noreplace, nas_side.sync_parents, nas_side.filesystem_ready,
+                primitives.layout, primitives.posix, primitives.remote_path, primitives.verify_nfs_after_rename)
 RUNTIME = get_config()
 OVERRIDES = get_settings().overrides
 TARGETS = get_targets()
-
-
-class Refused(RuntimeError):
-    pass
-
-
-def require(ok, message):
-    if not ok:
-        raise Refused(message)
 
 
 def load_plan(base, execution_id):
@@ -44,15 +41,6 @@ def load_plan(base, execution_id):
 
 
 MEDIA = 'Movie'
-
-
-def layout():
-    # Built per call from RUNTIME, so a patched or reloaded runtime is honored.
-    return MediaLayout(RUNTIME, TARGETS)
-
-
-def posix(path):
-    return path.as_posix() if isinstance(path, PurePath) else str(path)
 
 
 def paths(row):
@@ -72,29 +60,9 @@ def paths(row):
         layout().logical(MEDIA, row['recommended'], dst.name)
 
 
-def canonical_existing(p):
-    require(p.resolve(strict=True) == p, 'Symlink or noncanonical filesystem path: ' + str(p))
-
-
-def filesystem_ready(src, dst):
-    canonical_existing(src)
-    canonical_existing(dst.parent)
-    require(src.is_dir() and dst.parent.is_dir(), 'Missing source or destination parent')
-    require(not os.path.lexists(dst), 'Destination already exists')
-    require(src.stat().st_dev == dst.parent.stat().st_dev, 'Different filesystem devices')
-
-
 def progress(message):
     print('[%s] %s' % (datetime.now().strftime('%H:%M:%S'), message),
           file=sys.stderr, flush=True)
-
-
-def file_metadata(root):
-    return scan_metadata(root, require)
-
-
-def inventory_metadata(items):
-    return metadata_from_inventory(items)
 
 
 def inventory(root):
@@ -145,27 +113,6 @@ def run_progress(command, label, input=None, timeout=1800, idle_timeout=None):
                        idle_timeout=idle_timeout)
 
 
-def rename_noreplace(src, dst):
-    # Atomic collision protection. Never fall back to copy/delete or replacing rename.
-    libc = ctypes.CDLL(None, use_errno=True)
-    require(hasattr(libc, 'renameat2'), 'renameat2 unavailable; refusing unsafe fallback')
-    fn = libc.renameat2
-    fn.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
-    fn.restype = ctypes.c_int
-    if fn(-100, os.fsencode(src), -100, os.fsencode(dst), 1) != 0:
-        err = ctypes.get_errno()
-        raise OSError(err, os.strerror(err))
-
-
-def sync_parents(src, dst):
-    for parent in {src.parent, dst.parent}:
-        fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY)
-        try:
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-
-
 class Radarr:
     def __init__(self):
         # runtime.json urls + "secrets" (default: ApiKey/UrlBase from the container's config.xml).
@@ -210,13 +157,6 @@ class Radarr:
         result = run_progress(
             ['docker', 'exec', check['container'], 'sha256sum', '--', path], 'Radarr file-content verification')
         require(result.split()[0] == expected_hash, 'Radarr-visible file content mismatch')
-
-
-def verify_nfs_after_rename(src, dst, expected, log, timeout=60, interval=2, metadata_only=False):
-    return verify_after_rename(
-        src, dst, expected, log, require=require, canonical_existing=canonical_existing,
-        file_metadata=file_metadata, inventory=inventory, inventory_metadata=inventory_metadata,
-        timeout=timeout, interval=interval, metadata_only=metadata_only)
 
 
 def execute(base, execution_id, live, radarr, log, transport=None, recovery=None):
@@ -321,12 +261,6 @@ def check_journal(journal, resume=False):
     require(not resume, 'No failed journal to recover')
 
 
-def remote_path(path):
-    raw = posix(path)
-    require(layout().parse_local(raw, MEDIA) is not None, 'Invalid NAS mapping')
-    return layout().to_remote(raw, MEDIA)
-
-
 def remote_layout(disk):
     """One disk's NAS root and the Movie category folders; shipped with the program."""
     return {disk: layout().remote_roots[disk]}, layout().category_dirs[MEDIA]
@@ -379,30 +313,9 @@ with os.fdopen(lockfd, 'a') as lock:
 '''
 
 
-class NasTransport:
-    def __enter__(self):
-        self.temp = tempfile.TemporaryDirectory(prefix='migratarr-ssh-')
-        self.options = ['-i', RUNTIME.ssh_key,
-                        '-o', 'IdentitiesOnly=yes',
-                        '-o', 'BatchMode=yes',
-                        '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=15',
-                        '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3',
-                        '-o', 'ControlPath=' + self.temp.name + '/socket']
-        try:
-            # Dedicated key only; never wait for a terminal password prompt.
-            subprocess.run(['ssh', *self.options, '-M', '-N', '-f',
-                            '-o', 'ControlPersist=yes', RUNTIME.ssh_target], check=True, timeout=120)
-        except BaseException:
-            self.temp.cleanup()
-            raise
-        return self
-
-    def __exit__(self, *exc):
-        try:
-            subprocess.run(['ssh', *self.options, '-O', 'exit', RUNTIME.ssh_target],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20)
-        finally:
-            self.temp.cleanup()
+class NasTransport(transport.NasChannel):
+    """The NAS program's channel (migratarr/engine/transport.py): SSH, or this host for topology local."""
+    runtime = property(lambda self: RUNTIME)
 
     def call(self, operation, src, dst, before):
         found = [layout().parse_local(posix(p), MEDIA) for p in (src, dst)]
@@ -410,8 +323,7 @@ class NasTransport:
         disk = found[0][0]
         payload = dict(operation=operation, source=remote_path(src), destination=remote_path(dst),
                        inventory=before)
-        result = run_progress(['ssh', *self.options, '-o', 'BatchMode=yes', RUNTIME.ssh_target,
-                                 shlex.quote(RUNTIME.remote_python) + ' -c ' + shlex.quote(remote_program(disk))],
+        result = run_progress(self.command(remote_program(disk)),
                               'NAS ' + operation, input=json.dumps(payload),
                               timeout=None, idle_timeout=NAS_IDLE_TIMEOUT)
         require(json.loads(result) == dict(result='OK', operation=operation),

@@ -20,7 +20,7 @@ class StorageTargetTests(unittest.TestCase):
         model = parse_targets(self.data)
         legacy = json.loads((ROOT / 'config/legacy-storage.json').read_text())
         policy = parse_policy(legacy)
-        runtime = json.loads((ROOT / 'config/runtime.example.json').read_text())
+        runtime = json.loads((ROOT / 'config/examples/runtime.v1.example.json').read_text())
         self.assertEqual({t.id: {'local_path': str(t.path), 'remote_path': str(t.remote_path)}
                           for t in model.targets}, runtime['storage'])
         self.assertEqual(tuple(Path(str(p)) for p in model.source_roots), policy.source_roots)
@@ -140,11 +140,11 @@ class StorageTargetTests(unittest.TestCase):
                     load_targets(path)
 
     def test_runtime_consistency_accepts_matching_deployment(self):
-        runtime = load_config(ROOT / 'config/runtime.example.json', environ={})
+        runtime = load_config(ROOT / 'config/examples/runtime.v1.example.json', environ={})
         check_runtime_consistency(runtime, parse_targets(self.data))
 
     def test_runtime_consistency_rejects_drifted_local_path(self):
-        runtime = load_config(ROOT / 'config/runtime.example.json', environ={})
+        runtime = load_config(ROOT / 'config/examples/runtime.v1.example.json', environ={})
         # Move every target to a new shared parent, keeping id == path.name so
         # storage_targets' own phase1-fixed-depth/shared-parent checks still pass.
         for target in self.data['targets']:
@@ -153,7 +153,7 @@ class StorageTargetTests(unittest.TestCase):
             check_runtime_consistency(runtime, parse_targets(self.data))
 
     def test_runtime_consistency_rejects_disk_missing_from_targets(self):
-        runtime = load_config(ROOT / 'config/runtime.example.json', environ={})
+        runtime = load_config(ROOT / 'config/examples/runtime.v1.example.json', environ={})
         del self.data['targets'][3]
         for media in ('Movie', 'TV'):
             self.data['placement'][media]['Library'] = ['media03']
@@ -162,13 +162,13 @@ class StorageTargetTests(unittest.TestCase):
             check_runtime_consistency(runtime, parse_targets(self.data))
 
     def test_runtime_consistency_rejects_mismatched_remote_path(self):
-        runtime = load_config(ROOT / 'config/runtime.example.json', environ={})
+        runtime = load_config(ROOT / 'config/examples/runtime.v1.example.json', environ={})
         self.data['targets'][0]['remote_path'] = '/volume9/media01'
         with self.assertRaisesRegex(ValueError, 'remote_path disagrees'):
             check_runtime_consistency(runtime, parse_targets(self.data))
 
     def test_runtime_consistency_rejects_plan_only_target_for_runtime_disk(self):
-        runtime = load_config(ROOT / 'config/runtime.example.json', environ={})
+        runtime = load_config(ROOT / 'config/examples/runtime.v1.example.json', environ={})
         del self.data['targets'][0]['remote_path']
         with self.assertRaisesRegex(ValueError, 'remote_path disagrees'):
             check_runtime_consistency(runtime, parse_targets(self.data))

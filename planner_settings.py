@@ -295,6 +295,44 @@ def parse_settings(data):
                            _family_rules(streaming.get('families', DEFAULT_FAMILIES)))
 
 
+
+def settings_problems(data):
+    """Every problem in a planner.json document as (field, message); see parse_settings."""
+    found = []
+
+    def attempt(field, check):
+        try:
+            check()
+        except SettingsError as exc:
+            found.append((field, str(exc)))
+        except (KeyError, TypeError, AttributeError):
+            found.append((field, 'Planner settings: ' + field + ' is missing or malformed'))
+
+    if not isinstance(data, dict):
+        return [('root', 'Planner settings: root must be an object')]
+    attempt('root', lambda: _fields(data, ('schema_version', 'streaming'), 'root',
+                                    optional=('overrides', 'scoring')))
+    attempt('schema_version', lambda: _require(type(data.get('schema_version')) is int
+                                              and data['schema_version'] == 1, 'unsupported schema_version'))
+    streaming = data.get('streaming')
+    if isinstance(streaming, dict):
+        attempt('streaming', lambda: _fields(streaming, ('region', 'subscribed', 'user_free_access'),
+                                             'streaming', optional=('families',)))
+        attempt('streaming.region', lambda: _require(
+            isinstance(streaming['region'], str) and re.fullmatch(r'[A-Z]{2}', streaming['region']),
+            'streaming.region must be a two-letter uppercase TMDB region code'))
+        for name in ('subscribed', 'user_free_access'):
+            attempt('streaming.' + name, lambda name=name: _families(streaming[name], 'streaming.' + name))
+        if 'families' in streaming:
+            attempt('streaming.families', lambda: _family_rules(streaming['families']))
+    else:
+        found.append(('streaming', 'Planner settings: streaming must be an object'))
+    if 'overrides' in data:
+        attempt('overrides', lambda: _overrides(data['overrides']))
+    if 'scoring' in data:
+        attempt('scoring', lambda: _scoring(data['scoring']))
+    return found
+
 def _unique_object(pairs):
     result = {}
     for key, value in pairs:

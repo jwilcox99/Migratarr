@@ -35,7 +35,7 @@ def isolated_legacy():
         if isinstance(node, ast.FunctionDef) and node.name in LEGACY_FUNCTIONS
     ]
     namespace = {"Path": Path, "os": __import__("os"),
-                 "RUNTIME": load_config(ROOT / "config/runtime.example.json", environ={})}
+                 "RUNTIME": load_config(ROOT / "config/examples/runtime.v1.example.json", environ={})}
     exec(compile(ast.Module(body=definitions, type_ignores=[]), str(PLANNER), "exec"), namespace)
     targets = load_targets(ROOT / 'config/storage-targets.example.json')
     namespace.update(

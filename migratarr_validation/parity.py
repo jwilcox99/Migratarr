@@ -47,7 +47,7 @@ def load_legacy(runtime=None, targets=None, planner=None, settings=None):
     from runtime_config import load_config
     # Offline parity remains pinned to the documented Phase One deployment.
     # Live callers explicitly supply their deployed configuration.
-    runtime = runtime or load_config(PLANNER.parent / 'config' / 'runtime.example.json', environ={})
+    runtime = runtime or load_config(PLANNER.parent / 'config' / 'examples' / 'runtime.v1.example.json', environ={})
     from planner_settings import load_settings
     settings = settings or load_settings(PLANNER.parent / 'config' / 'planner.example.json')
     from service_keys import service_endpoint

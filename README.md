@@ -97,12 +97,20 @@ reproducing past decisions. They are not part of the pipeline you run.
 
 ## Configuration
 
-Runtime scripts use a required, validated `config/runtime.json` file. Start with:
+Runtime scripts use a required, validated `config/runtime.json` file and
+`config/storage-targets.json`, where your disks are declared. Start with:
 
 ```sh
 cp config/runtime.example.json config/runtime.json
+cp config/storage-targets.example.json config/storage-targets.json
 python3 -c 'from runtime_config import get_config; get_config(); print("Runtime config valid")'
 ```
+
+For a single machine with local disks (no NAS), start from
+`config/examples/runtime.local.example.json` and
+`storage-targets.local.example.json` instead. Existing version 1
+`runtime.json` files keep working and are migrated once, automatically, when
+the web UI starts; see [Settings](docs/settings.md).
 
 Replace the example's host, NAS and disk values with your own before use. See
 [Runtime configuration](docs/runtime-configuration.md) for all fields, environment

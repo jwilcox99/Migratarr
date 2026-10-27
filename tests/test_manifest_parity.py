@@ -20,7 +20,7 @@ def _sha256(path):
 
 class ManifestParityTests(unittest.TestCase):
     def setUp(self):
-        self.runtime = load_config(ROOT / "config/runtime.example.json", environ={})
+        self.runtime = load_config(ROOT / "config/examples/runtime.v1.example.json", environ={})
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.run_dir = Path(self.temp.name) / "20260101T000000Z"

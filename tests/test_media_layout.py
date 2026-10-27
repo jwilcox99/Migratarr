@@ -24,7 +24,7 @@ from storage_targets import load_targets
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / 'tests/fixtures'
-RUNTIME = load_config(ROOT / 'config/runtime.example.json', environ={})
+RUNTIME = load_config(ROOT / 'config/examples/runtime.v1.example.json', environ={})
 TARGETS = load_targets(ROOT / 'config/storage-targets.example.json')
 DISKS = sorted(RUNTIME.storage)
 MEDIA = {'Movie': ('Movies', ('Common', 'Rare', 'Library', 'Archive')),

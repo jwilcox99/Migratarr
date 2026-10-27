@@ -113,7 +113,7 @@ class PreflightTests(unittest.TestCase):
         (self.repo / 'tracked.py').write_text('x = 1\n')
         subprocess.run(['git', 'add', '.'], cwd=self.repo, check=True)
         subprocess.run([*git, 'commit', '-qm', 'init'], cwd=self.repo, check=True)
-        self.config = load_config(ROOT / 'config/runtime.example.json', environ={})
+        self.config = load_config(ROOT / 'config/examples/runtime.v1.example.json', environ={})
 
     def preflight(self, allow_dirty=False, failing=()):
         def read_key(service, runtime=None):
@@ -122,8 +122,36 @@ class PreflightTests(unittest.TestCase):
             return 'value'
         with patch('runtime_config.get_config', return_value=self.config), \
                 patch('planner_settings.get_settings', return_value=None), \
-                patch('service_keys.read_key', read_key):
+                patch('service_keys.read_key', read_key), \
+                patch.object(migratarr_plan, 'health_failures', return_value=list(self.failing_checks)):
             return migratarr_plan.preflight(self.repo, allow_dirty)
+
+    failing_checks = ()
+
+    def test_a_failing_health_check_stops_planning(self):
+        from migratarr.health import Check
+        self.failing_checks = (Check('nas.ssh', 'nas', 'NAS over SSH', 'fail', 'mig@nas: Permission denied',
+                                     'Check nas.ssh_key'),)
+        problems, _ = self.preflight()
+        self.assertEqual(problems, ['Health check failed: NAS over SSH: mig@nas: Permission denied '
+                                    '(Check nas.ssh_key)'])
+
+    def test_health_checks_are_not_run_when_basics_already_fail(self):
+        with patch.object(migratarr_plan, 'health_failures', side_effect=AssertionError('ran')):
+            with patch('runtime_config.get_config', return_value=self.config), \
+                    patch('planner_settings.get_settings', side_effect=ValueError('bad region')), \
+                    patch('service_keys.read_key', return_value='value'):
+                problems, _ = migratarr_plan.preflight(self.repo, False)
+        self.assertEqual(problems, ['Planner settings: bad region'])
+
+    def test_health_failures_uses_the_doctor_check_list(self):
+        from migratarr import health
+        checks = [health.Check('a', 'config', 'A', health.FAIL), health.Check('b', 'disks', 'B', health.WARN),
+                  health.Check('c', 'nas', 'C', health.SKIP)]
+        with patch('migratarr.settings.load', return_value='report'), \
+                patch('migratarr.health.run_checks', return_value=checks) as run:
+            self.assertEqual([c.id for c in migratarr_plan.health_failures()], ['a'])  # warnings don't block
+        run.assert_called_once_with('report')
 
     def test_clean_repository_and_readable_credentials_pass(self):
         self.assertEqual(self.preflight(), ([], self.config.base_path))

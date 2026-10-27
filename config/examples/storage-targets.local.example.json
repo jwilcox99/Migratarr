@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "defaults": {
+    "minimum_free_space_gb": 50
+  },
+  "targets": [
+    {
+      "id": "disk1",
+      "name": "Local disk 1",
+      "path": "/srv/media/disk1",
+      "enabled": true,
+      "media_types": [
+        "Movie",
+        "TV"
+      ],
+      "minimum_free_space_gb": 50,
+      "storage_class": null,
+      "priority": 100,
+      "tags": []
+    },
+    {
+      "id": "disk2",
+      "name": "Local disk 2",
+      "path": "/srv/media/disk2",
+      "enabled": true,
+      "media_types": [
+        "Movie",
+        "TV"
+      ],
+      "minimum_free_space_gb": 50,
+      "storage_class": null,
+      "priority": 100,
+      "tags": []
+    },
+    {
+      "id": "disk3",
+      "name": "Local disk 3",
+      "path": "/srv/media/disk3",
+      "enabled": true,
+      "media_types": [
+        "Movie",
+        "TV"
+      ],
+      "minimum_free_space_gb": 50,
+      "storage_class": null,
+      "priority": 100,
+      "tags": []
+    },
+    {
+      "id": "disk4",
+      "name": "Local disk 4",
+      "path": "/srv/media/disk4",
+      "enabled": true,
+      "media_types": [
+        "Movie",
+        "TV"
+      ],
+      "minimum_free_space_gb": 50,
+      "storage_class": null,
+      "priority": 100,
+      "tags": []
+    }
+  ],
+  "category_paths": {
+    "Movie": {
+      "Common": "Movies/Common",
+      "Rare": "Movies/Rare",
+      "Library": "Movies/Library",
+      "Archive": "Movies/Archive"
+    },
+    "TV": {
+      "Current": "TV/Current",
+      "Rare": "TV/Rare",
+      "Library": "TV/Library",
+      "Archive": "TV/Archive"
+    }
+  },
+  "placement": {
+    "Movie": {
+      "Common": [
+        "disk1"
+      ],
+      "Rare": [
+        "disk2"
+      ],
+      "Library": [
+        "disk3",
+        "disk4"
+      ],
+      "Archive": [
+        "disk4"
+      ]
+    },
+    "TV": {
+      "Current": [
+        "disk1"
+      ],
+      "Rare": [
+        "disk2"
+      ],
+      "Library": [
+        "disk3",
+        "disk4"
+      ],
+      "Archive": [
+        "disk4"
+      ]
+    }
+  }
+}

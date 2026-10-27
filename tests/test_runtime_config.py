@@ -13,7 +13,7 @@ from storage_targets import load_targets
 from runtime_config import ConfigError, RuntimeConfig, get_config, load_config
 
 ROOT = Path(__file__).resolve().parents[1]
-EXAMPLE = ROOT / 'config/runtime.example.json'
+EXAMPLE = ROOT / 'config/examples/runtime.v1.example.json'
 
 
 class RuntimeConfigTests(unittest.TestCase):

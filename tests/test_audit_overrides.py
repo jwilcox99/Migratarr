@@ -13,7 +13,7 @@ from runtime_config import load_config
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = load_config(ROOT / 'config/runtime.example.json', environ={})
+RUNTIME = load_config(ROOT / 'config/examples/runtime.v1.example.json', environ={})
 
 
 def settings_with(overrides):

@@ -233,8 +233,7 @@ def transport_class(m):
             payload = dict(operation=operation, source=m.remote_path(src), destination=m.remote_path(dst),
                            inventory=before, execution_id=execution_id, receipt=receipt)
             program = receipt_program(m) if operation == 'receipt' else m.remote_program()
-            output = m.run_progress(['ssh', *self.options, '-o', 'BatchMode=yes', m.RUNTIME.ssh_target,
-                                     shlex.quote(m.RUNTIME.remote_python) + ' -c ' + shlex.quote(program)],
+            output = m.run_progress(self.command(program),
                                     'NAS recovery ' + operation, input=json.dumps(payload),
                                     timeout=None, idle_timeout=NAS_IDLE_TIMEOUT)
             response = json.loads(output)
