@@ -1,82 +1,129 @@
-# Runtime configuration (Phase 2 checkpoint)
+# Runtime configuration (`runtime.json`)
 
-> **Version 2 (2026-10-26):** `storage` moved to storage-targets.json and
-> `topology` was added; see [Settings](settings.md). The version 1 reference
-> below still applies to every other field, and version 1 files still load.
+`runtime.json` says where Migratarr keeps its records, where moves run, how to
+reach the NAS, Radarr, Sonarr and Jellyfin, and where each API key comes from.
+It holds no keys. Disks are not declared here: they are in
+[storage-targets.json](storage-targets.md).
 
-Runtime scripts require a version 1 JSON file. By default they load
-`config/runtime.json` beside `runtime_config.py`, independent of the current
-working directory. There is no automatic fallback to production settings.
-The committed `config/runtime.example.json` represents the existing media host/NAS
-layout; it contains connection metadata, not credentials. The deployment file
-is ignored by Git. Python 3.10+ and the standard library are sufficient.
+The setup wizard writes this file, and **Settings & health** in the UI edits
+it. This page is the reference for reading or editing it by hand. How the
+three settings files fit together: [Settings](settings.md).
 
-```sh
-cd /opt/media-stack/migratarr
-cp config/runtime.example.json config/runtime.json
-# Review/edit every deployment-specific value before running any runtime script.
-python3 -c 'from runtime_config import get_config; get_config(); print("Runtime config valid")'
+**Location:** `$MIGRATARR_CONFIG` if set (use an absolute path), otherwise
+`config/runtime.json` in the data folder. The data folder is `$MIGRATARR_HOME`,
+else the git clone the code runs from, else `~/.local/share/migratarr`.
+`migratarr doctor --offline` prints both and checks the file.
+
+The current format is **version 2**. Version 1 files still load and are
+migrated automatically; see [Version 1](#version-1-older-files).
+
+## Examples
+
+NAS over SSH (`config/runtime.example.json` in the repository):
+
+```json
+{
+  "schema_version": 2,
+  "base_path": "/opt/media-stack/migratarr",
+  "topology": "nas_ssh",
+  "containers": {"radarr": "radarr", "sonarr": "sonarr", "homepage": "homepage"},
+  "urls": {
+    "radarr": "http://localhost:7878",
+    "sonarr": "http://localhost:8989",
+    "jellyfin": "http://localhost:8096"
+  },
+  "nas": {
+    "host": "nas.example",
+    "user": "migratarr",
+    "ssh_key": "~/.ssh/migratarr_nas",
+    "python": "/usr/bin/python3"
+  }
+}
 ```
 
-The file requires every documented field. Unknown and duplicate fields, missing
-NAS/Arr settings, invalid schema versions, noncanonical paths, ambiguous disk
-roots, malformed URLs and unsafe SSH/container identifiers raise
-`Runtime configuration: ...` errors before runtime scripts contact services or
-write records. Validation does not prove that mounts, services, keys or files
-exist. Keys expand `~` for the account running Python; environment variables
-inside JSON strings are not interpolated. Credentials never go in this file: the
-optional `secrets` section only says where each one is read from (see
-[Service credentials](#service-credentials)).
+This machine's own disks, **experimental** (`config/examples/runtime.local.example.json`):
 
-## Extracted values and production mapping
+```json
+{
+  "schema_version": 2,
+  "base_path": "/opt/migratarr",
+  "topology": "local",
+  "containers": {"radarr": "radarr", "sonarr": "sonarr", "homepage": "homepage"},
+  "urls": {
+    "radarr": "http://localhost:7878",
+    "sonarr": "http://localhost:8989",
+    "jellyfin": "http://localhost:8096"
+  },
+  "storage_targets": "storage-targets.local.example.json"
+}
+```
 
-| Setting | Example value |
-| --- | --- |
-| `base_path` | `/opt/media-stack/migratarr` |
-| `nas.host`, `nas.user` | `nas.example`, `migratarr` (placeholders; replace with your NAS host and SSH user) |
-| `nas.ssh_key`, `nas.python` | `~/.ssh/migratarr_nas`, `/usr/bin/python3` |
-| `containers.radarr`, `.sonarr`, `.homepage` (each optional; required where a Docker credential source or file check uses it) | `radarr`, `sonarr`, `homepage` |
-| `urls.radarr`, `.sonarr`, `.jellyfin` | `http://localhost:7878`, `http://localhost:8989`, `http://localhost:8096` |
-| `storage.media01` | `/mnt/nas/media01` → `/volume4/media01` |
-| `storage.media02` | `/mnt/nas/media02` → `/volume1/media02` |
-| `storage.media03` | `/mnt/nas/media03` → `/volume2/media03` |
-| `storage.media04` | `/mnt/nas/media04` → `/volume3/media04` |
+Every value above is an example. Replace each one with your own.
 
-All of these settings are deployment-specific.
+## Fields
 
-### Service URLs
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `schema_version` | yes | `2` |
+| `base_path` | yes | Where runs, manifests, approvals, jobs and move journals go. The wizard sets it to the data folder |
+| `topology` | yes | `nas_ssh` or `local`; see [Topology](#topology) |
+| `containers` | yes (may be `{}`) | Docker container names: `radarr`, `sonarr`, `homepage`. Each is needed only where a Docker key source or [Arr file check](#arr-file-checks) uses it |
+| `urls` | yes | `radarr`, `sonarr`, `jellyfin`; see [Service URLs](#service-urls) |
+| `nas` | with `nas_ssh` only | `host`, `user`, `ssh_key`, `python`; see [NAS](#nas) |
+| `storage_targets` | no | Path to storage-targets.json, absolute or relative to this file's folder. Default: `storage-targets.json` beside this file |
+| `secrets` | no | Where each key comes from; see [Service credentials](#service-credentials) |
+| `arr_file_checks` | no | How file checks reach Radarr's and Sonarr's view; see [Arr file checks](#arr-file-checks) |
+
+A `storage` block is refused in version 2: disks belong in storage-targets.json.
+
+The file is checked before Migratarr contacts any service or writes anything.
+Unknown or duplicate fields, a missing required field, an unsupported
+`schema_version`, non-canonical paths, malformed URLs and unsafe host, user or
+container names are refused with a `Runtime configuration: ...` message. These
+checks don't prove that disks, services or keys exist; `migratarr doctor`
+does that. Paths expand `~` for the user running Migratarr; environment
+variables inside values are not expanded.
+
+## Topology
+
+| `topology` | Moves run | `nas` | Each storage target's `remote_path` |
+| --- | --- | --- | --- |
+| `nas_ssh` | On the NAS, over SSH. Migratarr runs on a machine that mounts the NAS disks | required | required: the disk's root as the NAS sees it |
+| `local` (experimental) | On this machine's own disks | not allowed | not allowed |
+
+Both use the same move program, checks and journals; only where the program
+runs differs. Moves on `local` have not yet been run end to end against a real
+Radarr and Sonarr.
+
+## NAS
+
+| Field | Example | Rules |
+| --- | --- | --- |
+| `host` | `nas.example` | Host name or IP address |
+| `user` | `migratarr` | The account moves run as on the NAS |
+| `ssh_key` | `~/.ssh/migratarr_nas` | Private key used only by Migratarr; absolute after `~` expands |
+| `python` | `/usr/bin/python3` | Python 3.6 or newer on the NAS, absolute path |
+
+SSH uses only that key, never prompts for a password, and refuses a host not
+already in `known_hosts`. `migratarr doctor` checks the connection, the NAS's
+Python and that each disk exists and is writable on the NAS.
+
+## Service URLs
 
 `urls.radarr`, `.sonarr` and `.jellyfin` are HTTP(S) URLs with an optional
-base path, for services served under a prefix (for example behind a reverse
-proxy): `http://localhost:7878` or `https://proxy.example/radarr`. No
-credentials, query, fragment or trailing slash. Every script builds its API
-calls from one API root per service (`service_keys.service_endpoint`):
+base path, for services served under a prefix (behind a reverse proxy, say):
+`http://localhost:7878` or `https://proxy.example/radarr`. No credentials,
+query, fragment or trailing slash.
 
-- A base path written in `urls` is used as-is.
-- Otherwise Radarr and Sonarr append their `UrlBase`, read from `config.xml`
-  (or the `url_base` of an `env`/`file` credential source), so a Radarr
-  configured with URL base `/radarr` works with `urls.radarr` left at
-  `http://localhost:7878`.
-- Jellyfin uses its URL as given; put a Jellyfin base URL in `urls.jellyfin`.
-
-Before this, only `execute_cross_movie.py`, `execute_cross_tv.py` and
-`execute_tv_nas.py` applied `UrlBase`; the planners, `build_move_plan.py`,
-`audit_overrides.py`, `execute_movie.py` and `execute_movie_nas.py` ignored
-it, and `urls` refused any path. With no base path anywhere (this deployment),
-every URL is unchanged.
-
-Real-data result on the media host (2026-09-24, candidate `ab32449`):
-`secrets_parity` reported every service's new API root identical to the URL
-each old call site built (`endpoint_identical_to_urls` and, for Radarr/Sonarr,
-`endpoint_identical_to_url_base_executors`), so no `UrlBase` is set there; the
-item #3 recordings replayed byte-identically for movies and TV with no misses;
-the offline suite passed.
+- A base path written in `urls` is used as is.
+- Otherwise Radarr and Sonarr add their own URL base, read from `config.xml`
+  (or the `url_base` of a `file` or `env` key source). A Radarr with URL base
+  `/radarr` works with `urls.radarr` left at `http://localhost:7878`.
+- Jellyfin uses its URL as given; put any base path in `urls.jellyfin`.
 
 ## Service credentials
 
-`service_keys.py` reads every API key and the TMDB token, for the planners,
-`build_move_plan.py`, `audit_overrides.py` and all executors. Without a
-`secrets` section each service uses the source it always has:
+Without a `secrets` section, each service uses its default source:
 
 ```json
 "secrets": {
@@ -88,23 +135,29 @@ the offline suite passed.
 }
 ```
 
-List only the services you want to change. Sources:
+List only the services you want to change.
 
 | `source` | Fields | Reads |
-|---|---|---|
-| `docker_config_xml` | `container`, `path` (both optional) | `ApiKey` and `UrlBase` from `docker exec <container> cat <path>`; container defaults to `containers.radarr`/`.sonarr`, path to `/config/config.xml`. Radarr/Sonarr only. |
-| `config_xml` | `path` | The same from a host-side `config.xml`, for non-Docker installs. Radarr/Sonarr only. |
-| `docker_file` | `paths`, `container` (optional) | The first nonempty file of `paths` in the container; defaults to `containers.homepage` for Jellyfin. |
-| `file` | `path`, `url_base` (optional) | A file you provision. Refused unless it is owner-only (`chmod 600`) and outside the repository. |
-| `env` | `variable`, `url_base` (optional) | An environment variable. |
+| --- | --- | --- |
+| `docker_config_xml` | `container`, `path` (both optional) | `ApiKey` and `UrlBase` from `docker exec <container> cat <path>`. Container defaults to `containers.radarr` / `.sonarr`, path to `/config/config.xml`. Radarr and Sonarr only |
+| `config_xml` | `path` | The same from a `config.xml` on this machine, for installs without Docker. Radarr and Sonarr only |
+| `docker_file` | `paths`, `container` (optional) | The first non-empty file of `paths` inside the container. Jellyfin's container defaults to `containers.homepage` |
+| `file` | `path`, `url_base` (optional) | A file on this machine. Refused unless owner-only (`chmod 600`) and outside the Migratarr code folder |
+| `env` | `variable`, `url_base` (optional) | An environment variable |
 
-`url_base` applies to Radarr/Sonarr sources that don't read `config.xml`.
-Lookups run `docker exec ... cat` without a shell. A missing or empty
-credential stops the script before it contacts any service, and error messages
-name the source, never the value. `containers.homepage` is only required when
-Jellyfin uses the default source.
+`url_base` is for Radarr and Sonarr sources that don't read `config.xml`.
+Commands run inside containers without a shell. A missing or empty key stops
+Migratarr before it contacts any service, and errors name the source, never
+the value.
 
-For example, to keep the TMDB token in a file instead of the environment:
+A key pasted into the UI is saved to `~/.config/migratarr/secrets/<service>`
+and recorded here as a `file` source:
+
+```json
+"secrets": {"radarr": {"source": "file", "path": "/home/you/.config/migratarr/secrets/radarr"}}
+```
+
+To keep the TMDB token in a file yourself:
 
 ```sh
 install -m 600 /dev/null ~/.config/migratarr/tmdb_token
@@ -115,44 +168,14 @@ $EDITOR ~/.config/migratarr/tmdb_token
 "secrets": {"tmdb": {"source": "file", "path": "~/.config/migratarr/tmdb_token"}}
 ```
 
-### Migration evidence
-
-Before `service_keys.py`, the planners, `build_move_plan.py` and
-`audit_overrides.py` ran `docker exec <c> sh -c "sed ... /config/config.xml"`,
-the executors ran `docker exec <c> cat /config/config.xml` and parsed the XML
-(three of them also reading `UrlBase`), the movie planner tried two Jellyfin
-secret paths and the TV planner one. `migratarr_validation/secrets_parity.py`
-holds those lookups verbatim (cited at `260746d`).
-
-- `tests/test_service_keys.py` runs old and new side by side against a fake
-  `docker exec` (which also emulates the planners' `sed`): identical keys and
-  `UrlBase` for standard, URL-base, single-line and CRLF `config.xml`, and
-  identical Jellyfin keys. Two deliberate differences are pinned: a
-  `config.xml` without `ApiKey` now stops the planners up front (they used to
-  send an empty key), and the TV planner now falls back to
-  `/run/secrets/jellyfin_key` as the movie planner always did. The same file
-  covers every source type, owner-only and outside-repository file rules,
-  schema validation, and that errors never contain a secret value.
-- `dry_run_parity` replays substitute key lookups on both sides, so the item
-  #3 recordings still compare the planners' scoring.
-- Real data on the media host: `python3 -m migratarr_validation.secrets_parity`
-  compares the real old and new lookups for every service and prints only
-  booleans.
-
-Real-data result on the media host (2026-09-24, candidate `82f4210`, no `secrets`
-section, so every service on its default source): `secrets_parity` reported
-the real old and new lookups identical for Radarr and Sonarr (planner key,
-executor key and `UrlBase`), Jellyfin (both planners' lookups) and TMDB, with
-every lookup succeeding (`"identical": true`). Replaying the item #3
-recordings stayed byte-identical for movies and TV with no misses, and the
-offline suite passed.
+More on how keys are kept: [SECURITY.md](../SECURITY.md).
 
 ## Arr file checks
 
-Before and after every move, the executors confirm that Radarr/Sonarr can see
-each file at the path they will use (under `storage-targets.json` `arr_root`)
-and that it hashes to the expected SHA-256. `arr_files.py` does this; without
-an `arr_file_checks` section both services use `docker`:
+Before and after every move, Migratarr confirms that Radarr or Sonarr can see
+each file at the path it will use (under storage-targets.json `arr_root`) and
+that the file hashes as expected. Without an `arr_file_checks` section both
+services use `docker`:
 
 ```json
 "arr_file_checks": {
@@ -162,112 +185,99 @@ an `arr_file_checks` section both services use `docker`:
 ```
 
 | `mode` | Fields | Checks |
-|---|---|---|
-| `docker` | `container` (optional, default `containers.radarr`/`.sonarr`) | `docker exec <container> test -f/-d` and `sha256sum` inside the Arr container. |
-| `host` | none | Radarr/Sonarr run natively on the executor host, so their paths are host paths; checked and hashed directly. |
-| `host` | `host_root` | Radarr/Sonarr see `host_root` as `arr_root` (a bind mount); paths are translated and checked on the host. |
+| --- | --- | --- |
+| `docker` | `container` (optional, default `containers.radarr` / `.sonarr`) | `test` and `sha256sum` inside the Radarr or Sonarr container |
+| `host` | none | Radarr or Sonarr runs directly on this machine, so its paths are this machine's paths |
+| `host` | `host_root` | Radarr or Sonarr sees `host_root` as `arr_root` (a bind mount); paths are translated and checked on this machine |
 
 `docker` is the strongest check: it proves the container's own mounts show the
-file. Native `host` mode is equivalent when Radarr/Sonarr run on the executor
-host with the same mounts (but runs as the executor's user, not Radarr's).
-`host` with `host_root` proves only that the host sees the file; a container
-mounted wrongly would go unnoticed, so prefer `docker` when it is available.
-A path outside `arr_root`, a missing file or a hash mismatch refuses the move
-exactly as before.
+file. Use it when you can. `host` with `host_root` proves only that this
+machine sees the file; a container mounted wrongly would go unnoticed. A path
+outside `arr_root`, a missing file or a hash mismatch stops the move.
 
-Evidence: `tests/test_arr_file_checks.py` pins the default's exact `docker
-exec` commands for all five executors and the 0102 recovery client, and covers
-host mode (translated and native), refusals, validation and a mutation check.
-`python3 -m migratarr_validation.arr_files_parity --radarr-host-root <dir>
---sonarr-host-root <dir>` compares docker and host checks on the smallest real
-files each Arr reports, read-only.
+These settings are not in the UI; edit the file to change them.
 
-Real-data result on the media host (2026-09-24, candidate `e80cb4a`, run from a
-separate worktree while a live batch used the main checkout): Radarr and
-Sonarr both mount `/mnt/media` at `/media`, so `arr_files_parity` ran with
-`--radarr-host-root /mnt/media --sonarr-host-root /mnt/media --sample 5`. All
-10 files (7.9 MB to 471 MB) were visible both ways and hashed identically
-(`"identical": true`); the offline suite passed. the media host itself stays on
-`docker`, the stronger check.
+## Environment overrides
 
-## Environment and command-line precedence
-
-`MIGRATARR_CONFIG` selects another file (prefer an absolute path). The complete
-file is validated first, then the following optional overrides are applied and
-validated again. Empty overrides are errors.
+After the file is checked, these environment variables replace single values
+(and the result is checked again). An empty value is an error.
 
 - `MIGRATARR_BASE_PATH`
-- `MIGRATARR_NAS_HOST`, `MIGRATARR_NAS_USER`, `MIGRATARR_NAS_SSH_KEY`
+- `MIGRATARR_NAS_HOST`, `MIGRATARR_NAS_USER`, `MIGRATARR_NAS_SSH_KEY` (ignored
+  with `topology: local`)
 - `MIGRATARR_RADARR_CONTAINER`, `MIGRATARR_SONARR_CONTAINER`, `MIGRATARR_HOMEPAGE_CONTAINER`
 - `MIGRATARR_RADARR_URL`, `MIGRATARR_SONARR_URL`, `MIGRATARR_JELLYFIN_URL`
 
-Existing executor `--base` arguments still override the config's base directory.
-The batch runner uses the shared base for approval and both execution stages,
-pins the absolute config filename in child environments, and refuses changes to
-effective settings between commands. Its approval/check/live sequence is unchanged.
-Keep configuration and environment stable for the entire run; do not change disk
-mappings between approval and execution. Configuration is cached within a process.
+Other variables that pick files: `MIGRATARR_HOME` (data folder),
+`MIGRATARR_CONFIG` (this file), `MIGRATARR_STORAGE_TARGETS`,
+`MIGRATARR_PLANNER_CONFIG` and `MIGRATARR_SECRETS_DIR`. The `--base` option of
+`migratarr ui`, `status` and `reconcile` overrides `base_path`.
 
-Snapshots now include the runtime module and effective non-secret config in
-their existing SHA256SUMS. Old snapshots/manifests are not rewritten; approvals
-remain bound to the same manifest bytes. Runtime settings are not a new approval
-contract. Retain config snapshots when investigating old runs.
+## Keep settings steady while moves run
 
-## Deliberately unchanged boundaries
+Settings are read once per process. Don't change disks or where they are
+mounted between planning, approval and running a move. The UI refuses to save
+settings while a job or move is running, and move jobs refuse to continue if
+the effective settings changed since they started. Run snapshots record the
+settings they used (without keys).
 
-- `config/legacy-storage.json` and `legacy-rules.json` remain independent
-  planner/validation policy. No validation-engine cutover is included.
-- Root depth, the shared local parent, category folder names and the
-  Radarr/Sonarr-visible root are no longer Phase One contracts: see
-  `docs/media-layout.md`. Roots must still be canonical absolute paths, and no
-  local root (nor remote root) may equal or contain another. The *shape* an
-  executor accepts (one disk root, one category folder, one item folder) is
-  unchanged.
-- Disk *count* is no longer a fixed Phase One contract (see
-  `docs/storage-targets.md` gate 4): `runtime.json`'s `storage` block accepts
-  any number of validly-shaped disk IDs, not only `media01`–`media04`, and the
-  same-disk NAS executors (`execute_movie_nas.py`, `execute_tv_nas.py`) resolve
-  the disk from each approved manifest row instead of assuming `media04`.
-- Recovery IDs, titles, fingerprints, journal guards, and the 0102 Moneyball
-  literal NAS source/destination paths are incident evidence. They intentionally
-  stay fixed: that recovery refuses a remapped incident rather than interpreting
-  it as permission to recover different paths.
-- Frozen `movie_placement_v1.py` / `tv_placement_v1.py` and their checksum files
-  remain byte-for-byte historical references. Use `dry_run_movies.py` and
-  `dry_run_tv.py` for configured runtime operation.
-- Timeouts, retries, SSH keepalive/strict-host-key options, lock filenames
-  and reserve space remain fixed protocol/safety/policy values. In particular, changing an operation
-  timeout can change uncertain-execution behavior; it is deliberately excluded.
+## Version 1 (older files)
 
-Offline parity continues to characterize the example production layout, explicitly
-loading the example config without deployment overrides. Live override capture
-uses deployed runtime config. Capture's reviewed source hashes and narrowly scoped
-output/cache rewrite support the new placement path expressions.
+Version 1 declared every disk twice, in `runtime.json` `storage` and in
+storage-targets.json, and refused to run when they disagreed:
 
-## Migration checklist and risks
-
-1. Stop scheduling new runs and preserve the deployed code, config, manifests,
-   approvals and journals. Reconcile any uncertain live execution first.
-2. Install all changed Python files together, including `runtime_config.py` and
-   the updated capture/parity adapters. Copy and review the example as above.
-3. Run config validation under the actual service/operator account. Confirm the
-   expanded SSH key, NAS identity, Docker names, HTTP origins and all four mount
-   mappings match the server. Keep the current values for the initial rollout.
-4. Run the safe tests, then normal status/check-only commands on the server.
-   Inspect output and journals before explicitly authorizing any live execution.
-5. Keep the reviewed config/environment unchanged throughout planning, approval
-   and execution. Archive effective config alongside run records.
-
-The intentional behavior change is refusal when runtime config is absent or
-invalid. A syntactically valid but incorrect endpoint/mount mapping remains an
-operator deployment risk; unit tests cannot validate physical mount identity.
-No live NAS, Docker, Radarr/Sonarr calls or media moves were run for this change.
-Execution ordering, hashes, collision checks, deletion safeguards, locking,
-check-only defaults and recovery refusal guards remain in place.
-
-```sh
-python3 -m unittest discover -s tests -v
+```json
+{
+  "schema_version": 1,
+  "base_path": "/opt/media-stack/migratarr",
+  "containers": {"radarr": "radarr", "sonarr": "sonarr", "homepage": "homepage"},
+  "urls": {"radarr": "http://localhost:7878", "sonarr": "http://localhost:8989", "jellyfin": "http://localhost:8096"},
+  "nas": {"host": "nas.example", "user": "migratarr", "ssh_key": "~/.ssh/migratarr_nas", "python": "/usr/bin/python3"},
+  "storage": {
+    "media01": {"local_path": "/mnt/nas/media01", "remote_path": "/volume1/media01"}
+  }
+}
 ```
 
-GitHub Actions runs only this safe unit suite on Ubuntu/Python 3.10. Tests use
-temporary directories and mocks, without installed runtime config or credentials.
+Version 1 has no `topology` (it is always a NAS over SSH) and finds
+storage-targets.json at `<base_path>/config/storage-targets.json`. Full
+example: `config/examples/runtime.v1.example.json`.
+
+Version 1 files keep working, and `migratarr doctor` warns about them. They are
+migrated to version 2 automatically, once, when the UI starts, or on request
+with `migratarr doctor --migrate`. Migration:
+
+1. Requires both files to be valid and to agree, and refuses if
+   storage-targets.json declares a disk `runtime.json` doesn't (it would
+   become a move source and destination), naming the disk.
+2. Removes `storage`, adds `topology: nas_ssh`, and adds `storage_targets`
+   only when storage-targets.json isn't beside `runtime.json`.
+3. Checks that the effective settings are identical before and after. If not,
+   nothing is written.
+4. Saves with a backup in `config/backups/<time>/`, and is refused while a job
+   or move is running.
+
+If migration can't run, version 1 stays in place and keeps working; the UI
+says why when it starts. To undo, copy `config/backups/<time>/runtime.json`
+back.
+
+## Boundaries that stay fixed
+
+- Disk roots must be canonical absolute paths, and no root may equal or
+  contain another (on this machine, and on the NAS). Each title must be at
+  disk root, category folder, title folder; see [Media layout](media-layout.md).
+- Timeouts, retries, SSH options, lock files and reserve handling are fixed
+  safety values, not settings.
+- The incident recovery scripts keep their recorded paths on purpose: they
+  refuse a remapped incident rather than recover different paths.
+- The frozen placement modules (`movie_placement_v1`, `tv_placement_v1`) are
+  historical references and don't read these settings.
+
+## History
+
+The settings in this file were moved out of the code in September 2026, each
+with tests and real-data parity checks showing the deployed behavior didn't
+change (`runtime_config`, `service_keys`, `arr_files`; the
+`migratarr_validation` package holds the parity tools). Version 2 and the
+settings layer followed in October 2026. Details are in the git history and
+[Settings](settings.md).

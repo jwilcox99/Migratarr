@@ -1,82 +1,215 @@
 # Setup
 
-Migratarr has run against one real environment. Everything deployment-specific
-about it is configuration: see [Configuration](README.md#configuration),
-[Runtime configuration](docs/runtime-configuration.md),
-[Planner settings](docs/planner-settings.md) and
-[Media layout](docs/media-layout.md). This doc covers what to configure, then
-the topology the code still assumes (section 2), which is the part you can't
-change with JSON. Read both before running it against a library you care
-about.
+The setup wizard in the web UI is the normal way to set up Migratarr. This
+page walks through it, then covers editing the settings files by hand.
 
-## 1. What config already covers
+## Before you start
 
-Follow [Configuration](README.md#configuration) first:
+Have these ready:
+
+- Radarr, Sonarr and Jellyfin running, and their addresses.
+- A [TMDB API Read Access Token](https://www.themoviedb.org/settings/api).
+- Your disks mounted on the machine that will run Migratarr, with Radarr's
+  and Sonarr's root folders pointing at their category folders (see
+  [Media layout](docs/media-layout.md)).
+- For a NAS: its host name, an SSH user, a private key used only by
+  Migratarr, and the path to Python 3 on the NAS. Connect once by hand
+  (`ssh -i <key> -l migratarr nas.example`) so the NAS is in your
+  `known_hosts`: Migratarr refuses unknown hosts and never asks for a
+  password.
+
+Install with `pip install migratarr` (see the [README](README.md#install)).
+
+## Run the wizard
 
 ```sh
-cp config/runtime.example.json config/runtime.json
-cp config/storage-targets.example.json config/storage-targets.json
-cp config/planner.example.json config/planner.json
-# edit all three for your deployment
-python3 -c 'from runtime_config import get_config; get_config(); print("Runtime config valid")'
-python3 -c 'from planner_settings import load_settings; load_settings(); print("Planner settings valid")'
+migratarr ui
 ```
 
-That covers: base path, NAS host/user/SSH key, Docker container names,
-Radarr/Sonarr/Jellyfin URLs (with base paths, see
-[Service URLs](docs/runtime-configuration.md#service-urls)), disk IDs and
-local+remote roots of any depth,
-and category folder names (see [Media layout](docs/media-layout.md)). Disks
-are declared once, in `storage-targets.json`; `runtime.json` version 2 says
-only how moves run (`topology`: `nas_ssh` or `local`). A version 1
-`runtime.json` (with its own `storage` block) still works and is migrated
-automatically; see [Settings](docs/settings.md).
+Open `http://localhost:8765` (through an SSH tunnel if Migratarr runs on a
+server: `ssh -L 8765:localhost:8765 media-host.example`). With no settings
+yet, every page leads to the wizard. Nothing is written until the last step.
 
-`planner.json` holds your streaming subscriptions and TMDB watch-provider
-region, and optionally your override tag names and scoring tuning (see
-[Planner settings](docs/planner-settings.md)). The example's
-values (Hulu, Peacock, `US`) are this deployment's, not defaults: change them,
-or streaming scarcity will be scored against someone else's subscriptions.
-Subscriptions name provider *families*, which group TMDB's separate listings
-(e.g. `"Max"`, `"Disney+"`, `"Prime Video"`); the default grouping is written
-for the US, so outside it add your region's services to `streaming.families`
-(see [Provider families](docs/planner-settings.md#provider-families)).
+### 1. Connect your services
 
-You'll also need a [TMDB Read Access
-Token](https://www.themoviedb.org/settings/api), by default exported as
-`TMDB_TOKEN`. API keys and the TMDB token can instead come from other sources
-set in `runtime.json` "secrets" (for example an owner-only file, so the token
-survives new shells); see
-[Service credentials](docs/runtime-configuration.md#service-credentials).
+For each of Radarr, Sonarr, Jellyfin and TMDB, give the address (TMDB has
+none) and where Migratarr reads the key from:
 
-## 2. What still assumes this deployment's shape
+- **Read automatically from the Docker container's config.xml** (Radarr and
+  Sonarr; the default). Name the container.
+- **Read from config.xml on this machine**, for Radarr or Sonarr installed
+  without Docker.
+- **Read a file inside a Docker container**, for example a secret mounted
+  into a dashboard container.
+- **Read from a file on this machine.** The file must be readable by your user
+  only (`chmod 600`).
+- **Read from an environment variable.** TMDB's default is `TMDB_TOKEN`. The
+  variable must be set wherever `migratarr ui` runs; planning jobs inherit it.
+- **Paste the key here.** Saved to an owner-only file when you save, never
+  shown again. See [SECURITY.md](SECURITY.md).
 
-Every value SETUP.md used to list as a Python literal (streaming
-subscriptions and region, override tags, scoring, NAS layout and category
-folders, where API keys come from, service base URLs) is now configuration.
-What remains is topology rather than values:
+**Detect** reads Radarr's and Sonarr's keys and URL bases from their own
+config when it can. If Radarr or Sonarr is served under a path (for example
+behind a reverse proxy), put that path in the address or in **URL base**.
 
-- **One host, one NAS.** Planning and execution run on one host (here
-  "the media host") that sees the NAS disks locally and reaches the NAS over SSH
-  for cross-disk and same-disk moves.
-- **Radarr/Sonarr paths must be visible from the executor host.** The
-  executors verify every file at the path Radarr/Sonarr use, before and after
-  a move. By default that runs inside the containers (`docker exec`); a
-  non-Docker install on the executor host, or a host view of the containers'
-  media mount, can use `arr_file_checks` host mode instead (see
-  [Arr file checks](docs/runtime-configuration.md#arr-file-checks)). Radarr or
-  Sonarr on a *different* machine, with no view of their media from the
-  executor host, isn't supported.
+### 2. Where your disks are
 
-## 3. Recommended first run
+- **On a NAS, over SSH:** Migratarr runs on a machine that mounts the NAS
+  disks, and runs each move on the NAS. Enter the NAS host, the SSH user, the
+  full path to the SSH key and the path to Python on the NAS.
+- **On this machine's own disks (experimental):** moves run directly on disks
+  attached to this machine. This has not yet been run end to end against a
+  real Radarr and Sonarr.
 
-Once the above is addressed for your environment, follow
-[Usage](README.md#usage) — dry-run, plan, snapshot, manifest, approve — and
-run every executor check-only (the default; no `--execute`) before trusting
-any of it, on the smallest, least-important item you can find. Read
-[Safety model](README.md#safety-model) in full first.
+**Migratarr data folder** is where runs, approvals and move journals are kept.
+The default is the data folder (see [Where settings live](#where-settings-live)).
 
-## 4. Getting help
+You choose NAS or this machine once: switching later means entering every
+disk again, so run setup again (or edit the files by hand). The NAS details
+and the data folder can be changed in **Settings & health**.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch/PR workflow and
-[SECURITY.md](SECURITY.md) for anything you'd rather report privately.
+### 3. Disks and categories
+
+**Detect** lists mounted disks and the root folders Radarr and Sonarr use, and
+suggests which folder holds each category.
+
+- **Default free-space reserve (GB):** Migratarr never fills a disk past
+  this. Each disk can set its own.
+- **Media root as Radarr and Sonarr see it:** inside Radarr and Sonarr, each
+  title is at `<this>/<category folder>/<title>`, for example `/media`.
+- **Each disk:** a short id (lowercase, such as `media01`), a name, where it is
+  mounted on this machine, and, for a NAS, the same disk as the NAS sees it
+  (for example `/volume1/media01`). Choose whether it holds movies, TV or
+  both, and whether Migratarr may move media onto it. Add more disks with
+  **Add a disk**. Removing a disk only stops Migratarr managing it; nothing on
+  the disk is touched.
+- **Category folders:** the folder, relative to each disk, for each category,
+  for example `Movies/Rare`.
+- **Which disks hold each category:** tick one or more disks per category.
+
+### 4. Streaming services
+
+- **Region:** two letters, such as `US`, `GB` or `CA`.
+- **Services you pay for:** one per line, such as `Hulu`. Titles streaming on
+  these count as easy to watch.
+- **Free to you:** services TMDB lists as free that you really have (a library
+  card service, say). Leave empty unless you're sure.
+
+Outside the US, add your region's services to the provider groups by hand:
+[Provider families](docs/planner-settings.md#provider-families).
+
+### 5. Review and save
+
+The review lists everything you set and runs the checks that don't need a
+saved key. Pasted keys show only as "new key". **Save settings** writes the
+three settings files and any pasted keys.
+
+## Health checks
+
+After saving, the wizard runs the health checks. The same checks run from
+**Settings & health** in the UI and from the terminal:
+
+```sh
+migratarr doctor             # every check
+migratarr doctor --offline   # settings files only; contacts nothing
+```
+
+| Check | Fails when | Warns when |
+| --- | --- | --- |
+| Settings files | a file has an error | `runtime.json` is still version 1 |
+| Services | a key can't be read, a service can't be reached, or it rejects the key | Sonarr isn't v4 |
+| Radarr/Sonarr root folders | a category folder isn't a Radarr or Sonarr root folder | |
+| Disks | a disk path is missing; on this machine's own disks, not writable | NAS: not a mount point; free space below the reserve |
+| NAS | SSH fails, Python on the NAS is older than 3.6, or a disk is missing or not writable on the NAS | |
+| Permissions | | a category folder is missing, or it or a title folder in it lacks group write |
+
+You can save settings with failing checks, but Migratarr won't make a plan
+until none fail. Warnings are fine. `migratarr doctor` exits with status 1
+when a check failed.
+
+## Your first plan
+
+In the UI, choose **Plan a new run**, or from the terminal:
+
+```sh
+migratarr plan --check   # the checks only
+migratarr plan           # make a plan; nothing moves
+```
+
+Review the plan, approve one small move, run it, and check the result in
+Radarr or Sonarr before approving more. Read the
+[Safety model](README.md#safety-model) first.
+
+## Changing settings later
+
+**Settings & health** in the UI edits services, the NAS details, disks,
+streaming, scoring and override tags. Each change shows exactly what will change in the file before
+you save. Saving makes a backup in `config/backups/` and is refused while a
+job or move is running.
+
+## Where settings live
+
+Everything is in the data folder: `$MIGRATARR_HOME` if set, otherwise
+`~/.local/share/migratarr`. A git clone uses the clone itself. Check with:
+
+```sh
+migratarr doctor --offline
+```
+
+| File | Holds | Reference |
+| --- | --- | --- |
+| `config/runtime.json` | data folder, where moves run, NAS, containers, service addresses, where keys come from | [Runtime configuration](docs/runtime-configuration.md) |
+| `config/storage-targets.json` | disks, category folders, placement, reserves | [Storage targets](docs/storage-targets.md) |
+| `config/planner.json` | streaming, override tags, scoring | [Planner settings](docs/planner-settings.md) |
+
+Pasted keys are not in the data folder: they are in
+`~/.config/migratarr/secrets/` ([SECURITY.md](SECURITY.md)).
+
+## Advanced: editing the files by hand
+
+You can skip the wizard and write the three files yourself. Start from the
+examples in the repository's `config/` folder:
+
+- NAS over SSH: `runtime.example.json`, `storage-targets.example.json`
+- This machine's own disks: `examples/runtime.local.example.json`,
+  `examples/storage-targets.local.example.json`
+- Both: `planner.example.json`. Its streaming services (Hulu, Peacock, `US`)
+  are an example; replace them with yours.
+
+Copy them into `config/` in the data folder without `.example` in the names,
+replace every value with your own, then check them:
+
+```sh
+migratarr doctor --offline
+```
+
+Some settings exist only in the files: credential sources' extra options,
+[Arr file checks](docs/runtime-configuration.md#arr-file-checks) for
+non-Docker installs, and environment overrides.
+The [settings layer](docs/settings.md) explains how the three files fit
+together.
+
+### Already running from a clone
+
+A clone keeps its settings in its own `config/` folder and works as before.
+A version 1 `runtime.json` (with its own `storage` block) is migrated to
+version 2 automatically, with a backup, the first time the UI starts, or on
+request:
+
+```sh
+migratarr doctor --migrate
+```
+
+## What Migratarr still assumes
+
+- One machine runs planning and moves, and sees every disk.
+- With a NAS: one NAS, reached over SSH.
+- Radarr and Sonarr see your media from the machine running Migratarr: by
+  default inside their Docker containers, or on the host with
+  [Arr file checks](docs/runtime-configuration.md#arr-file-checks). Radarr or
+  Sonarr on another machine, with no view of the media, isn't supported.
+
+## Getting help
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) to report a bug or ask for an
+integration, and [SECURITY.md](SECURITY.md) for anything to report privately.
