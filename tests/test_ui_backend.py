@@ -32,6 +32,10 @@ def no_ssh(*args, **kwargs):
     raise FileNotFoundError('ssh')
 
 
+def no_docker(*args, **kwargs):
+    raise FileNotFoundError('docker')
+
+
 class Env:
     def make(self, configured=True, topology='nas_ssh'):
         tmp = tempfile.TemporaryDirectory()
@@ -41,7 +45,7 @@ class Env:
                     'MIGRATARR_PLANNER_CONFIG': str(self.root / 'config/planner.json'),
                     'MIGRATARR_SECRETS_DIR': str(self.root / 'secrets'), 'HOME': str(self.root)}
         self.base = self.root / 'base'
-        self.backend = UiBackend(self.env, base=self.base, http=offline_http, run=no_ssh)
+        self.backend = UiBackend(self.env, base=self.base, http=offline_http, run=no_ssh, docker=no_docker)
         if configured:
             self.backend.create(self.draft(topology))
         return self.backend
@@ -215,7 +219,7 @@ class SettingsEditTests(Env, unittest.TestCase):
         checks = self.backend.run_checks()
         ours = {c.id: c for c in checks}
         theirs = {c.id: c for c in health.run_checks(store.load(environ=self.env), environ=self.env,
-                                                     http=offline_http, run=no_ssh)}
+                                                     http=offline_http, run=no_ssh, docker=no_docker)}
         self.assertEqual(set(ours), set(theirs))  # one check list for UI, doctor and plan
         for cid, c in theirs.items():
             self.assertEqual(ours[cid].status, {'skip': 'skipped'}.get(c.status, c.status))
@@ -334,6 +338,149 @@ class DiscoveryTests(Env, unittest.TestCase):
         self.assertEqual(read_mounts(f.name), ['/mnt/media01', '/media/my disk'])
 
 
+class ArrInstallTests(Env, unittest.TestCase):
+    """Radarr and Sonarr in Docker (the default) or installed directly on this machine."""
+
+    def host_draft(self):
+        d = self.draft()
+        xml = self.root / 'radarr.xml'
+        xml.write_text('<Config><ApiKey>HOST-RADARR-KEY</ApiKey><UrlBase>/radarr</UrlBase></Config>')
+        d[sc.SERVICES].update({'services.arr_install': 'host', 'services.radarr.source': 'config_xml',
+                               'services.radarr.paths': [str(xml)], 'services.radarr.key': None})
+        return d
+
+    def test_docker_is_the_default_and_writes_nothing_new(self):
+        b = self.make(configured=False)
+        self.assertEqual(b.defaults(sc.SERVICES)['services.arr_install'], 'docker')
+        paths = [f.path for f in b.fields(sc.SERVICES, b.defaults(sc.SERVICES))]
+        self.assertEqual(paths[0], 'services.arr_install')
+        self.assertIn('services.radarr.container', paths)
+        b.create(self.draft())
+        runtime = store.load(environ=self.env).data['runtime']
+        self.assertNotIn('arr_file_checks', runtime)
+        self.assertEqual(runtime['containers'], {'radarr': 'radarr', 'sonarr': 'sonarr', 'homepage': 'homepage'})
+
+    def test_host_hides_containers_and_container_sources(self):
+        b = self.make(configured=False)
+        fields = {f.path: f for f in b.fields(sc.SERVICES, {'services.arr_install': 'host'})}
+        for arr in ('radarr', 'sonarr'):
+            self.assertNotIn(f'services.{arr}.container', fields)
+            self.assertFalse([v for v, _ in fields[f'services.{arr}.source'].choices if v.startswith('docker')])
+        self.assertIn('services.jellyfin.container', fields)  # Jellyfin's key may still come from a container
+        self.assertEqual([v for v, _ in fields['services.arr_install'].choices], ['docker', 'host'])
+
+    def test_host_writes_host_file_checks_and_loads(self):
+        b = self.make(configured=False)
+        draft = self.host_draft()
+        self.assertEqual(sc.blocking(b.validate(sc.SERVICES, draft[sc.SERVICES], draft)), [])
+        b.create(draft)
+        report = store.load(environ=self.env)
+        self.assertEqual(report.errors, [])
+        runtime = report.data['runtime']
+        self.assertEqual(runtime['arr_file_checks'], {'radarr': {'mode': 'host'}, 'sonarr': {'mode': 'host'}})
+        self.assertEqual(report.runtime.arr_file_checks['radarr'], {'mode': 'host', 'host_root': None})
+        self.assertEqual(runtime['containers'], {'homepage': 'homepage'})  # no `docker exec` into Arr
+        self.assertEqual(runtime['secrets']['radarr'], {'source': 'config_xml', 'path': str(self.root / 'radarr.xml')})
+        self.assertEqual(b.current(sc.SERVICES)['services.arr_install'], 'host')
+
+    def test_host_refuses_a_container_key_source(self):
+        b = self.make(configured=False)
+        draft = self.host_draft()
+        draft[sc.SERVICES]['services.radarr.source'] = 'docker_config_xml'
+        problems = sc.blocking(b.validate(sc.SERVICES, draft[sc.SERVICES], draft))
+        self.assertEqual([p.path for p in problems], ['services.radarr.source'])
+        self.assertIn('installed directly on this machine', problems[0].message)
+
+    def test_switching_to_host_moves_container_keys_to_config_xml(self):
+        b = self.make(configured=False)
+        values = dict(b.defaults(sc.SERVICES), **{'services.arr_install': 'host'})
+        values, notes = b.normalize(sc.SERVICES, values)
+        self.assertEqual(values['services.radarr.source'], 'config_xml')
+        self.assertIsNone(values['services.radarr.container'])
+        self.assertEqual({n.path for n in notes}, {'services.radarr.paths', 'services.sonarr.paths'})
+        self.assertEqual({n.severity for n in notes}, {sc.WARN})
+        # A config.xml path is then required.
+        self.assertIn('services.radarr.paths', {p.path for p in sc.blocking(b.validate(sc.SERVICES, values))})
+
+    def test_settings_switch_both_ways_with_a_reviewed_diff(self):
+        b = self.make()
+        xml = self.root / 'sonarr.xml'
+        xml.write_text('<Config><ApiKey>K</ApiKey></Config>')
+        values = dict(b.current(sc.SERVICES), **{'services.arr_install': 'host', 'services.sonarr.source':
+                                                 'config_xml', 'services.sonarr.paths': [str(xml)]})
+        shape = {k: v for k, v in values.items() if k not in ('services.radarr.container', 'services.sonarr.container')}
+        values, notes = b.normalize(sc.SERVICES, shape)
+        self.assertEqual(notes, [])  # radarr reads a pasted key, sonarr a config.xml: nothing to fix
+        self.assertEqual(sc.blocking(b.validate(sc.SERVICES, values)), [])
+        changes = {c.path: (c.before, c.after) for c in b.diff(sc.SERVICES, values)}
+        self.assertEqual(changes['services.arr_install'], ('docker', 'host'))
+        self.assertEqual(changes['services.radarr.container'], ('radarr', None))
+        b.save(sc.SERVICES, values, b.status().revision)
+        runtime = store.load(environ=self.env).data['runtime']
+        self.assertEqual(runtime['arr_file_checks']['sonarr'], {'mode': 'host'})
+        # And back: the hidden container fields come back with their default names.
+        values = {k: v for k, v in b.current(sc.SERVICES).items() if not k.endswith('.container')
+                  or k.startswith(('services.jellyfin', 'services.tmdb'))}
+        values['services.arr_install'] = 'docker'
+        values, notes = b.normalize(sc.SERVICES, values)
+        self.assertEqual(values['services.radarr.container'], 'radarr')
+        b.save(sc.SERVICES, values, b.status().revision)
+        runtime = store.load(environ=self.env).data['runtime']
+        self.assertNotIn('arr_file_checks', runtime)
+        self.assertEqual(runtime['containers']['radarr'], 'radarr')
+        self.assertEqual(runtime['secrets']['sonarr']['source'], 'config_xml')  # a host config.xml is kept
+
+    def test_hand_written_file_checks_are_kept(self):
+        b = self.make()
+        path = Path(self.env['MIGRATARR_CONFIG'])
+        runtime = json.loads(path.read_text())
+        runtime['arr_file_checks'] = {'radarr': {'mode': 'host', 'host_root': '/srv/pool/media'}}
+        path.write_text(json.dumps(runtime))
+        values = b.current(sc.SERVICES)
+        self.assertEqual(values['services.arr_install'], 'custom')
+        field = b.fields(sc.SERVICES, values)[0]
+        self.assertIn('custom', [v for v, _ in field.choices])
+        self.assertIn('services.radarr.container', {f.path for f in b.fields(sc.SERVICES, values)})
+        values['services.sonarr.url'] = 'http://sonarr.lan:8989'
+        b.save(sc.SERVICES, values, b.status().revision)
+        self.assertEqual(json.loads(path.read_text())['arr_file_checks'],
+                         {'radarr': {'mode': 'host', 'host_root': '/srv/pool/media'}})
+
+    def test_detect_reads_config_xml_on_this_machine_and_never_docker(self):
+        b = self.make(configured=False)
+        b.docker_cat = lambda *a: self.fail('Detect must not use docker in host mode')
+        config = self.root / '.config/Sonarr/config.xml'  # where Sonarr keeps it for a user install
+        config.parent.mkdir(parents=True)
+        config.write_text('<Config><ApiKey>HOST-SECRET</ApiKey><UrlBase>/sonarr</UrlBase></Config>')
+        found = b.discover(sc.SERVICES, {sc.SERVICES: {'services.arr_install': 'host'}})
+        self.assertNotIn('HOST-SECRET', repr(found))
+        self.assertEqual(found.values['services.sonarr.source'], 'config_xml')
+        self.assertEqual(found.values['services.sonarr.paths'], [str(config)])
+        self.assertNotIn('services.radarr.source', found.values)
+        notes = ' '.join(found.notes)
+        self.assertIn('URL base /sonarr', notes)
+        self.assertIn('Radarr: no readable config.xml', notes)
+
+    def test_detect_in_docker_mode_says_when_docker_itself_is_missing(self):
+        b = self.make(configured=False)
+        b.docker_cat = no_docker
+        notes = ' '.join(b.discover(sc.SERVICES, {sc.SERVICES: {}}).notes)
+        self.assertIn('Radarr: Docker is not installed on this machine', notes)
+        self.assertIn('installed directly on this machine, choose that above', notes)
+
+    def test_draft_checks_respect_the_mode(self):
+        b = self.make(configured=False)
+        calls = []
+        b.docker = lambda command, **kw: calls.append(command) or no_docker()
+        checks = {c.id: c for c in b.run_checks(self.host_draft())}
+        self.assertEqual(calls, [])
+        self.assertIn('on this machine', checks['arr_files.radarr'].detail)
+        self.assertEqual(checks['arr_files.radarr'].paths, ('services.arr_install',))
+        checks = {c.id: c for c in b.run_checks(self.draft())}
+        self.assertEqual(calls[0][:3], ['docker', 'exec', 'radarr'])
+        self.assertIn('Docker is not installed', checks['arr_files.radarr'].detail)
+
+
 class AppTests(Env, unittest.TestCase):
     """The UI as main() builds it, against real files."""
 
@@ -383,6 +530,40 @@ class AppTests(Env, unittest.TestCase):
         self.assertNotIn(KEY, self.files_text())
         self.assertFalse(app.setup_mode())
         self.assertEqual(app.base, self.base)
+
+    def test_wizard_round_trip_in_host_mode(self):
+        app = self.app(configured=False)
+        xml = self.root / 'radarr.xml'
+        xml.write_text('<Config><ApiKey>HOST-RADARR-KEY</ApiKey></Config>')
+        draft = self.draft()
+        f = lambda values: {'f:' + k: (v if isinstance(v, list) else ['on'] if v is True else [] if v is False
+                                       else ['' if v is None else str(v)]) for k, v in values.items()
+                            if not k.startswith('disks._') or k.startswith(('disks._folders', 'disks._placement',
+                                                                            'disks._defaults', 'disks._arr_root'))}
+        # The Docker form as first shown, with "installed directly" picked and Next pressed.
+        services = dict(draft[sc.SERVICES], **{'services.arr_install': 'host',
+                                               'services.sonarr.source': 'docker_config_xml'})
+        status, body = self.post(app, '/setup/services', action='next', **f(services))
+        self.assertEqual(status, 200)  # shown again, for Sonarr's config.xml path
+        self.assertIn('Sonarr runs on this machine', body)
+        self.assertNotIn('f-services-radarr-container', body)
+        self.assertNotIn('value="docker_config_xml"', body.split('f:services.sonarr.source')[1].split('</select>')[0])
+        services.update({'services.sonarr.source': 'config_xml', 'services.sonarr.paths': [str(xml)]})
+        del services['services.radarr.container'], services['services.sonarr.container']
+        self.assertEqual(self.post(app, '/setup/services', action='next', **f(services)), (303, '/setup/topology'))
+        status, body = self.get(app, '/setup/services')  # Back: the choice is kept
+        self.assertIn('<option value="host" selected>', body)
+        for step in (sc.TOPOLOGY, sc.DISKS, sc.STREAMING):
+            self.assertEqual(self.post(app, '/setup/' + step, action='next', **f(draft[step]))[0], 303)
+        status, body = self.get(app, '/setup/review')
+        self.assertIn('installed directly on this machine', body)
+        self.assertIn('Radarr file checks', body)
+        self.assertEqual(self.post(app, '/setup/review', action='save'), (303, '/setup/done'))
+        report = store.load(environ=self.env)
+        self.assertEqual(report.errors, [])
+        self.assertEqual(report.data['runtime']['arr_file_checks'],
+                         {'radarr': {'mode': 'host'}, 'sonarr': {'mode': 'host'}})
+        self.assertNotIn('radarr', report.data['runtime']['containers'])
 
     def test_plan_refused_while_a_check_fails_and_allowed_with_warnings(self):
         failing = [sc.CheckResult('nas.ssh', 'NAS over SSH', sc.FAIL, 'Permission denied', fix='Check the key')]

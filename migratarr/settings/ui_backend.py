@@ -10,6 +10,7 @@ Field paths are the pages' dotted names; each section reads from and writes
 to one settings file:
 
     services.<id>.url|source|key|container|paths|variable|url_base   runtime.json
+    services.arr_install (docker | host | custom)                       runtime.json arr_file_checks
     topology.mode|base_path|nas.host|nas.user|nas.ssh_key|nas.python  runtime.json
     disks.<disk>.name|path|remote_path|enabled|media_types|min_free_gb|remove,
     disks._new.*, disks._defaults.min_free_gb, disks._arr_root,
@@ -49,6 +50,17 @@ SOURCE_LABELS = {
     'env': 'Read from an environment variable',
     PASTE: 'Paste the key here (saved to an owner-only file)',
 }
+# How Radarr and Sonarr are installed: picks runtime.json arr_file_checks (migratarr/arr_files.py) and which
+# key sources and fields the Services form offers them. "custom" is shown only for an arr_file_checks
+# written by hand that is neither (a host_root, or one Arr each way); the form leaves it as it is.
+ARR_INSTALL = 'services.arr_install'
+ARR_SERVICES = tuple(d.id for d in services.SERVICES.values() if d.url_base_from_config)
+ARR_INSTALL_CHOICES = (('docker', 'Radarr and Sonarr run in Docker containers'),
+                       ('host', 'Radarr and Sonarr are installed directly on this machine'))
+ARR_INSTALL_CUSTOM = ('custom', 'Set by hand in runtime.json (arr_file_checks); keep as it is')
+# Where Radarr's and Sonarr's own installers keep config.xml on Linux (Detect looks only here).
+HOST_CONFIG_XML = {'radarr': ('/var/lib/radarr/config.xml', '{home}/.config/Radarr/config.xml'),
+                   'sonarr': ('/var/lib/sonarr/config.xml', '{home}/.config/Sonarr/config.xml')}
 TOPOLOGY_CHOICES = (('nas_ssh', 'On a NAS, over SSH'), ('local', "On this machine's own disks (experimental)"))
 MEDIA = (('Movie', 'Movies'), ('TV', 'TV'))
 CATEGORY_FOLDERS = {  # a fresh install's folders; category identities are fixed (plan risk list)
@@ -107,9 +119,24 @@ def templates(base=None):
 
 # ---------------------------------------------------------------- fields
 
-def service_fields(d):
+def arr_install_field(value):
+    choices = ARR_INSTALL_CHOICES + ((ARR_INSTALL_CUSTOM,) if value == ARR_INSTALL_CUSTOM[0] else ())
+    return sc.Field(ARR_INSTALL, 'Radarr and Sonarr', sc.CHOICE,
+                    'Docker: Migratarr reads their keys and checks media inside their containers (docker exec). '
+                    'Installed directly: it reads config.xml and checks media on this machine.',
+                    True, choices, 'How Radarr and Sonarr run')
+
+
+def on_host(d, install):
+    """Radarr/Sonarr installed directly on this machine: no container to name or read from."""
+    return d.url_base_from_config and install == 'host'
+
+
+def service_fields(d, install='docker'):
     p, g = 'services.' + d.id, d.label
-    choices = tuple((s, SOURCE_LABELS[s]) for s in d.sources) + (
+    host = on_host(d, install)
+    sources = tuple(s for s in d.sources if not (host and s.startswith('docker')))
+    choices = tuple((s, SOURCE_LABELS[s]) for s in sources) + (
         ((PASTE, SOURCE_LABELS[PASTE]),) if 'file' in d.sources else ())
     out = []
     if d.url_setting:
@@ -120,12 +147,16 @@ def service_fields(d):
     if 'file' in d.sources:
         out.append(sc.Field(p + '.key', 'Pasted ' + d.credential_label, sc.SECRET,
                             'Only with "Paste the key". Leave blank to keep a saved key.', group=g))
-    if any(s.startswith('docker') for s in d.sources):
+    if any(s.startswith('docker') for s in sources):
         default = d.container_setting.split('.', 1)[1] if d.container_setting else None
         out.append(sc.Field(p + '.container', 'Docker container', sc.TEXT,
                             'Only when the key is read from a container'
                             + (f' (default name: {default}).' if default else '.'), group=g))
-    if any(s in d.sources for s in ('config_xml', 'file', 'docker_file', 'docker_config_xml')):
+    if host:
+        out.append(sc.Field(p + '.paths', 'File path', sc.LINES,
+                            'Only when the key is read from a file: one path, for example '
+                            f'/var/lib/{d.id}/config.xml.', group=g))
+    elif any(s in d.sources for s in ('config_xml', 'file', 'docker_file', 'docker_config_xml')):
         out.append(sc.Field(p + '.paths', 'File path', sc.LINES,
                             'Only when the key is read from a file. One path; a file inside a container may '
                             'list several, tried in order. Blank with the container\'s config.xml means '
@@ -200,6 +231,7 @@ def read_section(section, docs, environ=None):
         secrets = _dict(runtime.get('secrets'))
         containers, urls = _dict(runtime.get('containers')), _dict(runtime.get('urls'))
         folder = secrets_folder_path(environ)
+        v[ARR_INSTALL] = arr_install_of(runtime)
         for d in services.SERVICES.values():
             p = 'services.' + d.id
             entry = _dict(secrets.get(d.id)) or services.default_sources()[d.id]
@@ -270,6 +302,68 @@ def read_section(section, docs, environ=None):
     return v
 
 
+def arr_install_of(runtime):
+    """docker, host or custom, from runtime.json arr_file_checks (absent: docker, the default)."""
+    checks = runtime.get('arr_file_checks')
+    if checks is None:
+        return 'docker'
+    checks = _dict(checks)
+    entries = [_dict(checks.get(a, {'mode': 'docker'})) for a in ARR_SERVICES]
+    if all(e.get('mode') == 'docker' for e in entries):
+        return 'docker'
+    if all(e == {'mode': 'host'} for e in entries):
+        return 'host'
+    return ARR_INSTALL_CUSTOM[0]
+
+
+def write_arr_install(runtime, install):
+    """Apply the choice to runtime.json arr_file_checks; custom (or anything else) leaves it alone."""
+    if install == 'host':
+        checks = dict(_dict(runtime.get('arr_file_checks')))
+        checks.update({a: {'mode': 'host'} for a in ARR_SERVICES})
+        runtime['arr_file_checks'] = checks
+    elif install == 'docker':
+        checks = {a: e for a, e in _dict(runtime.get('arr_file_checks')).items()
+                  if not (a in ARR_SERVICES and _dict(e).get('mode') == 'host')}
+        if checks:
+            runtime['arr_file_checks'] = checks
+        else:
+            runtime.pop('arr_file_checks', None)
+
+
+def normalize_services(values):
+    """Keep key sources in step with how Radarr and Sonarr are installed. Returns (values, notes).
+
+    Installed directly: a key read from a container becomes config.xml on this machine, and the form is
+    shown again for its path. Docker: a container field missing from the form (it was hidden) gets its
+    default name.
+    """
+    values, notes = dict(values), []
+    install = values.get(ARR_INSTALL) or 'docker'
+    for d in services.SERVICES.values():
+        if not d.url_base_from_config:
+            continue
+        p = 'services.' + d.id
+        if on_host(d, install):
+            values[p + '.container'] = None  # its runtime.json containers entry goes (shown on the review)
+        if on_host(d, install) and (values.get(p + '.source') or '').startswith('docker'):
+            values[p + '.source'] = 'config_xml'
+            if values.get(p + '.paths') in (None, [], ['/config/config.xml']):
+                values[p + '.paths'] = []
+            notes.append(sc.Problem(p + '.paths', f'{d.label} runs on this machine, so its key is read from '
+                                                  'its config.xml here. Give the path to that file (for '
+                                                  f'example /var/lib/{d.id}/config.xml), or paste the key.',
+                                    sc.WARN))
+        elif install == 'docker' and p + '.container' not in values and d.container_setting:
+            # Switched back from "installed directly": the container field was hidden, so use its default
+            # name (shown on the review). No note: the Settings review reads the form in the saved shape, so
+            # a note here would come back on every review.
+            values[p + '.container'] = d.container_setting.split('.', 1)[1]
+            if values.get(p + '.source') == 'config_xml' and not values.get(p + '.paths'):
+                values[p + '.source'] = 'docker_config_xml'
+    return values, notes
+
+
 def normalize_disks(values):
     """Turn "Add a disk" into a disk and drop removed disks. Returns (values, notes)."""
     values, notes = dict(values), []
@@ -296,6 +390,10 @@ def normalize_disks(values):
     return values, notes
 
 
+def kind_of(values, d):
+    return values.get('services.' + d.id + '.source') or services.default_sources()[d.id]['source']
+
+
 def write_section(section, docs, values, environ=None):
     """Apply one section's values to copies of the documents.
 
@@ -309,9 +407,15 @@ def write_section(section, docs, values, environ=None):
         secrets = dict(_dict(runtime.get('secrets')))
         containers, urls = dict(_dict(runtime.get('containers'))), dict(_dict(runtime.get('urls')))
         folder = secrets_folder_path(environ)
+        install = values.get(ARR_INSTALL)
+        write_arr_install(runtime, install)
         for d in services.SERVICES.values():
             p = 'services.' + d.id
             old = _dict(secrets.get(d.id))
+            if on_host(d, install) and kind_of(values, d).startswith('docker'):
+                problems.append(sc.Problem(p + '.source', f'{d.label} is installed directly on this machine: '
+                                                          'read its key from config.xml here, a file, a '
+                                                          'variable, or paste it.'))
             if d.url_setting:
                 name = d.url_setting.split('.', 1)[1]
                 if _blank(values.get(p + '.url')):
@@ -324,7 +428,12 @@ def write_section(section, docs, values, environ=None):
             entry = {'source': 'file' if kind == PASTE else kind}
             container = values.get(p + '.container')
             container_key = d.container_setting.split('.', 1)[1] if d.container_setting else None
-            if any(s.startswith('docker') for s in d.sources):
+            if on_host(d, install):
+                # Nothing runs `docker exec` in it any more (a container key source is refused above; keep
+                # the entry then, so that is the only problem reported).
+                if container_key and 'container' not in old and not kind.startswith('docker'):
+                    containers.pop(container_key, None)
+            elif any(s.startswith('docker') for s in d.sources):
                 if container_key and 'container' not in old:
                     if _blank(container):
                         containers.pop(container_key, None)
@@ -530,10 +639,10 @@ class UiBackend:
     """settings_contract.SettingsBackend and HealthBackend over migratarr.settings and migratarr.health."""
 
     def __init__(self, environ=None, *, base=None, http=health.http_get, run=subprocess.run,
-                 docker_cat=None, read_mounts=None, health_fs=None):
+                 docker_cat=None, read_mounts=None, health_fs=None, docker=subprocess.run):
         self.environ = os.environ if environ is None else environ
         self.base = base
-        self.http, self.run, self.health_fs = http, run, health_fs or {}
+        self.http, self.run, self.docker, self.health_fs = http, run, docker, health_fs or {}
         self.docker_cat, self.read_mounts = docker_cat, read_mounts
 
     # ------------------------------------------------------------ reading
@@ -581,7 +690,9 @@ class UiBackend:
 
     def fields(self, section, values):
         if section == sc.SERVICES:
-            return [f for d in services.SERVICES.values() for f in service_fields(d)]
+            install = values.get(ARR_INSTALL) or 'docker'
+            return [arr_install_field(install)] + [f for d in services.SERVICES.values()
+                                                   for f in service_fields(d, install)]
         if section == sc.TOPOLOGY:
             configured = not self.report().missing
             return [sc.Field('topology.mode', 'Moves run', sc.CHOICE,
@@ -638,7 +749,10 @@ class UiBackend:
 
     # ------------------------------------------------------------ checking
     def normalize(self, section, values, draft=None):
-        """Called by the pages after parsing a form: "Add a disk" and "Remove" become real changes."""
+        """Called by the pages after parsing a form: "Add a disk" and "Remove" become real changes, and
+        the Services form follows how Radarr and Sonarr are installed."""
+        if section == sc.SERVICES:
+            return normalize_services(values)
         if section != sc.DISKS:
             return values, []
         if draft and sc.TOPOLOGY in draft:
@@ -762,7 +876,8 @@ class UiBackend:
             problems, runtime, targets, planner = store.check(docs, self.environ)
             report = store.Report(base.files, docs, {n: 'draft' for n in store.FILES}, problems, runtime,
                                   targets, planner)
-        checks = health.run_checks(report, environ=self.environ, http=self.http, run=self.run, **self.health_fs)
+        checks = health.run_checks(report, environ=self.environ, http=self.http, run=self.run, docker=self.docker,
+                                   **self.health_fs)
         out = []
         for c in checks:
             service = c.id.split('.', 1)[1] if c.id.startswith(('service.', 'arr_roots.')) else None
@@ -785,27 +900,41 @@ class UiBackend:
         return sc.Discovery({}, ())
 
     def discover_services(self, draft):
-        from migratarr.service_keys import SecretError, _docker_cat, _from_xml
+        from migratarr.service_keys import SecretError, _docker_cat, _from_xml, docker_failure
         cat = self.docker_cat or _docker_cat
         values, notes = {}, []
         mine = dict(draft.get(sc.SERVICES, {}))
+        install = mine.get(ARR_INSTALL) or 'docker'
         for d in services.SERVICES.values():
             p = 'services.' + d.id
-            if d.url_base_from_config:
+            if on_host(d, install):
+                found, url_base, where = self.discover_host_config(d, mine.get(p + '.paths') or [])
+                if found:
+                    values.update({p + '.source': 'config_xml', p + '.paths': [where]})
+                    notes.append(f'{d.label}: {where} has an API key'
+                                 + (f' (URL base {url_base})' if url_base else '') + '; it will be read from there.')
+                else:
+                    notes.append(f'{d.label}: no readable config.xml with an API key found'
+                                 + (f' at {where}' if where else ' in the usual places') + '. Give the path '
+                                 'to its config.xml, or paste the key.')
+            elif d.url_base_from_config:
                 container = mine.get(p + '.container') or d.container_setting.split('.', 1)[1]
-                found = None
+                found, why = None, None
                 try:
                     key, url_base = _from_xml(cat(container, '/config/config.xml'), d.id,
                                               {'source': 'docker_config_xml', 'container': container,
                                                'path': '/config/config.xml'})
                     found = bool(key)
                     key = None  # never kept
-                except (OSError, subprocess.SubprocessError, SecretError, ValueError):
-                    url_base = None
+                except (OSError, subprocess.SubprocessError, SecretError, ValueError) as exc:
+                    url_base, why = None, docker_failure(exc, container)
                 if found:
                     values.update({p + '.source': 'docker_config_xml', p + '.container': container})
                     notes.append(f'{d.label}: container "{container}" has a config.xml with an API key'
                                  + (f' (URL base {url_base})' if url_base else '') + '; it will be read from there.')
+                elif why and 'container' not in why:  # Docker itself: not installed or not reachable
+                    notes.append(f'{d.label}: {why}. If Radarr and Sonarr are installed directly on this machine, '
+                                 'choose that above; otherwise paste the key.')
                 else:
                     notes.append(f'{d.label}: no config.xml found in a container called "{container}". '
                                  'Set the container name, or paste the key.')
@@ -819,6 +948,22 @@ class UiBackend:
             if d.url_setting and _blank(mine.get(p + '.url')):
                 values[p + '.url'] = d.default_url
         return sc.Discovery(values, tuple(notes))
+
+    def discover_host_config(self, d, paths):
+        """(found, url_base, path) for an Arr installed on this machine: the config.xml path given, else the
+        first of its usual places that has a key. Reads the key only to see that there is one."""
+        from migratarr.service_keys import SecretError, _from_xml
+        home = Path(self.environ.get('HOME') or '~').expanduser()
+        candidates = list(paths[:1]) or [str(Path(x.format(home=home))) for x in HOST_CONFIG_XML[d.id]]
+        for where in candidates:
+            try:
+                key, url_base = _from_xml(Path(where).read_bytes(), d.id, {'source': 'config_xml', 'path': where})
+            except (OSError, SecretError, ValueError):
+                continue
+            if key:
+                key = None  # never kept
+                return True, url_base, where
+        return False, None, paths[0] if paths else None
 
     def discover_disks(self, draft):
         values, notes = {}, []
@@ -847,6 +992,8 @@ class UiBackend:
 def check_paths(check):
     if check.id.startswith('service.'):
         return ('services.' + check.id.split('.', 1)[1] + '.url',)
+    if check.id.startswith('arr_files.'):
+        return (ARR_INSTALL,)
     if check.id.startswith('disk.'):
         return ('disks.' + check.id.split('.', 1)[1] + '.path',)
     if check.id.startswith('nas.disk.'):

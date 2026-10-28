@@ -65,8 +65,9 @@ become an Archive candidate.
   category folders Migratarr will use.
 - To move files, by default, permission to run `docker exec` in the Radarr and
   Sonarr containers: before and after every move Migratarr checks the files
-  where Radarr and Sonarr see them. Non-Docker installs can check on the host
-  instead; see [Arr file checks](https://github.com/jwilcox99/Migratarr/blob/main/docs/runtime-configuration.md#arr-file-checks).
+  where Radarr and Sonarr see them. For Radarr and Sonarr installed without
+  Docker, choose that during setup and Migratarr checks on the host instead;
+  see [Arr file checks](https://github.com/jwilcox99/Migratarr/blob/main/docs/runtime-configuration.md#arr-file-checks).
 - For moves on a NAS: SSH access to the NAS with a key used only by Migratarr,
   and Python 3 on the NAS.
 

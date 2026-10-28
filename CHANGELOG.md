@@ -9,6 +9,19 @@ may still change between minor versions, always with a migration or a note here)
 
 ### Changed (internal)
 - The four `execute_*.py` executors now run on one shared execution engine (`migratarr/engine`); journals, refusals and commands are unchanged.
+### Added
+- Setup and Settings > Services ask whether Radarr and Sonarr run in Docker
+  containers (the default) or are installed directly on this machine. The second
+  sets host-side Arr file checks, hides the container fields, and Detect looks
+  for config.xml on this machine.
+- `migratarr doctor` and Settings & health check that the Arr file checks can
+  run (new `arr_files` group): the container sees the media root, or, for
+  Radarr and Sonarr installed directly, the folder exists here.
+
+### Fixed
+- Docker's own error messages (for example when Docker isn't installed or
+  running) no longer appear in the terminal. Health checks and Detect say what
+  went wrong instead.
 
 ## [0.1.0] — unreleased
 

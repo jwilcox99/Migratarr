@@ -195,7 +195,15 @@ file. Use it when you can. `host` with `host_root` proves only that this
 machine sees the file; a container mounted wrongly would go unnoticed. A path
 outside `arr_root`, a missing file or a hash mismatch stops the move.
 
-These settings are not in the UI; edit the file to change them.
+The setup wizard and Settings > Services set the two common cases: Docker
+for both (no `arr_file_checks`), or `{"mode": "host"}` for both ("installed
+directly on this machine"). Anything else, such as `host_root` or one service
+each way, is edited in the file; the UI then shows it as set by hand and
+leaves it alone.
+
+`migratarr doctor` (the `arr_files` group) checks that these checks can run:
+in `docker` mode, that the container sees `arr_root`; in `host` mode, that
+`arr_root` (or `host_root`) is a folder on this machine.
 
 ## Environment overrides
 

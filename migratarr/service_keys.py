@@ -42,7 +42,7 @@ FIELDS = {  # source: (required, optional)
 
 
 class SecretError(ValueError):
-    pass
+    docker = False  # True when Docker itself failed (not installed, not reachable, no such container)
 
 
 def _require(ok, message):
@@ -110,12 +110,53 @@ def describe(service, source):
     return f'{service} credential ({kind} {source["path"]})'
 
 
+# Docker's own error messages, in plain words. Checked in order against docker's stderr (lowercased);
+# the daemon/socket ones first, since "no such file or directory" also ends a missing-socket error.
+DOCKER_ERRORS = (
+    ('permission denied while trying to connect', 'this account may not use Docker (add it to the docker '
+                                                  'group, then log in again)'),
+    ('cannot connect to the docker daemon', 'Docker is not running or not reachable'),
+    ('failed to connect to the docker api', 'Docker is not running or not reachable'),
+    ('error during connect', 'Docker is not running or not reachable'),
+    ('no such container', 'there is no container called {container}'),
+    ('is not running', 'container {container} is not running'),
+)
+
+
+def docker_reason(stderr, container):
+    """Docker's error (captured stderr) as a short plain reason, or None when it isn't one we know."""
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode('utf-8', 'replace')
+    text = (stderr or '').lower()
+    for pattern, reason in DOCKER_ERRORS:
+        if pattern in text:
+            return reason.format(container=container)
+    return None
+
+
+def docker_failure(exc, container):
+    """Why a `docker exec` call failed, in plain words, from the exception it raised (never its output)."""
+    if isinstance(exc, FileNotFoundError):
+        return 'Docker is not installed on this machine (no docker command)'
+    if isinstance(exc, subprocess.TimeoutExpired):
+        return 'Docker did not answer within ' + format(exc.timeout, 'g') + ' s'
+    if isinstance(exc, subprocess.CalledProcessError):
+        return docker_reason(exc.stderr, container)
+    return None
+
+
 def _docker_cat(container, path):
     # No shell: container and path are validated and passed as separate arguments.
-    # Docker's own stderr (e.g. "failed to connect to the docker API") is dropped: the caller's error says what
-    # failed, and nothing a container prints should reach logs next to a credential read.
+    # Docker's own stderr (e.g. "failed to connect to the docker API") is captured, never passed through to
+    # this process's stderr: callers turn it into a plain reason with docker_failure().
     return subprocess.check_output(['docker', 'exec', container, 'cat', path], timeout=30,
-                                   stderr=subprocess.DEVNULL)
+                                   stderr=subprocess.PIPE)
+
+
+def _docker_error(service, source, reason):
+    error = SecretError('Service credentials: cannot read ' + describe(service, source) + ': ' + reason)
+    error.docker = True
+    return error
 
 
 def _owner_only_file(raw):
@@ -154,13 +195,17 @@ def read_credential(service, runtime=None):
         elif kind == 'config_xml':
             value, url_base = _from_xml(Path(source['path']).read_bytes(), service, source)
         elif kind == 'docker_file':
+            reason = None
             for path in source['paths']:
                 try:
                     value = _docker_cat(source['container'], path).decode('utf-8').strip()
-                except (OSError, subprocess.SubprocessError, UnicodeDecodeError):
+                except (OSError, subprocess.SubprocessError, UnicodeDecodeError) as exc:
+                    reason = docker_failure(exc, source['container']) or reason
                     continue
                 if value:
                     break
+            if not value and reason:  # Docker itself failed: say so, not "missing"
+                raise _docker_error(service, source, reason)
         elif kind == 'file':
             value = _owner_only_file(source['path']).strip()
         else:
@@ -168,7 +213,11 @@ def read_credential(service, runtime=None):
     except SecretError:
         raise
     except (OSError, subprocess.SubprocessError, UnicodeDecodeError) as exc:
-        # The exception type only: messages from cat/docker could echo file content.
+        # A known Docker failure in plain words, else the exception type only: messages from cat could echo
+        # file content.
+        reason = docker_failure(exc, source['container']) if kind.startswith('docker') else None
+        if reason:
+            raise _docker_error(service, source, reason) from None
         raise SecretError('Service credentials: cannot read ' + describe(service, source)
                           + ': ' + type(exc).__name__) from None
     _require(value, describe(service, source) + ' is missing or empty')
