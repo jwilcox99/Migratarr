@@ -5,27 +5,21 @@ import hashlib
 import inspect
 import json
 import os
-from pathlib import Path, PurePath, PurePosixPath
-import re
+from pathlib import Path, PurePath
 import stat
-import shlex
-import subprocess
+import subprocess  # patched by tests through this module; the Arr client uses it
 import sys
-import tempfile
 import time
-from datetime import datetime, timezone
-import urllib.request
+from datetime import datetime
 
 from migratarr.runtime_config import get_config
 from migratarr.planner_settings import get_settings
 from migratarr.media_layout import MediaLayout, canonical, get_targets, split_media_path
-from migratarr.service_keys import SecretError, service_endpoint
-from migratarr.arr_files import host_path, host_sha256, host_visible
-from migratarr.executor_manifest import digest, load_approved_plan
+from migratarr.executor_manifest import digest, load_approved_plan  # digest: batch_cross_*.py use m.digest
 from migratarr.executor_nfs import verify_after_rename
 from migratarr.executor_command import NAS_IDLE_TIMEOUT, run_command
 from migratarr.executor_inventory import scan_metadata, metadata_from_inventory
-from migratarr.engine import nas_side, primitives, transport
+from migratarr.engine import nas_side, primitives, run, transport
 
 # Shared code, bound into this module so it resolves names (inventory, nas_pair,
 # RUNTIME, ...) here, exactly as when it was defined in this file.
@@ -36,11 +30,14 @@ OVERRIDES = get_settings().overrides
 TARGETS = get_targets()
 
 
+MEDIA, TRANSFER = 'Movie', 'SAME_DISK_RENAME'
+# execute(), check_journal() and the Radarr client come from the engine
+# (migratarr/engine: adapters RadarrMovie, strategy SameDiskRename, run()).
+NS = run.wire(globals(), MEDIA, TRANSFER)
+
+
 def load_plan(base, execution_id):
-    return load_approved_plan(base, execution_id, 'Movie', 'SAME_DISK_RENAME', require)
-
-
-MEDIA = 'Movie'
+    return load_approved_plan(base, execution_id, MEDIA, TRANSFER, require)
 
 
 def paths(row):
@@ -111,154 +108,6 @@ def inventory(root):
 def run_progress(command, label, input=None, timeout=1800, idle_timeout=None):
     return run_command(command, label, input, timeout, require=require, progress=progress,
                        idle_timeout=idle_timeout)
-
-
-class Radarr:
-    def __init__(self):
-        # runtime.json urls + "secrets" (default: ApiKey/UrlBase from the container's config.xml).
-        try:
-            self.api_root, self.key = service_endpoint('radarr', RUNTIME)
-        except SecretError as exc:
-            require(False, str(exc))
-        require(self.key, 'Radarr API key missing')
-        # Disable redirects so an API key cannot be forwarded to another server.
-        class NoRedirect(urllib.request.HTTPRedirectHandler):
-            def redirect_request(self, *args, **kwargs):
-                return None
-        self.opener = urllib.request.build_opener(NoRedirect, urllib.request.ProxyHandler({}))
-
-    def api(self, path, body=None):
-        req = urllib.request.Request(self.api_root + '/api/v3/' + path,
-                                     data=None if body is None else json.dumps(body).encode(),
-                                     headers={'X-Api-Key': self.key, 'Content-Type': 'application/json'},
-                                     method='GET' if body is None else 'PUT')
-        with self.opener.open(req, timeout=30) as response:
-            data = response.read()
-            return json.loads(data) if data else None
-
-    def visible(self, path, kind='-f'):
-        # runtime.json arr_file_checks (default docker; see arr_files.py).
-        check = RUNTIME.arr_file_checks['radarr']
-        if check['mode'] == 'host':
-            require(host_visible(host_path(check, TARGETS.arr_root, path), kind),
-                    'Radarr path not visible on this host: ' + path)
-            return
-        r = subprocess.run(['docker', 'exec', check['container'], 'test', kind, path], timeout=30,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        require(r.returncode == 0, 'Radarr container cannot see required path: ' + path)
-
-    def verify_file(self, path, expected_hash):
-        self.visible(path)
-        check = RUNTIME.arr_file_checks['radarr']
-        if check['mode'] == 'host':
-            digest = host_sha256(host_path(check, TARGETS.arr_root, path))
-            require(digest == expected_hash, 'Radarr-visible file content mismatch')
-            return
-        result = run_progress(
-            ['docker', 'exec', check['container'], 'sha256sum', '--', path], 'Radarr file-content verification')
-        require(result.split()[0] == expected_hash, 'Radarr-visible file content mismatch')
-
-
-def execute(base, execution_id, live, radarr, log, transport=None, recovery=None):
-    progress('Checking frozen manifest, approval, paths, and Radarr record')
-    row, manifest_hash = load_plan(base, execution_id)
-    system = radarr.api('system/status')
-    require(system.get('version'), 'Radarr system status is invalid')
-    src, dst, logical_src, logical_dst = paths(row)
-    filesystem_ready(src, dst)
-    movies = radarr.api('movie')
-    matches = [m for m in movies if m.get('path') == logical_src]
-    require(len(matches) == 1, 'Expected exactly one Radarr movie at source path')
-    movie_id = matches[0]['id']
-    movie = radarr.api(f'movie/{movie_id}')
-    require(movie['path'] == logical_src and movie.get('hasFile'), 'Radarr source changed or has no file')
-    for field in ('radarr_id', 'item_id'):
-        if row.get(field):
-            require(int(row[field]) == movie_id, 'Radarr ID mismatch')
-    require(not any(m.get('path') == logical_dst for m in movies), 'Radarr destination already assigned')
-    roots = radarr.api('rootfolder')
-    target_root = str(PurePosixPath(logical_dst).parent)
-    require(any(r.get('path') == target_root and r.get('accessible') is True for r in roots),
-            'Destination is not an accessible Radarr root')
-    labels = {t['id']: t['label'].lower() for t in radarr.api('tag')}
-    tags = {labels.get(t, '') for t in movie.get('tags', [])}
-    require(not OVERRIDES.locked(tags), 'Movie now has ' + OVERRIDES.lock_tag)
-    require(OVERRIDES.agrees(tags, row['recommended']), 'Current override conflicts')
-    relative = movie.get('movieFile', {}).get('relativePath', '')
-    rp = PurePosixPath(relative)
-    require(relative and not rp.is_absolute() and '..' not in rp.parts, 'Invalid Radarr movie file')
-    progress('Verifying source contents on the media host')
-    before = inventory(src)
-    if recovery is not None:
-        old, intent = recovery
-        require(old['manifest_sha256'] == manifest_hash and old['source'] == str(src)
-                and old['destination'] == str(dst) and intent['inventory'] == before,
-                'Failed-attempt manifest, paths, or source contents have changed')
-    require(relative in before and len(before[relative]) == 4 and before[relative][0] > 0, 'Radarr media file missing')
-    radarr.verify_file(logical_src + '/' + relative, before[relative][1])
-    radarr.visible(target_root, '-d')
-    require(transport is not None, 'NAS transport required')
-    transport.call('check', src, dst, before)
-    if recovery is not None:
-        log('NFS_RECOVERY_VERIFIED', manifest_sha256=manifest_hash)
-    log('PREFLIGHT_OK', manifest_sha256=manifest_hash, source=str(src), destination=str(dst),
-        radarr_id=movie_id, radarr_version=system['version'],
-        logical_source=logical_src, logical_destination=logical_dst)
-    if not live:
-        log('CHECK_ONLY', manifest_sha256=manifest_hash)
-        return 'CHECK_ONLY'
-    # Revalidate authorization and mutable inputs immediately before durable intent.
-    require(load_plan(base, execution_id) == (row, manifest_hash), 'Plan/approval changed')
-    require(radarr.api(f'movie/{movie_id}') == movie, 'Radarr record changed during preflight')
-    filesystem_ready(src, dst)
-    require(file_metadata(src) == inventory_metadata(before), 'Source changed during preflight')
-    log('RENAME_INTENT', inventory=before)
-    transport.call('rename', src, dst, before)
-    log('RENAMED')
-    verify_nfs_after_rename(src, dst, before, log)
-    radarr.visible(logical_dst + '/' + relative)
-    updated = dict(movie, path=logical_dst, rootFolderPath=target_root)
-    log('RADARR_UPDATE_INTENT')
-    radarr.api(f'movie/{movie_id}?moveFiles=false', updated)
-    after = radarr.api(f'movie/{movie_id}')
-    require(after.get('id') == movie_id and after.get('path') == logical_dst
-            and after.get('rootFolderPath') == target_root
-            and after.get('hasFile') and after.get('movieFile', {}).get('id') == movie['movieFile']['id']
-            and after.get('movieFile', {}).get('relativePath') == relative,
-            'Radarr post-update verification failed')
-    radarr.verify_file(logical_dst + '/' + relative, before[relative][1])
-    verify_nfs_after_rename(src, dst, before, log, metadata_only=True)
-    log('SUCCESS', manifest_sha256=manifest_hash)
-    return 'SUCCESS'
-
-
-def check_journal(journal, resume=False):
-    if journal.exists():
-        events = [json.loads(line) for line in journal.read_text().splitlines()]
-        if resume:
-            intents = [i for i, e in enumerate(events) if e['event'] == 'RENAME_INTENT']
-            require(len(intents) == 1, 'Recovery requires exactly one previous rename intent')
-            index = intents[0]
-            require(index > 0 and index + 1 < len(events), 'Incomplete failed-attempt journal')
-            failure = events[index + 1]
-            require(failure.get('event') == 'STOPPED' and failure.get('error_type') == 'OSError'
-                    and failure.get('reason') == '[Errno 22] Invalid argument',
-                    'Recovery only supports the diagnosed NFS EINVAL refusal')
-            require(not any(e['event'] in {'RENAMED', 'RADARR_UPDATE_INTENT', 'SUCCESS'} for e in events),
-                    'Journal indicates a completed or uncertain mutation')
-            # Only successful check-only recovery runs may follow the original failure.
-            tail = events[index + 2:]
-            allowed = {'START', 'NFS_RECOVERY_VERIFIED', 'PREFLIGHT_OK', 'CHECK_ONLY'}
-            require(all(e['event'] in allowed for e in tail)
-                    and (not tail or tail[-1]['event'] == 'CHECK_ONLY')
-                    and not any(e['event'] == 'START' and e.get('live') is not False for e in tail),
-                    'A later attempt needs manual reconciliation')
-            prior = [e for e in events[:index] if e['event'] == 'PREFLIGHT_OK']
-            require(prior, 'Missing failed-attempt preflight')
-            return prior[-1], events[index]
-        require(not any(e['event'] in {'RENAME_INTENT', 'SUCCESS'} for e in events),
-                'Previous live attempt exists; inspect journal and reconcile manually before retrying')
-    require(not resume, 'No failed journal to recover')
 
 
 def remote_layout(disk):
@@ -338,40 +187,7 @@ def main():
     parser.add_argument('--resume-nfs-refusal', action='store_true',
                         help='Reconcile the single diagnosed NFS EINVAL attempt; retain its journal')
     args = parser.parse_args()
-    require(sys.platform.startswith('linux'), 'Run on the Linux media host')
-    import fcntl
-    require(re.fullmatch(r'\d{8}T\d{6}Z-\d{4,}', args.execution_id), 'Invalid execution ID')
-    logs = args.base / 'execution_logs'
-    logs.mkdir(exist_ok=True)
-    with (logs / 'executor.lock').open('a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        journal = logs / (args.execution_id + '.jsonl')
-        recovery = check_journal(journal, args.resume_nfs_refusal)
-        with journal.open('a', encoding='utf-8') as stream:
-            def log(event, **details):
-                progress(event.replace('_', ' '))
-                stream.write(json.dumps(dict(utc=datetime.now(timezone.utc).isoformat(),
-                                             execution_id=args.execution_id, event=event, **details)) + '\n')
-                stream.flush()
-                os.fsync(stream.fileno())
-            # Persist the journal directory entry before any media mutation.
-            fd = os.open(logs, os.O_RDONLY | os.O_DIRECTORY)
-            try:
-                os.fsync(fd)
-            finally:
-                os.close(fd)
-            try:
-                log('START', live=args.execute)
-                with NasTransport() as transport:
-                    result = execute(args.base, args.execution_id, args.execute, Radarr(), log,
-                                     transport, recovery)
-                print(result + ': ' + args.execution_id)
-            except BaseException as exc:
-                log('STOPPED', error_type=type(exc).__name__, reason=str(exc))
-                print('STOPPED: ' + str(exc), file=sys.stderr)
-                print('Inspect journal: ' + str(journal) + '. No automatic rollback or retry.', file=sys.stderr)
-                return 1
-    return 0
+    return run.main(NS, args, MEDIA, TRANSFER, resume=args.resume_nfs_refusal)
 
 
 if __name__ == '__main__':
