@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -45,6 +46,19 @@ class FakeHttp:
         if url.endswith('/3/configuration'):
             return 200, {'images': {}}
         return 404, None
+
+
+def fake_docker(returncode=0, stderr=b'', raises=None):
+    """`docker exec <container> test -d <path>`: records calls; answers returncode/stderr, or raises."""
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append((command, kwargs))
+        if raises is not None:
+            raise raises
+        return subprocess.CompletedProcess(command, returncode, b'', stderr)
+    run.calls = calls
+    return run
 
 
 class HealthTests(unittest.TestCase):
@@ -94,9 +108,10 @@ class HealthTests(unittest.TestCase):
         run.calls = calls
         return run
 
-    def checks(self, http=None, run=None, **fs):
+    def checks(self, http=None, run=None, docker=None, **fs):
         report = settings.load(environ=self.d.env)
-        return health.run_checks(report, http=http or FakeHttp(), run=run or self.nas(), **dict(self.fs, **fs))
+        return health.run_checks(report, http=http or FakeHttp(), run=run or self.nas(),
+                                 docker=docker or fake_docker(), **dict(self.fs, **fs))
 
     def by_id(self, checks):
         return {c.id: c for c in checks}
@@ -219,6 +234,64 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(c['disk.media01'].status, health.OK)  # not a mount point is fine locally
         self.assertEqual(c['disk.media03'].status, health.FAIL)
 
+    def set_arr_file_checks(self, checks, arr_root=None):
+        runtime = self.d.read('runtime.json')
+        runtime['arr_file_checks'] = checks
+        self.d.write('runtime.json', runtime)
+        if arr_root:
+            targets = self.d.read('storage-targets.json')
+            targets['arr_root'] = arr_root
+            self.d.write('storage-targets.json', targets)
+
+    def test_arr_file_checks_in_docker_mode(self):
+        docker = fake_docker()
+        c = self.by_id(self.checks(docker=docker))
+        self.assertEqual((c['arr_files.radarr'].status, c['arr_files.sonarr'].status), (health.OK, health.OK))
+        command, kwargs = docker.calls[0]
+        self.assertEqual(command, ['docker', 'exec', 'radarr', 'test', '-d', '/media'])
+        self.assertTrue(kwargs.get('capture_output'))  # Docker's own output never reaches our stderr
+        c = self.by_id(self.checks(docker=fake_docker(1)))
+        self.assertEqual(c['arr_files.radarr'].status, health.WARN)
+        self.assertEqual(c['arr_files.radarr'].detail, 'container radarr does not see /media')
+        # Docker exits 1 for its own failures too: the captured message decides.
+        down = fake_docker(1, b'Cannot connect to the Docker daemon at unix:///var/run/docker.sock.')
+        c = self.by_id(self.checks(docker=down))
+        self.assertEqual(c['arr_files.sonarr'].status, health.WARN)
+        self.assertIn('Docker is not running or not reachable', c['arr_files.sonarr'].detail)
+        self.assertIn('installed directly on this machine', c['arr_files.sonarr'].fix)
+        self.assertNotIn('unix://', c['arr_files.sonarr'].detail)
+        c = self.by_id(self.checks(docker=fake_docker(raises=FileNotFoundError('docker'))))
+        self.assertIn('Docker is not installed', c['arr_files.radarr'].detail)
+
+    def test_host_mode_checks_this_machine_and_never_runs_docker(self):
+        media, arr_root = self.d.base / 'arr-media', str(self.d.base / 'arr-root')
+        self.set_arr_file_checks({'radarr': {'mode': 'host'}, 'sonarr': {'mode': 'host', 'host_root': str(media)}},
+                                 arr_root)
+        docker = fake_docker(raises=AssertionError('docker must not run in host mode'))
+        c = self.by_id(self.checks(docker=docker))
+        self.assertEqual(docker.calls, [])
+        self.assertEqual(c['arr_files.radarr'].status, health.WARN)  # arr_root is not a folder here
+        self.assertIn(arr_root + ' is not a folder here', c['arr_files.radarr'].detail)
+        self.assertIn('runs in Docker, say so in Settings', c['arr_files.radarr'].fix)
+        self.assertEqual(c['arr_files.sonarr'].status, health.WARN)
+        media.mkdir()
+        c = self.by_id(self.checks(docker=docker))
+        self.assertEqual(c['arr_files.sonarr'].status, health.OK)
+        self.assertEqual(c['arr_files.sonarr'].detail, 'on this machine: ' + str(media))
+
+    def test_docker_credential_failure_suggests_host_mode(self):
+        runtime = self.d.read('runtime.json')
+        runtime['secrets']['radarr'] = {'source': 'docker_config_xml'}
+        self.d.write('runtime.json', runtime)
+
+        def missing(*args, **kwargs):
+            raise FileNotFoundError('docker')
+        with patch('subprocess.check_output', missing):
+            c = self.by_id(self.checks())
+        self.assertEqual(c['service.radarr'].status, health.FAIL)
+        self.assertIn('Docker is not installed', c['service.radarr'].detail)
+        self.assertIn('installed directly on this machine', c['service.radarr'].fix)
+
     def test_broken_settings_skip_the_rest(self):
         runtime = self.d.read('runtime.json')
         runtime['urls']['radarr'] = 'nope'
@@ -260,6 +333,43 @@ class DoctorTests(unittest.TestCase):
         self.assertIn('Migrated runtime.json to version 2', data['migration'])
         self.assertEqual(self.d.read('runtime.json')['schema_version'], 2)
         self.assertEqual([c['status'] for c in data['checks']], ['ok', 'ok', 'ok'])
+
+    def test_no_docker_output_on_stderr(self):
+        # migratarr doctor as a user runs it, on a machine whose docker can't reach its daemon.
+        with tempfile.TemporaryDirectory() as tmp:
+            shim = Path(tmp) / 'docker'
+            shim.write_text('#!/bin/sh\necho "failed to connect to the docker API at unix:///x.sock" >&2\nexit 1\n')
+            shim.chmod(0o755)
+            root = Path(__file__).resolve().parents[1]
+            env = dict(os.environ, **self.d.env, PATH=tmp + os.pathsep + os.environ.get('PATH', ''),
+                       PYTHONPATH=str(root))
+            env.pop('TMDB_TOKEN', None)
+            out = subprocess.run([sys.executable, '-m', 'migratarr.cli', 'doctor', '--migrate',
+                                  '--only', 'services,arr_files'], capture_output=True, text=True, env=env,
+                                 timeout=120, cwd=tmp)
+        self.assertEqual(out.stderr, '')
+        self.assertIn('[FAIL] Radarr: cannot read radarr credential (docker_config_xml /config/config.xml in '
+                      'container radarr): Docker is not running or not reachable', out.stdout)
+        self.assertIn('[warn] Radarr file checks: in container radarr: Docker is not running or not reachable',
+                      out.stdout)
+        self.assertNotIn('docker API', out.stdout)
+
+    def test_doctor_in_host_mode_runs_no_docker(self):
+        runtime = self.d.read('runtime.json')
+        runtime['arr_file_checks'] = {'radarr': {'mode': 'host'}, 'sonarr': {'mode': 'host'}}
+        runtime['secrets'] = {'radarr': {'source': 'env', 'variable': 'NO_KEY'},
+                              'sonarr': {'source': 'env', 'variable': 'NO_KEY'}}
+        self.d.write('runtime.json', runtime)
+        targets = self.d.read('storage-targets.json')
+        targets['arr_root'] = str(self.d.base / 'arr-root')
+        self.d.write('storage-targets.json', targets)
+        out = io.StringIO()
+        with patch('subprocess.run', side_effect=AssertionError('docker must not run')), \
+                patch('subprocess.check_output', side_effect=AssertionError('docker must not run')), \
+                patch('migratarr.health.subprocess.run', side_effect=AssertionError('docker must not run')):
+            migratarr_doctor.main(['--migrate', '--only', 'arr_files'], out)
+        self.assertIn(f'Radarr file checks: on this machine: {self.d.base}/arr-root is not a folder here',
+                      out.getvalue())
 
     def test_unknown_group(self):
         with self.assertRaises(SystemExit), patch('sys.stderr', io.StringIO()):
