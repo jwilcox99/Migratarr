@@ -9,7 +9,8 @@
 
 Checks (migratarr/health.py): settings files, each service (Radarr, Sonarr,
 Jellyfin, TMDB) reachable with a working key, Radarr/Sonarr root folders
-covering every category folder, each disk mounted / writable / above its
+covering every category folder, the Arr file checks able to run (in the
+containers, or on this machine), each disk mounted / writable / above its
 reserve, the NAS over SSH and its Python (topology nas_ssh), and group write
 on media folders. Read-only except --migrate. Never prints a credential.
 

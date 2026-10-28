@@ -34,13 +34,24 @@ yet, every page leads to the wizard. Nothing is written until the last step.
 
 ### 1. Connect your services
 
-For each of Radarr, Sonarr, Jellyfin and TMDB, give the address (TMDB has
-none) and where Migratarr reads the key from:
+First say how Radarr and Sonarr run:
+
+- **Radarr and Sonarr run in Docker containers** (the default). Migratarr
+  reads their keys and, before and after every move, checks files inside
+  their containers with `docker exec`. Name the containers below.
+- **Radarr and Sonarr are installed directly on this machine.** Migratarr
+  reads their keys from config.xml on this machine and checks files here.
+  The container fields are hidden. For Radarr or Sonarr in a container with
+  its media mounted at a different path, see
+  [Arr file checks](docs/runtime-configuration.md#arr-file-checks).
+
+Then, for each of Radarr, Sonarr, Jellyfin and TMDB, give the address (TMDB
+has none) and where Migratarr reads the key from:
 
 - **Read automatically from the Docker container's config.xml** (Radarr and
-  Sonarr; the default). Name the container.
+  Sonarr in Docker; the default). Name the container.
 - **Read from config.xml on this machine**, for Radarr or Sonarr installed
-  without Docker.
+  directly. Give the file's path, for example `/var/lib/radarr/config.xml`.
 - **Read a file inside a Docker container**, for example a secret mounted
   into a dashboard container.
 - **Read from a file on this machine.** The file must be readable by your user
@@ -51,7 +62,10 @@ none) and where Migratarr reads the key from:
   shown again. See [SECURITY.md](SECURITY.md).
 
 **Detect** reads Radarr's and Sonarr's keys and URL bases from their own
-config when it can. If Radarr or Sonarr is served under a path (for example
+config when it can: inside the named containers, or, when they are installed
+directly, from the path you gave or the usual places
+(`/var/lib/radarr/config.xml`, `~/.config/Radarr/config.xml`, and the same
+for Sonarr). If Docker isn't installed or running, Detect says so. If Radarr or Sonarr is served under a path (for example
 behind a reverse proxy), put that path in the address or in **URL base**.
 
 ### 2. Where your disks are
@@ -186,8 +200,8 @@ migratarr doctor --offline
 ```
 
 Some settings exist only in the files: credential sources' extra options,
-[Arr file checks](docs/runtime-configuration.md#arr-file-checks) for
-non-Docker installs, and environment overrides.
+[Arr file checks](docs/runtime-configuration.md#arr-file-checks) other than
+"all Docker" or "all on this machine", and environment overrides.
 The [settings layer](docs/settings.md) explains how the three files fit
 together.
 
