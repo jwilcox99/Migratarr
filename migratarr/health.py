@@ -5,6 +5,8 @@ Each check returns Check(id, group, label, status, detail, fix):
   config       each settings file loads with no errors (migratarr.settings report)
   services     each registry service: credential readable, reachable, key accepted
   arr_roots    Radarr/Sonarr root folders include every category folder Migratarr moves into
+  arr_files    the Arr file checks moves rely on can run (runtime.json arr_file_checks): docker, the
+               container sees arr_root; host, this machine does
   disks        each disk exists, is mounted (nas_ssh), writable (local), above its reserve
   nas          (nas_ssh) SSH with the configured key works, the NAS Python runs, each
                NAS disk root exists and is writable there
@@ -12,7 +14,8 @@ Each check returns Check(id, group, label, status, detail, fix):
 
 Read-only: nothing here writes a file, changes a service, or prints a
 credential. Details carry HTTP status codes and exception type names, never
-response bodies or command output that could echo a key. Standard library only.
+response bodies or command output that could echo a key; Docker's own error
+output is captured and summed up, never passed through. Standard library only.
 """
 from dataclasses import asdict, dataclass
 import json
@@ -28,7 +31,7 @@ from migratarr import services
 
 OK, WARN, FAIL, SKIP = 'ok', 'warn', 'fail', 'skip'
 ORDER = {FAIL: 0, WARN: 1, OK: 2, SKIP: 3}
-GROUPS = ('config', 'services', 'arr_roots', 'disks', 'nas', 'permissions')
+GROUPS = ('config', 'services', 'arr_roots', 'arr_files', 'disks', 'nas', 'permissions')
 TIMEOUT = 10
 GiB = 1024 ** 3
 
@@ -121,8 +124,13 @@ def service_check(descriptor, runtime, http=http_get):
     try:
         root, key = _endpoint(descriptor, runtime)
     except SecretError as exc:
-        return Check(cid, 'services', label, FAIL, str(exc).replace('Service credentials: ', ''),
-                     'Check where the ' + descriptor.credential_label + ' comes from: runtime.json "secrets"'), None
+        fix = 'Check where the ' + descriptor.credential_label + ' comes from: runtime.json "secrets"'
+        if getattr(exc, 'docker', False):
+            fix = ('Start Docker or fix the container name' + (
+                f'; if {label} is installed directly on this machine, say so in Settings > Services '
+                '(Radarr and Sonarr)' if descriptor.url_base_from_config else '; or read the key another way')
+                + ', or paste the key')
+        return Check(cid, 'services', label, FAIL, str(exc).replace('Service credentials: ', ''), fix), None
     probe = descriptor.probe
     url = root.rstrip('/') + probe.path
     shown = root  # validated: no credentials, query or fragment
@@ -173,6 +181,56 @@ def arr_root_checks(descriptor, endpoint, runtime, targets, http=http_get):
                      f'Add them as root folders in {descriptor.label} (Settings > Media Management), or change '
                      'category_paths / arr_root in storage-targets.json. Moves into a missing root are refused.')
     return Check(cid, 'arr_roots', label, OK, ', '.join(sorted(expected)))
+
+
+def arr_file_checks(runtime, targets, run=subprocess.run):
+    """Moves confirm each file where Radarr/Sonarr see it (migratarr/arr_files.py); check that can work.
+
+    docker: `docker exec <container> test -d <arr_root>`, Docker's output captured. host: arr_root (or its
+    host_root) is a folder on this machine. WARN, not FAIL: planning doesn't need it; moves stop at it.
+    """
+    from migratarr.arr_files import host_path
+    from migratarr.service_keys import docker_failure, docker_reason
+    checks, arr_root = [], str(targets.arr_root)
+    for descriptor in services.SERVICES.values():
+        check = runtime.arr_file_checks.get(descriptor.id)
+        if check is None:
+            continue
+        cid, label = 'arr_files.' + descriptor.id, descriptor.label + ' file checks'
+        if check['mode'] == 'host':
+            where = host_path(check, arr_root, arr_root)
+            if where and os.path.isdir(where):
+                checks.append(Check(cid, 'arr_files', label, OK, f'on this machine: {where}'))
+            else:
+                checks.append(Check(cid, 'arr_files', label, WARN, f'on this machine: {where} is not a folder here',
+                                    f'{descriptor.label} is set as installed directly on this machine, so moves '
+                                    f'check files under {where} here. Mount the media there, or if {descriptor.label} '
+                                    'runs in Docker, say so in Settings > Services.'))
+            continue
+        container = check['container']
+        try:
+            result = run(['docker', 'exec', container, 'test', '-d', arr_root], capture_output=True, timeout=30)
+        except (OSError, subprocess.SubprocessError) as exc:
+            reason, code = docker_failure(exc, container) or 'docker did not run: ' + type(exc).__name__, None
+        else:
+            # Docker itself fails with status 1 too, so read its (captured) message before taking 1 as
+            # "test -d: no such folder".
+            code = result.returncode
+            reason = None if code == 0 else docker_reason(result.stderr, container)
+            if reason is None and code not in (0, 1):
+                reason = f'docker exec exited with status {code}'
+        if code == 0:
+            checks.append(Check(cid, 'arr_files', label, OK, f'in container {container}: {arr_root}'))
+        elif reason is None:
+            checks.append(Check(cid, 'arr_files', label, WARN, f'container {container} does not see {arr_root}',
+                                f'Mount the media into {container} at {arr_root}, or set arr_root in '
+                                'storage-targets.json to where it sees it'))
+        else:
+            checks.append(Check(cid, 'arr_files', label, WARN, f'in container {container}: {reason}',
+                                'Moves check each file inside the container. Start Docker or fix the container '
+                                f'name; if {descriptor.label} is installed directly on this machine, say so in '
+                                'Settings > Services.'))
+    return checks
 
 
 def disk_checks(runtime, targets, *, ismount=os.path.ismount, statvfs=os.statvfs, access=os.access):
@@ -339,8 +397,9 @@ def nas_checks(runtime, run=subprocess.run):
 
 # ---------------------------------------------------------------- all together
 
-def run_checks(report=None, *, environ=None, groups=GROUPS, http=http_get, run=subprocess.run, **fs):
-    """Run the selected groups and return their checks (config first)."""
+def run_checks(report=None, *, environ=None, groups=GROUPS, http=http_get, run=subprocess.run,
+               docker=subprocess.run, **fs):
+    """Run the selected groups and return their checks (config first). run: ssh; docker: docker exec."""
     from migratarr import settings
     report = report or settings.load(environ=environ)
     checks = config_checks(report) if 'config' in groups else []
@@ -362,6 +421,8 @@ def run_checks(report=None, *, environ=None, groups=GROUPS, http=http_get, run=s
         for descriptor in services.SERVICES.values():
             if descriptor.role in ('movies', 'tv'):
                 checks.append(arr_root_checks(descriptor, endpoints.get(descriptor.id), runtime, targets, http))
+    if 'arr_files' in groups:
+        checks += arr_file_checks(runtime, targets, docker)
     if 'disks' in groups:
         checks += disk_checks(runtime, targets, **{k: v for k, v in fs.items()
                                                    if k in ('ismount', 'statvfs', 'access')})

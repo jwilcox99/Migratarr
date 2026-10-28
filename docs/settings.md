@@ -92,11 +92,12 @@ A future integration is a new descriptor here plus an adapter for what Migratarr
 | config | a settings file has an error | runtime.json is still version 1 |
 | services | credential can't be read, service unreachable, key rejected (401/403), wrong response | Sonarr isn't v4 |
 | arr_roots | a placement category folder (`<arr_root>/<category dir>`) isn't an accessible Radarr/Sonarr root folder (the executors refuse moves into it) | |
+| arr_files | | the [Arr file checks](runtime-configuration.md#arr-file-checks) moves rely on can't run: docker, the container doesn't see `arr_root` or Docker isn't reachable; host, `arr_root` (or `host_root`) isn't a folder on this machine |
 | disks | path missing; topology local: not writable | nas_ssh: not a mount point; free space below the disk's reserve |
 | nas | SSH fails (same options as the executors: key only, `BatchMode`, known host), NAS Python < 3.6, a NAS root missing or not writable by the NAS user | |
 | permissions | | a category folder or an item folder directly in it lacks group write; a category folder is missing |
 
-Details never contain a credential: HTTP status codes and exception type names only, never response bodies. If the UI starts with settings that don't load, it now opens in setup mode (only Settings & health, all actions off) instead of exiting.
+Details never contain a credential: HTTP status codes and exception type names only, never response bodies. Docker's own error output is captured and summed up ("Docker is not installed", "not running or not reachable", "no container called radarr"), never printed. If the UI starts with settings that don't load, it now opens in setup mode (only Settings & health, all actions off) instead of exiting.
 
 ## Not in Phase 1
 
