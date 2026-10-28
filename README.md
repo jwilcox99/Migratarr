@@ -7,10 +7,10 @@
 
 # Migratarr
 
-Migratarr decides *where* your media should live, and movesit there once you 
-approve. It works alongside Radarr and Sonarr (which managewhat's in your library)
-and Jellyfin (which plays it), and sorts movies and TV across your disks by how 
-hard each title would be to get again, whether it's on a streaming service you 
+Migratarr decides *where* your media should live, and moves it there once you
+approve. It works alongside Radarr and Sonarr (which manage what's in your library)
+and Jellyfin (which plays it), and sorts movies and TV across your disks by how
+hard each title would be to get again, whether it's on a streaming service you
 pay for, and how your household actually watches it.
 
 Every move is planned first. Nothing moves until you review the plan and
