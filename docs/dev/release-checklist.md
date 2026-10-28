@@ -45,14 +45,17 @@ branches to push).
 5. - [x] **Version** (Claude): `0.1.0rc1` in `migratarr/cli.py`; CHANGELOG `[0.1.0]` section;
          release.yml handles pre-release tags (notes from `[0.1.0]`, marked pre-release) and
          stops the notes at the next heading
-6. - [ ] **Public history** (Josh): the repo is already publicly readable with its full history.
-         Decide whether the scrub plan (`reviews/2026-09-24-history-scrub-plan.md`, private)
-         still applies, and do it before anything is published to PyPI
-7. - [ ] **Repo settings** (Josh): `main` and `v*` tag rulesets, private vulnerability
-         reporting, the `pypi` environment
-8. - [ ] **PyPI** (Josh): trusted publisher for project `migratarr` — owner `jwilcox99`, repository
-         `Migratarr`, workflow `release.yml`, environment `pypi`
-9. - [ ] **Release candidate** (Josh): tag `v0.1.0rc1`; check the PyPI page, then
-         `pipx install --pip-args=--pre migratarr` on the VM, `migratarr demo`, wizard, first plan
+6. - [x] **Public history** (Josh, 2026-10-27/28): the scrub plan re-run on the final `main`
+         (8 commits had the work email, one test line the NAS user); old repo archived and made
+         private, a fresh `Migratarr` holds the scrubbed `main`. Clones re-pointed or disconnected
+7. - [x] **Repo settings** (Josh, 2026-10-28): `main` ruleset (PR, the six CI checks, no force
+         push or deletion), `v*` tag ruleset (no update or deletion), private vulnerability
+         reporting, the `pypi` environment (required reviewer, `v*` tags only)
+8. - [x] **PyPI** (Josh): pending trusted publisher for `migratarr` (owner `jwilcox99`, repository
+         `Migratarr`, workflow `release.yml`, environment `pypi`)
+9. - [ ] **Release candidate** (Josh): `v0.1.0rc1` published 2026-10-28. Still to do: check the
+         PyPI page; on the VM `pip install --pre migratarr`, `migratarr demo`, wizard, first plan.
+         Pre-release cleanup (incident scripts out of the package, developer notes in
+         `docs/dev/`) lands after rc1 and ships in 0.1.0
 10. - [ ] **Release** (Claude, then Josh): `__version__ = '0.1.0'`, date the `[0.1.0]` section
           (`## [0.1.0] — YYYY-MM-DD`); Josh tags `v0.1.0`

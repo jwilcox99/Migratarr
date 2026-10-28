@@ -1,6 +1,6 @@
 # Settings layer
 
-**Status:** Phase 1 of `reviews/2026-10-26-public-setup-plan`. Written 2026-10-26 against `main` @ `696d7d4`.
+**Status:** Written 2026-10-26 against `main` @ `696d7d4`.
 
 Migratarr is configured by three JSON files. This doc covers what changed in
 runtime.json version 2, the settings layer every new entry point uses to read
@@ -105,4 +105,4 @@ Details never contain a credential: HTTP status codes and exception type names o
 
 ## Sources
 
-`runtime_config.py`, `storage_targets.py`, `planner_settings.py`, `service_keys.py`, `media_layout.py`, `migratarr_jobs.py`, `config/*.example.json` at `main` @ `696d7d4`; `reviews/2026-10-26-public-setup-plan.md` (decisions table).
+`runtime_config.py`, `storage_targets.py`, `planner_settings.py`, `service_keys.py`, `media_layout.py`, `migratarr_jobs.py`, `config/*.example.json` at `main` @ `696d7d4`; the 0.1.0 decisions in [the release checklist](dev/release-checklist.md#decisions-josh).

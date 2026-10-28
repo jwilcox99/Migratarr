@@ -20,7 +20,7 @@ following them.
   "not run live" versus "run live, here's the result," rather than implied.
 - Run the test suite before opening a PR: `python -m unittest discover -s tests -v`.
   `tests/` is on `main` as of the Phase One closeout
-  (`docs/phase-one-closeout.md`) — keep it green, and add to it if you're
+  (`docs/dev/phase-one-closeout.md`) — keep it green, and add to it if you're
   touching `migratarr_validation/`.
 
 ## Branch and PR workflow
@@ -38,7 +38,7 @@ following them.
 
 If you're changing logic in `build_move_plan.py`, `dry_run_movies.py`, or
 `dry_run_tv.py` — the scoring/planning code — follow the precedent set in
-`docs/validation-engine.md` (on `main` as of the Phase One closeout):
+`docs/dev/validation-engine.md` (on `main` as of the Phase One closeout):
 characterize the existing behavior first (tests that pin down what the current code
 actually does, with citations to the exact function/lines you're
 reproducing), *then* change it, and report a parity comparison against
@@ -94,7 +94,7 @@ through the old and new planner offline with the clock frozen). See
 ## Areas that could use help
 
 See the README's [Known limitations](README.md#known-limitations) section
-and `docs/phase-one-closeout.md`'s Phase Two handoff. In particular:
+and `docs/dev/phase-one-closeout.md`'s Phase Two handoff. In particular:
 
 - De-duplicating `execute_movie_nas.py`, `execute_tv_nas.py`,
   `execute_cross_movie.py`, and `execute_cross_tv.py` into a shared module —

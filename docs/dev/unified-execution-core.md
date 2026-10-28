@@ -1,7 +1,7 @@
 # Unified execution core: Step 2 design spec
 
 **Status:** In progress. Gates 1 and 2 done; gates 3–6 not started. 2026-10-26: the transport layer (SSH or this host, by `topology`) landed ahead of gate 3; see [Execution transport](execution-transport.md). Written 2026-09-24 against `main` @ `7a1d084`.
-**Plan reference:** Step 2 of `2026-09-24-release-path-plan` and the Phase Two handoff in `docs/phase-one-closeout.md` ("a unified execution core that preserves the Phase One safety invariants while removing duplicated Movie/TV and same-disk/cross-disk code").
+**Plan reference:** Step 2 of `2026-09-24-release-path-plan` and the Phase Two handoff in `docs/dev/phase-one-closeout.md` ("a unified execution core that preserves the Phase One safety invariants while removing duplicated Movie/TV and same-disk/cross-disk code").
 **Goal:** one execution engine replaces the four live executors. Every journal, refusal and Arr call stays exactly as it is today. The engine reports what it does as structured data, so the CLI now and a web UI later are both clients of the same code.
 
 ## 1. Baseline
@@ -67,7 +67,7 @@ This keeps today's property that the same-disk program cannot copy or delete. Th
 
 **D6. Entry points stay the same until Step 4.** `execute_movie_nas.py`, `execute_tv_nas.py`, `execute_cross_movie.py` and `execute_cross_tv.py` remain, as thin wrappers with the same arguments, exit codes and stdout lines (`SUCCESS: <id>`, `CHECK_ONLY: <id>`, `STOPPED: …`). The batch scripts and operator muscle memory keep working, and the Step 4 CLI replaces them later.
 
-**D7. Retire, don't port, `execute_movie.py`.** It has no NAS transport and is outside the documented pipeline. It gets deleted, not moved into the engine. Five test modules reference it (`test_executor_safety`, `test_media_layout`, `test_override_tags`, `test_runtime_config`, `test_service_urls`) and get updated to match. `recover_cross_0102.py` / `recover_cross_0116.py` move unchanged to `incidents/`, with `IncidentRecoveryTests` repointed.
+**D7. Retire, don't port, `execute_movie.py`.** It has no NAS transport and is outside the documented pipeline. It gets deleted, not moved into the engine. Five test modules reference it (`test_executor_safety`, `test_media_layout`, `test_override_tags`, `test_runtime_config`, `test_service_urls`) and get updated to match. `recover_cross_0102.py` / `recover_cross_0116.py` move unchanged to `incidents/`, with `IncidentRecoveryTests` repointed (done for 0.1.0: `incidents/`, not installed).
 
 **D8. Behavior-neutral first; fixes come later.** These differences are carried into the engine as per-pairing parameters, not unified. Each gets its own reviewed change afterwards:
 - `run_progress` timeout: 1800 s same-disk vs 7200 s cross-disk.
@@ -119,7 +119,7 @@ Live progress for a running execution comes from `progress` events (D3). The UI 
 | 1 | Characterization only: golden-journal tests for all four pairings, recording the exact event sequence and detail keys for check-only, success and each existing failure case in `test_executor_safety*.py`; stdout/exit-code tests for each wrapper; a test that the generated NAS programs compile and reject operations outside their set. **Done 2026-09-24:** `tests/test_executor_golden.py`, `tests/golden/executor_sequences.json` (70 records; mutation-checked). | New tests pass against **unchanged** executors |
 | 2 | `migratarr/engine/primitives.py` + `nas_side.py`; executors import from them, with no behavior change. **Done 2026-10-19** (see "Recorded by gate 2"). | Step 1 golden tests byte-identical; `NasReceiptTests` pass against the new NAS program |
 | 3 | Adapters, strategies, `run()`; the four scripts become wrappers (D6). | All existing safety tests and Step 1 golden tests pass unmodified |
-| 4 | **Live parity:** for one approved row of each pairing, run old and new in check-only mode and compare the journals, which must be identical except for `utc`. This is the same bar as `docs/executor-refactor.md` / `docs/validation-engine.md`. Then one watched `--execute` per pairing on the smallest eligible item. | Evidence recorded in this doc, as `docs/storage-targets.md` does |
+| 4 | **Live parity:** for one approved row of each pairing, run old and new in check-only mode and compare the journals, which must be identical except for `utc`. This is the same bar as `docs/executor-refactor.md` / `docs/dev/validation-engine.md`. Then one watched `--execute` per pairing on the smallest eligible item. | Evidence recorded in this doc, as `docs/storage-targets.md` does |
 | 5 | One `batch_cross.py --media {Movie,TV}` replaces both batch scripts; retire `execute_movie.py`; move recovery scripts (D7). | Existing batch tests ported; `--limit` behavior unchanged |
 | 6 | Separate reviewed changes for each D8 item, then the lock rename (D5). | One PR each |
 
@@ -157,4 +157,4 @@ The golden records made two existing behaviors explicit. Both are preserved as t
 
 ## Sources
 
-`execute_movie.py`, `execute_movie_nas.py`, `execute_tv_nas.py`, `execute_cross_movie.py`, `execute_cross_tv.py`, `batch_cross_tv.py`, `executor_*.py`, `recover_cross_0102.py`, `recover_cross_0116.py`, `tests/test_executor_safety.py`, `tests/test_executor_safety_phase2.py`, `docs/executor-safety-tests.md`, `docs/phase-one-closeout.md`, `README.md` — all at `main` @ `7a1d084`; `codex/host-verification` @ `ebd357c`.
+`execute_movie.py`, `execute_movie_nas.py`, `execute_tv_nas.py`, `execute_cross_movie.py`, `execute_cross_tv.py`, `batch_cross_tv.py`, `executor_*.py`, `recover_cross_0102.py`, `recover_cross_0116.py`, `tests/test_executor_safety.py`, `tests/test_executor_safety_phase2.py`, `docs/dev/executor-safety-tests.md`, `docs/dev/phase-one-closeout.md`, `README.md` — all at `main` @ `7a1d084`; `codex/host-verification` @ `ebd357c`.

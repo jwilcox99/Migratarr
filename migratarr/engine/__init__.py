@@ -1,1 +1,1 @@
-"""Unified execution core (docs/unified-execution-core.md)."""
+"""Unified execution core (docs/dev/unified-execution-core.md)."""

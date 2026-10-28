@@ -11,7 +11,7 @@ Every executor builds one standard-library program (pinned byte-for-byte by `tes
 | `nas_ssh` | on the NAS | `ssh <options> <user>@<host> <nas.python> -c <program>` through one control master per run. Options and commands are exactly the ones the executors used before; `tests/test_local_transport.py` pins the full argv of the master, each call and the exit. |
 | `local` | on this host | `<this Python> -I -c <program>`; no SSH. Disk "remote" roots equal the local ones (`runtime_config.storage_from_targets`), so the same program renames (same disk), or stages, publishes and deletes (cross disk) on this host's filesystems. |
 
-Everything else is shared by both: the approval checks, preflight, journals and their events, the NAS-side lock (`/tmp/migratarr-movie-<uid>.lock`, D5), receipts, the NFS visibility check (immediate on local disks), and the Radarr/Sonarr updates. Cross-disk moves still require the two disks to be different filesystems; same-disk moves still require one. `recover_cross_published.py` uses the channel too; the frozen incident scripts (`recover_cross_0102.py`, `recover_cross_0116.py`) still build SSH commands themselves and are NAS-only.
+Everything else is shared by both: the approval checks, preflight, journals and their events, the NAS-side lock (`/tmp/migratarr-movie-<uid>.lock`, D5), receipts, the NFS visibility check (immediate on local disks), and the Radarr/Sonarr updates. Cross-disk moves still require the two disks to be different filesystems; same-disk moves still require one. `recover_cross_published.py` uses the channel too; the frozen incident scripts (`incidents/recover_cross_0102.py`, `incidents/recover_cross_0116.py`) still build SSH commands themselves and are NAS-only.
 
 **Evidence:** `tests/test_local_transport.py` runs the real shipped programs on this host through all four executors' transports: same-disk rename (Movie, TV), refusal when the source changed after hashing, and cross-disk check → copy → delete between `/tmp` and `/dev/shm` (Movie, TV), ending with no staging or quarantine folders left. All gate 1 golden journals and the gate 2 program pins are unchanged.
 
@@ -39,7 +39,7 @@ or **Mark reconciled** on the move's page in the UI (actions on, no job running)
 
 ## Next: gate 3 and beyond
 
-Unchanged from `docs/unified-execution-core.md` §5. Gate 3 (adapters, strategies, `run()`, scripts as thin wrappers) builds on this channel: `run()` takes a `NasChannel` instead of constructing SSH itself. Gate 4's live parity on Josh's library should now also include one check-only run per pairing to confirm the channel's commands on the real NAS.
+Unchanged from `docs/dev/unified-execution-core.md` §5. Gate 3 (adapters, strategies, `run()`, scripts as thin wrappers) builds on this channel: `run()` takes a `NasChannel` instead of constructing SSH itself. Gate 4's live parity on Josh's library should now also include one check-only run per pairing to confirm the channel's commands on the real NAS.
 
 ## Sources
 

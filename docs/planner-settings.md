@@ -101,7 +101,7 @@ tags) as unrecognized, since nothing acts on it.
 
 `config/legacy-rules.json` (the read-only validation layer's policy) carries
 its own copy of these tags; keep it in step unless you are deliberately
-previewing a different policy (see `docs/validation-engine.md`).
+previewing a different policy (see `docs/dev/validation-engine.md`).
 
 ## Scoring
 

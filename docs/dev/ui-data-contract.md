@@ -1,7 +1,7 @@
 # Read-only UI: data contract
 
 **Status:** Read layer implemented 2026-09-25 as `read_api.py` + `migratarr_status.py` (tests: `tests/test_read_api.py`). UI milestone 1 implemented 2026-10-19 as `migratarr_ui.py` (tests: `tests/test_ui.py`): standard library only, bound to 127.0.0.1, GET only, loopback `Host` names only, strict CSP. Written 2026-09-24.
-**Plan reference:** UI milestone 1 (read-only web UI) in `2026-09-24-release-path-plan`, and §4 of `docs/unified-execution-core.md`.
+**Plan reference:** UI milestone 1 (read-only web UI) in `2026-09-24-release-path-plan`, and §4 of `docs/dev/unified-execution-core.md`.
 **Goal:** pin down exactly which files the first UI reads, what each field means, and how the UI works out a move's status. The UI can then be built against formats that already exist, without waiting for new storage.
 
 ## 1. Ground rules

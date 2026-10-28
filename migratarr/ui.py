@@ -8,7 +8,7 @@ browse to http://localhost:8765:
 
     ssh -L 8765:localhost:8765 <user>@<media host>
 
-Pages (GET) come from read_api.py (docs/ui-data-contract.md) plus the disks'
+Pages (GET) come from read_api.py (docs/dev/ui-data-contract.md) plus the disks'
 free space, and never write, rename or lock anything; they never open
 execution_logs/executor.lock. The actions (POST, see docs/ui-actions.md) only:
 start a planning job, record approvals through approval_store.py (the same
