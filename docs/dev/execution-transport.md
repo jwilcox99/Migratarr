@@ -39,7 +39,7 @@ or **Mark reconciled** on the move's page in the UI (actions on, no job running)
 
 ## Next: gate 3 and beyond
 
-Unchanged from `docs/unified-execution-core.md` §5. Gate 3 (adapters, strategies, `run()`, scripts as thin wrappers) builds on this channel: `run()` takes a `NasChannel` instead of constructing SSH itself. Gate 4's live parity on Josh's library should now also include one check-only run per pairing to confirm the channel's commands on the real NAS.
+Unchanged from `docs/dev/unified-execution-core.md` §5. Gate 3 (adapters, strategies, `run()`, scripts as thin wrappers) builds on this channel: `run()` takes a `NasChannel` instead of constructing SSH itself. Gate 4's live parity on Josh's library should now also include one check-only run per pairing to confirm the channel's commands on the real NAS.
 
 ## Sources
 

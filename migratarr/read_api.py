@@ -1,6 +1,6 @@
 """Read-only view of Migratarr's on-disk state, shared by the CLI and a future UI.
 
-Implements docs/ui-data-contract.md. Every function here only reads files
+Implements docs/dev/ui-data-contract.md. Every function here only reads files
 under the base path: nothing is written, renamed, chmod'ed or locked. In
 particular execution_logs/executor.lock is never opened, because executors take
 it with flock(LOCK_EX | LOCK_NB) and would refuse to start while a reader held it.

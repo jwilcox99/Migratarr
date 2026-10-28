@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Show runs, per-move status and execution timelines. Read-only: never approves,
-moves, writes or locks anything (see read_api.py and docs/ui-data-contract.md)."""
+moves, writes or locks anything (see read_api.py and docs/dev/ui-data-contract.md)."""
 import argparse
 import json
 from pathlib import Path

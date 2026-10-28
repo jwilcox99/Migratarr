@@ -4,7 +4,7 @@ Phase 1 implements ``SettingsBackend`` (loads every config file, validates per
 field, saves atomically with a backup); phase 2 implements ``HealthBackend``.
 The settings pages (settings_ui.py) and the first-run wizard (setup_wizard.py)
 use only what is declared here, so either side can change its internals
-without touching the other. See docs/settings-ui-contract.md.
+without touching the other. See docs/dev/settings-ui-contract.md.
 
 Rules every implementation keeps:
 - A secret's value never leaves the backend: ``current`` returns SECRET_KEPT

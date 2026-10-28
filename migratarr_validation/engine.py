@@ -1,7 +1,7 @@
 """Port of build_move_plan.py decisions with injected policy and filesystem reads.
 
 The planner's branch order, status strings, blocker names, warning names, and
-capacity reservation rules are intentionally retained. See docs/validation-engine.md
+capacity reservation rules are intentionally retained. See docs/dev/validation-engine.md
 for provenance and known legacy edge cases.
 """
 

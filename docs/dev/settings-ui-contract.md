@@ -78,6 +78,6 @@ problems and checks can point at the field they are about.
    but not for a regular install; a single `MIGRATARR_HOME` (default: the clone)
    would fix it. Also `migratarr_plan` refuses to plan from a dirty git tree, and
    `snapshot_run` records the commit; an install without git needs a version instead.
-   We need a decision before 0.1.0 (see `docs/release-checklist.md`).
+   We need a decision before 0.1.0 (see `docs/dev/release-checklist.md`).
 7. **Topology choice.** `capabilities().topologies` gains `local` when the local
    transport passes its tests; the wizard refuses `local` until then.
