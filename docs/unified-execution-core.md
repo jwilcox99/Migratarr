@@ -67,7 +67,7 @@ This keeps today's property that the same-disk program cannot copy or delete. Th
 
 **D6. Entry points stay the same until Step 4.** `execute_movie_nas.py`, `execute_tv_nas.py`, `execute_cross_movie.py` and `execute_cross_tv.py` remain, as thin wrappers with the same arguments, exit codes and stdout lines (`SUCCESS: <id>`, `CHECK_ONLY: <id>`, `STOPPED: …`). The batch scripts and operator muscle memory keep working, and the Step 4 CLI replaces them later.
 
-**D7. Retire, don't port, `execute_movie.py`.** It has no NAS transport and is outside the documented pipeline. It gets deleted, not moved into the engine. Five test modules reference it (`test_executor_safety`, `test_media_layout`, `test_override_tags`, `test_runtime_config`, `test_service_urls`) and get updated to match. `recover_cross_0102.py` / `recover_cross_0116.py` move unchanged to `incidents/`, with `IncidentRecoveryTests` repointed.
+**D7. Retire, don't port, `execute_movie.py`.** It has no NAS transport and is outside the documented pipeline. It gets deleted, not moved into the engine. Five test modules reference it (`test_executor_safety`, `test_media_layout`, `test_override_tags`, `test_runtime_config`, `test_service_urls`) and get updated to match. `recover_cross_0102.py` / `recover_cross_0116.py` move unchanged to `incidents/`, with `IncidentRecoveryTests` repointed (done for 0.1.0: `incidents/`, not installed).
 
 **D8. Behavior-neutral first; fixes come later.** These differences are carried into the engine as per-pairing parameters, not unified. Each gets its own reviewed change afterwards:
 - `run_progress` timeout: 1800 s same-disk vs 7200 s cross-disk.

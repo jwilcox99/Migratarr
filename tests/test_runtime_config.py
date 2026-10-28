@@ -138,7 +138,7 @@ class RuntimeWiringTests(unittest.TestCase):
                 patch('subprocess.check_output', side_effect=AssertionError('external command')):
             cls.modules = {name: importlib.import_module(name) for name in
                            ('execute_cross_movie', 'execute_cross_tv', 'execute_movie_nas', 'execute_tv_nas',
-                            'execute_movie', 'recover_cross_0102', 'recover_cross_0116', 'batch_cross_movies',
+                            'execute_movie', 'incidents.recover_cross_0102', 'incidents.recover_cross_0116', 'batch_cross_movies',
                             'batch_cross_tv')}
 
     def test_config_driven_mapping_and_any_declared_disk(self):
@@ -190,7 +190,7 @@ class RuntimeWiringTests(unittest.TestCase):
             self.assertIn('LOCK_EX | fcntl.LOCK_NB', code)
             if args:
                 self.assertIn(self.config.remote_disks[args[0]], code)
-        recovery = self.modules['recover_cross_0102'].receipt_program()
+        recovery = self.modules['incidents.recover_cross_0102'].receipt_program()
         compile(recovery, '<recovery helper>', 'exec')
         self.assertIn('/volume3/media04/Movies/Library/Moneyball (2011)', recovery)
         self.assertIn('/volume4/media01/Movies/Common/Moneyball (2011)', recovery)

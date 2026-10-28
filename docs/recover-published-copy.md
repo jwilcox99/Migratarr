@@ -5,7 +5,7 @@ in one specific state: the NAS **published** the copy, but its response didn't
 come back before the executor's time limit.
 
 This happened twice:
-- *Moneyball*, `20260915T192959Z-0102`, at the old 1800 s limit. It was fixed with the one-off `recover_cross_0102.py`.
+- *Moneyball*, `20260915T192959Z-0102`, at the old 1800 s limit. It was fixed with the one-off `incidents/recover_cross_0102.py`.
 - *Friday Night Lights*, `20260923T013125Z-0014`, 160 GB, at the 7200 s limit.
 
 Since 2026-09-27 the executors stop a NAS call only after 30 minutes with **no progress** (`NAS_IDLE_TIMEOUT`), rather than after a fixed total time. This failure should now be rare, and this tool handles it when it does happen.

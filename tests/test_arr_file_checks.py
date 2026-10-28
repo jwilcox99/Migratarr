@@ -20,7 +20,7 @@ EXAMPLE = json.loads((ROOT / 'config/examples/runtime.v1.example.json').read_tex
 TARGETS = load_targets(ROOT / 'config/storage-targets.example.json')
 CLIENTS = {'execute_movie': ('Radarr', 'radarr'), 'execute_movie_nas': ('Radarr', 'radarr'),
            'execute_cross_movie': ('Radarr', 'radarr'), 'execute_cross_tv': ('Sonarr', 'sonarr'),
-           'execute_tv_nas': ('Sonarr', 'sonarr'), 'recover_cross_0102': ('RecoveryRadarr', 'radarr')}
+           'execute_tv_nas': ('Sonarr', 'sonarr'), 'incidents.recover_cross_0102': ('RecoveryRadarr', 'radarr')}
 FILE = '/media/Movies/Common/Film (2001)/film.mkv'
 CONTENT = b'offline test media'
 DIGEST = hashlib.sha256(CONTENT).hexdigest()
@@ -108,7 +108,7 @@ class DockerModeTests(unittest.TestCase):
     def test_commands_unchanged(self):
         for name, (_, service) in CLIENTS.items():
             m = self.modules[name]
-            base = m.m if name.startswith('recover') else m
+            base = m.m if name.startswith('incidents.recover') else m
             runs, hashes = [], []
 
             def run(command, **kwargs):
@@ -152,7 +152,7 @@ class HostModeTests(unittest.TestCase):
     def test_host_root_checks_and_hashes_without_docker(self):
         for name, (_, service) in CLIENTS.items():
             m = self.modules[name]
-            base = m.m if name.startswith('recover') else m
+            base = m.m if name.startswith('incidents.recover') else m
             c = runtime({service: {'mode': 'host', 'host_root': self.root}})
             forbidden = AssertionError('docker used in host mode')
             with self.subTest(executor=name), patch.object(base, 'RUNTIME', c), \
