@@ -7,6 +7,9 @@ may still change between minor versions, always with a migration or a note here)
 
 ## [Unreleased]
 
+### Changed (internal)
+- The four `execute_*.py` executors now run on one shared execution engine (`migratarr/engine`); journals, refusals and commands are unchanged.
+
 ## [0.1.0] — unreleased
 
 First public release: install with pip, set up and run Migratarr on your own

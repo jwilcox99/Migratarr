@@ -1,6 +1,6 @@
 # Unified execution core: Step 2 design spec
 
-**Status:** In progress. Gates 1 and 2 done; gates 3–6 not started. 2026-10-26: the transport layer (SSH or this host, by `topology`) landed ahead of gate 3; see [Execution transport](execution-transport.md). Written 2026-09-24 against `main` @ `7a1d084`.
+**Status:** In progress. Gates 1–3 done (offline); gates 4–6 not started. Gate 4 (live check-only parity on the NAS) is the next step and must pass before release. 2026-10-26: the transport layer (SSH or this host, by `topology`) landed ahead of gate 3; see [Execution transport](execution-transport.md). Written 2026-09-24 against `main` @ `7a1d084`.
 **Plan reference:** Step 2 of `2026-09-24-release-path-plan` and the Phase Two handoff in `docs/dev/phase-one-closeout.md` ("a unified execution core that preserves the Phase One safety invariants while removing duplicated Movie/TV and same-disk/cross-disk code").
 **Goal:** one execution engine replaces the four live executors. Every journal, refusal and Arr call stays exactly as it is today. The engine reports what it does as structured data, so the CLI now and a web UI later are both clients of the same code.
 
@@ -118,7 +118,7 @@ Live progress for a running execution comes from `progress` events (D3). The UI 
 | 0 | Merge `codex/host-verification` first. It edits all five executors (about 16 changed lines each, plus new `arr_files.py`); merging it after the refactor means porting it by hand. | Its own tests, and CI on 3.10–3.13 |
 | 1 | Characterization only: golden-journal tests for all four pairings, recording the exact event sequence and detail keys for check-only, success and each existing failure case in `test_executor_safety*.py`; stdout/exit-code tests for each wrapper; a test that the generated NAS programs compile and reject operations outside their set. **Done 2026-09-24:** `tests/test_executor_golden.py`, `tests/golden/executor_sequences.json` (70 records; mutation-checked). | New tests pass against **unchanged** executors |
 | 2 | `migratarr/engine/primitives.py` + `nas_side.py`; executors import from them, with no behavior change. **Done 2026-10-19** (see "Recorded by gate 2"). | Step 1 golden tests byte-identical; `NasReceiptTests` pass against the new NAS program |
-| 3 | Adapters, strategies, `run()`; the four scripts become wrappers (D6). | All existing safety tests and Step 1 golden tests pass unmodified |
+| 3 | Adapters, strategies, `run()`; the four scripts become wrappers (D6). **Done 2026-10-28** (see "Recorded by gate 3"). | All existing safety tests and Step 1 golden tests pass unmodified |
 | 4 | **Live parity:** for one approved row of each pairing, run old and new in check-only mode and compare the journals, which must be identical except for `utc`. This is the same bar as `docs/executor-refactor.md` / `docs/dev/validation-engine.md`. Then one watched `--execute` per pairing on the smallest eligible item. | Evidence recorded in this doc, as `docs/storage-targets.md` does |
 | 5 | One `batch_cross.py --media {Movie,TV}` replaces both batch scripts; retire `execute_movie.py`; move recovery scripts (D7). | Existing batch tests ported; `--limit` behavior unchanged |
 | 6 | Separate reviewed changes for each D8 item, then the lock rename (D5). | One PR each |
@@ -140,6 +140,56 @@ The golden records made two existing behaviors explicit. Both are preserved as t
 - **How executors use it: `primitives.bind()`, not plain imports.** The shared functions call helpers that still differ per executor. On the NAS they meet them in one shipped program; on the media host, and in the safety tests that patch executor globals, they must resolve that executor's versions. `bind()` gives each executor its own function object over the same code with the executor's globals, which is exactly the behavior of the pasted text. `Refused` is now one class shared by all executors (journals record `error_type` by name, so they are unaffected).
 - **D4 enforced by test.** `tests/test_engine_layout.py` checks that `nas_side.py` imports only the standard library and runs nothing at import, that no executor still defines a shared function, and that every shared function is bound to each executor's globals.
 - **Deployment.** The executors now import `migratarr.engine`, so the `migratarr/` folder must be present beside them (it is, in the repository).
+
+### Recorded by gate 3
+
+Done 2026-10-28 on `feature/engine-gate3` (from `main` @ `d773d8b`). Offline only: the live parity of gate 4 has not been run.
+
+- **What moved into `migratarr/engine/`:**
+  - `adapters.py`: `RadarrMovie` and `SonarrSeries` (D1), plus `episode_state`, `verify_episode_contents` and `verify_movie`.
+  - `strategies.py`: `SameDiskRename` and `CrossDiskCopy`.
+  - `arr.py`: one Radarr/Sonarr HTTP client (`NoRedirect`, `service_endpoint`, docker or host file checks).
+  - `journal.py`: each pairing's uncertain-event set and the `--resume-nfs-refusal` check.
+  - `events.py`: `ExecutionResult`, `ConsoleSink`, `JournalSink`.
+  - `run.py`: `wire()` and `run()`.
+- **The four scripts are thin wrappers (D6).** Each keeps its arguments, stdout/stderr lines and exit codes. `run.wire()` installs `execute`, `check_journal`, the `Radarr`/`Sonarr` class and the Arr helpers into each script, and `main()` calls `run.main()`. The scripts keep only what still differs per executor or is shipped to the NAS: `load_plan`, `paths`, `progress`, `inventory`, `run_progress`, `nas_pair`, `remote_layout`, `remote_program`, and `NasTransport.call`.
+- **`run()` takes the channel, it doesn't build SSH.** It opens the executor's `NasTransport` (a `NasChannel`, see [Execution transport](execution-transport.md)) for SSH or local alike. It returns an `ExecutionResult`; refusals before `START` (platform, ID, host lock, uncertain journal) still raise, as before.
+- **Names resolve at call time.** The engine reads every helper through the executor's own globals (`run.Names`), the same way `bind()` does in gate 2. A patched `RUNTIME`, `OVERRIDES`, `inventory` or `load_plan`, in the safety tests or the recovery scripts (`m.verify_movie`, `m.episode_state`, `m.Radarr`), behaves as before.
+- **D8 differences kept, now in one place.** Refusal texts per pairing are in `adapters.TEXT`. The remaining step differences are explicit branches:
+  - same-disk Movie: no settings comparison, a different opening check order, and resume only there;
+  - TV: re-reads the association table before every mutation;
+  - timeouts: 1800 s vs 7200 s stays in each script's `run_progress`.
+- **Not done at this gate:**
+  - Numeric `progress` events (D3): `inventory()` and `progress()` are part of the shipped NAS program text, pinned byte for byte, so changing them is a reviewed NAS-side change (D8, gate 6).
+  - `executor_*.py` are not absorbed into `primitives.py`.
+  - `status()` / `events()` (§4) are not written.
+  - The NAS lock is not renamed (D5).
+
+**Evidence** (Python 3.13, `python -m unittest discover -s tests`): 566 tests, OK, 1 skipped (a `/dev/shm` test that is skipped when there is no second filesystem). That is 563 before plus 3 new.
+
+- **Unchanged and passing:** `tests/golden/executor_sequences.json` (70 records, through `test_executor_golden`), `tests/golden/nas_programs.json` (12 programs, through `test_nas_program_parity`), every test in `test_executor_safety*.py` and `test_local_transport.py`.
+- **Mutation checks:** two fail the goldens:
+  - changing one refusal text: 12 failures;
+  - running TV's final association check one step later: 3 failures.
+  Renaming one journal event fails the new test.
+- **New `tests/test_engine_run.py`:** runs `main()` → `run()` for all four pairings on local disks. It uses the real host lock, journal file and shipped NAS programs (rename; copy, publish and delete between `/tmp` and `/dev/shm`), with fake Arrs. It covers check-only then a live move, a refusal journaled as `STOPPED`, and the `ExecutionResult`.
+
+| Script | Lines at `d773d8b` | After gate 3 |
+| --- | --- | --- |
+| `execute_movie_nas.py` | 381 | 197 |
+| `execute_tv_nas.py` | 398 | 192 |
+| `execute_cross_movie.py` | 365 | 175 |
+| `execute_cross_tv.py` | 404 | 176 |
+| **Total** | **1548** | **740** (+ 835 new lines in `engine/`: adapters 341, strategies 157, run 133, arr 76, journal 65, events 63) |
+
+**Needs gate 4 on the real NAS:**
+- one check-only run per pairing, old (`main`) against new, journals identical except `utc`;
+- then one watched `--execute` per pairing on the smallest item.
+
+Offline tests can't cover:
+- the real Radarr/Sonarr HTTP calls through the shared `arr.py` client (URL building and docker commands are pinned by `test_service_urls` / `test_arr_file_checks`, but not run live);
+- SSH channel commands on the NAS;
+- NFS visibility timing after a real rename.
 
 ## 6. Decisions needed from Josh
 
