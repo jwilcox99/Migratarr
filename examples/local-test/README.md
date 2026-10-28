@@ -67,21 +67,25 @@ export MTEST_ROOT="$HOME/migratarr-test"   # a new folder; must not exist yet, o
 export MTEST_PUID=1000 MTEST_PGID=100      # your real Radarr's PUID and PGID
 
 mkdir -p "$MTEST_ROOT"
-git clone --branch examples/local-test-kit https://github.com/jwilcox99/migratarr "$MTEST_ROOT/src"
+git clone https://github.com/jwilcox99/Migratarr "$MTEST_ROOT/src"
 cd "$MTEST_ROOT/src/examples/local-test"
 ```
 
-(Once the kit is merged, use `--branch main`.) Every new shell needs those three `export`s
-again, then `cd "$MTEST_ROOT/src/examples/local-test"`.
+The kit itself isn't part of the installed package, so the clone is needed either way.
+Every new shell needs those three `export`s again, then
+`cd "$MTEST_ROOT/src/examples/local-test"`.
 
 ## 2. Install the test Migratarr
 
 ```bash
 python3 -m venv "$MTEST_ROOT/venv"
-"$MTEST_ROOT/venv/bin/pip" install "$MTEST_ROOT/src"
+"$MTEST_ROOT/venv/bin/pip" install "$MTEST_ROOT/src"      # the code you just cloned
 ```
 
-This is an ordinary install into its own environment. Your real clone isn't touched.
+To test a published release instead, install it from PyPI in place of the last line:
+`"$MTEST_ROOT/venv/bin/pip" install --pre migratarr` (`--pre` includes release
+candidates). Either way it's an ordinary install into its own environment; your real
+clone isn't touched.
 
 ## 3. Create the test disks and start the containers
 
