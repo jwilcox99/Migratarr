@@ -36,6 +36,10 @@ reviewed and approved before anything runs.
 ### Changed
 - Settings version 2: one definition per disk. Version 1 files are migrated
   automatically, with a backup.
+- The two one-off recovery scripts for September 2026 incidents (`recover_cross_0102`,
+  `recover_cross_0116`) are no longer installed; they live in the clone's `incidents/`.
+  `recover_cross_published` is the general tool and stays.
+- Developer notes moved to `docs/dev/`; `docs/` holds the user documentation.
 - All code is in the `migratarr` package; an install adds only `migratarr` to
   site-packages. In a clone, `python3 <script>.py` keeps working through small
   wrapper files. Commands that need settings print what's missing instead of a
