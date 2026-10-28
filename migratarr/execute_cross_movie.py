@@ -1,49 +1,27 @@
 """One approved cross-disk movie transfer; check-only by default."""
 import argparse
-
 import ctypes
-
 import errno
-
 import hashlib
-
 import inspect
-
 import json
-
 import os
-
 from pathlib import Path, PurePath, PurePosixPath
-
 import re
-
 import stat
-
-import shlex
-
-import subprocess
-
+import subprocess  # patched by tests through this module; the Arr client uses it
 import sys
-
-import tempfile
 import shutil
-
 import time
-
-from datetime import datetime, timezone
-
-import urllib.request
-
+from datetime import datetime
 
 from migratarr.runtime_config import get_config
 from migratarr.planner_settings import get_settings
 from migratarr.media_layout import MediaLayout, canonical, get_targets, split_media_path
-from migratarr.service_keys import SecretError, service_endpoint
-from migratarr.arr_files import host_path, host_sha256, host_visible
-from migratarr.executor_manifest import digest, load_approved_plan
+from migratarr.executor_manifest import digest, load_approved_plan  # digest: batch_cross_*.py use m.digest
 from migratarr.executor_command import NAS_IDLE_TIMEOUT, run_command
 from migratarr.executor_inventory import scan_metadata, metadata_from_inventory
-from migratarr.engine import nas_side, primitives, transport
+from migratarr.engine import nas_side, primitives, run, transport
 
 # Shared code, bound into this module so it resolves names (inventory, nas_pair,
 # RUNTIME, ...) here, exactly as when it was defined in this file.
@@ -52,10 +30,14 @@ primitives.bind(globals(), nas_side.Refused, nas_side.require, nas_side.canonica
 RUNTIME = get_config()
 OVERRIDES = get_settings().overrides
 TARGETS = get_targets()
+MEDIA, TRANSFER = 'Movie', 'CROSS_DISK_TRANSFER'
+# execute(), check_journal(), the Radarr client and verify_movie() come from
+# the engine (migratarr/engine: adapter RadarrMovie, strategy CrossDiskCopy, run()).
+NS = run.wire(globals(), MEDIA, TRANSFER)
 
 
 def load_plan(base, execution_id):
-    return load_approved_plan(base, execution_id, 'Movie', 'CROSS_DISK_TRANSFER', require)
+    return load_approved_plan(base, execution_id, MEDIA, TRANSFER, require)
 
 
 def progress(message):
@@ -107,51 +89,6 @@ def run_progress(command, label, input=None, timeout=7200, idle_timeout=None):
                        idle_timeout=idle_timeout)
 
 
-class Radarr:
-    def __init__(self):
-        # runtime.json urls + "secrets" (default: ApiKey/UrlBase from the container's config.xml).
-        try:
-            self.api_root, self.key = service_endpoint('radarr', RUNTIME)
-        except SecretError as exc:
-            require(False, str(exc))
-        require(self.key, 'Radarr API key missing')
-        # Disable redirects so an API key cannot be forwarded to another server.
-        class NoRedirect(urllib.request.HTTPRedirectHandler):
-            def redirect_request(self, *args, **kwargs):
-                return None
-        self.opener = urllib.request.build_opener(NoRedirect, urllib.request.ProxyHandler({}))
-
-    def api(self, path, body=None):
-        req = urllib.request.Request(self.api_root + '/api/v3/' + path,
-                                     data=None if body is None else json.dumps(body).encode(),
-                                     headers={'X-Api-Key': self.key, 'Content-Type': 'application/json'},
-                                     method='GET' if body is None else 'PUT')
-        with self.opener.open(req, timeout=30) as response:
-            data = response.read()
-            return json.loads(data) if data else None
-
-    def visible(self, path, kind='-f'):
-        # runtime.json arr_file_checks (default docker; see arr_files.py).
-        check = RUNTIME.arr_file_checks['radarr']
-        if check['mode'] == 'host':
-            require(host_visible(host_path(check, TARGETS.arr_root, path), kind),
-                    'Radarr path not visible on this host: ' + path)
-            return
-        r = subprocess.run(['docker', 'exec', check['container'], 'test', kind, path], timeout=30,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        require(r.returncode == 0, 'Radarr container cannot see required path: ' + path)
-
-    def verify_file(self, path, expected_hash):
-        self.visible(path)
-        check = RUNTIME.arr_file_checks['radarr']
-        if check['mode'] == 'host':
-            digest = host_sha256(host_path(check, TARGETS.arr_root, path))
-            require(digest == expected_hash, 'Radarr-visible file content mismatch')
-            return
-        result = run_progress(['docker', 'exec', check['container'], 'sha256sum', '--', path],
-                              'Radarr file-content verification')
-        require(result.split()[0] == expected_hash, 'Radarr-visible file content mismatch')
-
 class NasTransport(transport.NasChannel):
     """The NAS program's channel (migratarr/engine/transport.py): SSH, or this host for topology local."""
     runtime = property(lambda self: RUNTIME)
@@ -173,43 +110,9 @@ def main():
     parser.add_argument('--base', type=Path, default=RUNTIME.base_path)
     parser.add_argument('--execute', action='store_true', help='Perform the approved move; default is check only')
     args = parser.parse_args()
-    require(sys.platform.startswith('linux'), 'Run on the Linux media host')
-    import fcntl
-    require(re.fullmatch(r'\d{8}T\d{6}Z-\d{4,}', args.execution_id), 'Invalid execution ID')
-    logs = args.base / 'execution_logs'
-    logs.mkdir(exist_ok=True)
-    with (logs / 'executor.lock').open('a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        journal = logs / (args.execution_id + '.jsonl')
-        check_journal(journal)
-        with journal.open('a', encoding='utf-8') as stream:
-            def log(event, **details):
-                progress(event.replace('_', ' '))
-                stream.write(json.dumps(dict(utc=datetime.now(timezone.utc).isoformat(),
-                                             execution_id=args.execution_id, event=event, **details)) + '\n')
-                stream.flush()
-                os.fsync(stream.fileno())
-            # Persist the journal directory entry before any media mutation.
-            fd = os.open(logs, os.O_RDONLY | os.O_DIRECTORY)
-            try:
-                os.fsync(fd)
-            finally:
-                os.close(fd)
-            try:
-                log('START', live=args.execute)
-                with NasTransport() as transport:
-                    result = execute(args.base, args.execution_id, args.execute, Radarr(), log,
-                                     transport)
-                print(result + ': ' + args.execution_id)
-            except BaseException as exc:
-                log('STOPPED', error_type=type(exc).__name__, reason=str(exc))
-                print('STOPPED: ' + str(exc), file=sys.stderr)
-                print('Inspect journal: ' + str(journal) + '. No automatic rollback or retry.', file=sys.stderr)
-                return 1
-    return 0
+    return run.main(NS, args, MEDIA, TRANSFER)
 
 
-MEDIA = 'Movie'
 
 
 def paths(row):
@@ -244,99 +147,6 @@ def nas_pair(source, destination, nas_layout):
         require(item is not None, 'Invalid NAS movie path')
     require(found[0][2] == found[1][2] and found[0][0] != found[1][0], 'Not a cross-disk pair')
     return Path(source), Path(destination)
-
-
-def check_journal(journal):
-    if journal.exists():
-        events = [json.loads(line) for line in journal.read_text().splitlines()]
-        blocked = {'COPY_INTENT', 'COPIED', 'RADARR_UPDATE_INTENT', 'DELETE_INTENT',
-                   'SOURCE_REMOVED', 'SUCCESS', 'RENAME_INTENT'}
-        require(not any(e['event'] in blocked for e in events),
-                'Previous live attempt exists; reconcile manually before retrying')
-
-
-def verify_movie(radarr, movie_id, logical, root, file_record):
-    movie = radarr.api(f'movie/{movie_id}')
-    require(movie.get('id') == movie_id and movie.get('path') == logical
-            and movie.get('rootFolderPath') == root and movie.get('hasFile'), 'Radarr path verification failed')
-    current = movie.get('movieFile', {})
-    require(all(current.get(k) == file_record.get(k) for k in ('id', 'relativePath', 'size')),
-            'Radarr movie-file identity changed')
-    require(current.get('path') == logical + '/' + file_record['relativePath'], 'Radarr file path mismatch')
-    return movie
-
-
-def execute(base, execution_id, live, radarr, log, transport):
-    row, manifest_hash = load_plan(base, execution_id)
-    src, dst, logical_src, logical_dst = paths(row)
-    canonical_existing(src)
-    canonical_existing(dst.parent)
-    require(src.is_dir() and dst.parent.is_dir() and not os.path.lexists(dst), 'Source/destination not ready')
-    system = radarr.api('system/status')
-    require(system.get('version'), 'Missing Radarr version')
-    movies = radarr.api('movie')
-    matches = [m for m in movies if m.get('path') == logical_src]
-    require(len(matches) == 1 and not any(m.get('path') == logical_dst for m in movies),
-            'Radarr source missing/ambiguous or destination occupied')
-    movie_id = matches[0]['id']
-    movie = radarr.api(f'movie/{movie_id}')
-    require(movie.get('path') == logical_src and movie.get('hasFile'), 'Radarr source changed')
-    for field in ('radarr_id', 'item_id'):
-        if row.get(field):
-            require(int(row[field]) == movie_id, 'Radarr ID mismatch')
-    root = str(PurePosixPath(logical_dst).parent)
-    require(any(r.get('path') == root and r.get('accessible') is True for r in radarr.api('rootfolder')),
-            'Radarr destination root inaccessible')
-    labels = {t['id']: t['label'].lower() for t in radarr.api('tag')}
-    tags = {labels.get(t, '') for t in movie.get('tags', [])}
-    require(not OVERRIDES.locked(tags), 'Movie is locked')
-    require(OVERRIDES.agrees(tags, row['recommended']), 'Conflicting override')
-    before = inventory(src)
-    file_record = dict(movie.get('movieFile', {}))
-    relative = file_record.get('relativePath', '')
-    require(relative in before and len(before[relative]) == 4
-            and before[relative][0] == file_record.get('size') and before[relative][0] > 0,
-            'Radarr media file missing or size differs')
-    require(not PurePosixPath(relative).is_absolute() and '..' not in PurePosixPath(relative).parts,
-            'Invalid media path')
-    radarr.verify_file(logical_src + '/' + relative, before[relative][1])
-    radarr.visible(root, '-d')
-    transport.call('check', src, dst, before, execution_id)
-    log('PREFLIGHT_OK', manifest_sha256=manifest_hash, source=str(src), destination=str(dst),
-        logical_source=logical_src, logical_destination=logical_dst, radarr_id=movie_id,
-        radarr_version=system['version'], movie_file_id=file_record['id'])
-    if not live:
-        log('CHECK_ONLY', manifest_sha256=manifest_hash)
-        return 'CHECK_ONLY'
-    require(load_plan(base, execution_id) == (row, manifest_hash), 'Approval or plan changed')
-    require(radarr.api(f'movie/{movie_id}') == movie, 'Radarr changed during preflight')
-    require(file_metadata(src) == inventory_metadata(before), 'Source changed during preflight')
-    log('COPY_INTENT', inventory=before)
-    receipt = transport.call('copy', src, dst, before, execution_id)
-    log('COPIED', receipt=receipt)
-    destination = verify_destination(dst, before)
-    require(inventory(src) == before, 'Source changed while copying; retain both copies')
-    radarr.verify_file(logical_dst + '/' + relative, before[relative][1])
-    require(load_plan(base, execution_id) == (row, manifest_hash), 'Approval changed after copy')
-    require(radarr.api(f'movie/{movie_id}') == movie, 'Radarr changed before update')
-    log('RADARR_UPDATE_INTENT')
-    radarr.api(f'movie/{movie_id}?moveFiles=false', dict(movie, path=logical_dst, rootFolderPath=root))
-    updated = verify_movie(radarr, movie_id, logical_dst, root, file_record)
-    require(all(updated.get(k) == movie.get(k) for k in ('monitored', 'qualityProfileId', 'tags')),
-            'Radarr settings changed; source retained')
-    radarr.verify_file(logical_dst + '/' + relative, before[relative][1])
-    require(file_metadata(dst) == inventory_metadata(destination), 'Destination changed after verification')
-    require(load_plan(base, execution_id) == (row, manifest_hash), 'Approval changed before deletion')
-    verify_movie(radarr, movie_id, logical_dst, root, file_record)
-    log('DELETE_INTENT', receipt=receipt)
-    transport.call('delete', src, dst, before, execution_id, receipt)
-    log('SOURCE_REMOVED')
-    wait_source_absent(src)
-    require(file_metadata(dst) == inventory_metadata(destination), 'Final destination metadata mismatch')
-    verify_movie(radarr, movie_id, logical_dst, root, file_record)
-    radarr.visible(logical_dst + '/' + relative)
-    log('SUCCESS', manifest_sha256=manifest_hash)
-    return 'SUCCESS'
 
 
 def remote_program():

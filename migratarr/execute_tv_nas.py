@@ -6,26 +6,20 @@ import inspect
 import json
 import os
 from pathlib import Path, PurePath, PurePosixPath
-import re
 import stat
-import shlex
-import subprocess
+import subprocess  # patched by tests through this module; the Arr client uses it
 import sys
-import tempfile
 import time
-from datetime import datetime, timezone
-import urllib.request
+from datetime import datetime
 
 from migratarr.runtime_config import get_config
 from migratarr.planner_settings import get_settings
 from migratarr.media_layout import MediaLayout, canonical, get_targets, split_media_path
-from migratarr.service_keys import SecretError, service_endpoint
-from migratarr.arr_files import host_path, host_sha256, host_visible
-from migratarr.executor_manifest import digest, load_approved_plan
+from migratarr.executor_manifest import digest, load_approved_plan  # digest: batch_cross_*.py use m.digest
 from migratarr.executor_nfs import verify_after_rename
 from migratarr.executor_command import NAS_IDLE_TIMEOUT, run_command
 from migratarr.executor_inventory import scan_metadata, metadata_from_inventory
-from migratarr.engine import nas_side, primitives, transport
+from migratarr.engine import nas_side, primitives, run, transport
 
 # Shared code, bound into this module so it resolves names (inventory, nas_pair,
 # RUNTIME, ...) here, exactly as when it was defined in this file.
@@ -36,11 +30,15 @@ OVERRIDES = get_settings().overrides
 TARGETS = get_targets()
 
 
+MEDIA, TRANSFER = 'TV', 'SAME_DISK_RENAME'
+# execute(), check_journal(), the Sonarr client, episode_state() and
+# verify_episode_contents() come from the engine (migratarr/engine: adapter
+# SonarrSeries, strategy SameDiskRename, run()).
+NS = run.wire(globals(), MEDIA, TRANSFER)
+
+
 def load_plan(base, execution_id):
-    return load_approved_plan(base, execution_id, 'TV', 'SAME_DISK_RENAME', require)
-
-
-MEDIA = 'TV'
+    return load_approved_plan(base, execution_id, MEDIA, TRANSFER, require)
 
 
 def paths(row):
@@ -108,177 +106,6 @@ def inventory(root):
 def run_progress(command, label, input=None, timeout=1800, idle_timeout=None):
     return run_command(command, label, input, timeout, require=require, progress=progress,
                        idle_timeout=idle_timeout)
-
-
-class Sonarr:
-    def __init__(self):
-        # runtime.json urls + "secrets" (default: ApiKey/UrlBase from the container's config.xml).
-        try:
-            self.api_root, self.key = service_endpoint('sonarr', RUNTIME)
-        except SecretError as exc:
-            require(False, str(exc))
-        require(self.key, 'Sonarr API key missing')
-        # Disable redirects so an API key cannot be forwarded to another server.
-        class NoRedirect(urllib.request.HTTPRedirectHandler):
-            def redirect_request(self, *args, **kwargs):
-                return None
-        self.opener = urllib.request.build_opener(NoRedirect, urllib.request.ProxyHandler({}))
-
-    def api(self, path, body=None):
-        req = urllib.request.Request(self.api_root + '/api/v3/' + path,
-                                     data=None if body is None else json.dumps(body).encode(),
-                                     headers={'X-Api-Key': self.key, 'Content-Type': 'application/json'},
-                                     method='GET' if body is None else 'PUT')
-        with self.opener.open(req, timeout=30) as response:
-            data = response.read()
-            return json.loads(data) if data else None
-
-    def visible(self, path, kind='-f'):
-        # runtime.json arr_file_checks (default docker; see arr_files.py).
-        check = RUNTIME.arr_file_checks['sonarr']
-        if check['mode'] == 'host':
-            require(host_visible(host_path(check, TARGETS.arr_root, path), kind),
-                    'Sonarr path not visible on this host: ' + path)
-            return
-        r = subprocess.run(['docker', 'exec', check['container'], 'test', kind, path], timeout=30,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        require(r.returncode == 0, 'Sonarr container cannot see required path: ' + path)
-
-    def verify_file(self, path, expected_hash):
-        self.visible(path)
-        check = RUNTIME.arr_file_checks['sonarr']
-        if check['mode'] == 'host':
-            digest = host_sha256(host_path(check, TARGETS.arr_root, path))
-            require(digest == expected_hash, 'Sonarr-visible file content mismatch')
-            return
-        result = run_progress(['docker', 'exec', check['container'], 'sha256sum', '--', path],
-                              'Sonarr file-content verification')
-        require(result.split()[0] == expected_hash, 'Sonarr-visible file content mismatch')
-
-
-def episode_state(sonarr, series_id, logical_path, before):
-    files = sonarr.api(f'episodefile?seriesId={series_id}')
-    require(files, 'Series has no episode files')
-    records = {}
-    names = set()
-    for f in files:
-        relative = f.get('relativePath', '')
-        path = PurePosixPath(relative)
-        require(relative and str(path) == relative and not path.is_absolute()
-                and '..' not in path.parts and relative not in names, 'Invalid or duplicate episode path')
-        require(f.get('seriesId') == series_id and f['id'] not in records, 'Episode file identity mismatch')
-        require(f.get('path') == logical_path + '/' + relative, 'Sonarr episode path mismatch')
-        require(relative in before and len(before[relative]) == 4
-                and before[relative][0] > 0 and f.get('size') == before[relative][0],
-                'Episode file missing or size differs: ' + relative)
-        records[f['id']] = (relative, f['size'])
-        names.add(relative)
-    episodes = sonarr.api(f'episode?seriesId={series_id}')
-    associations = {}
-    for e in episodes:
-        require(e.get('seriesId') == series_id and e['id'] not in associations,
-                'Episode identity mismatch')
-        file_id = e.get('episodeFileId', 0)
-        require(not file_id or file_id in records, 'Episode references unknown file')
-        require(bool(e.get('hasFile')) == bool(file_id), 'Inconsistent episode file association')
-        associations[e['id']] = (e.get('seasonNumber'), e.get('episodeNumber'), file_id,
-                                  e.get('monitored'))
-    require({v[2] for v in associations.values() if v[2]} == set(records),
-            'Episode file is not linked to any episode')
-    return records, associations
-
-
-def verify_episode_contents(sonarr, logical_path, records, before):
-    for index, (relative, size) in enumerate(sorted(records.values()), 1):
-        progress('Sonarr file %d/%d: %s (%.2f GiB)' %
-                 (index, len(records), relative, size / 2**30))
-        sonarr.verify_file(logical_path + '/' + relative, before[relative][1])
-
-
-def execute(base, execution_id, live, sonarr, log, transport=None):
-    progress('Checking manifest, approval, and Sonarr series')
-    row, manifest_hash = load_plan(base, execution_id)
-    src, dst, logical_src, logical_dst = paths(row)
-    # Validate the configured NAS mapping even for a check-only run.
-    remote_path(src)
-    remote_path(dst)
-    filesystem_ready(src, dst)
-    system = sonarr.api('system/status')
-    require(str(system.get('version', '')).startswith('4.'), 'Only Sonarr v4 is supported')
-    all_series = sonarr.api('series')
-    matches = [x for x in all_series if x.get('path') == logical_src]
-    require(len(matches) == 1, 'Expected exactly one Sonarr series at source')
-    series_id = matches[0]['id']
-    series = sonarr.api(f'series/{series_id}')
-    require(series.get('id') == series_id and series.get('path') == logical_src,
-            'Sonarr source changed')
-    for field in ('sonarr_id', 'item_id'):
-        if row.get(field):
-            require(int(row[field]) == series_id, 'Sonarr ID mismatch')
-    require(not any(x.get('path') == logical_dst for x in all_series), 'Destination already assigned')
-    target_root = str(PurePosixPath(logical_dst).parent)
-    require(any(x.get('path') == target_root and x.get('accessible') is True
-                for x in sonarr.api('rootfolder')), 'Destination root unavailable')
-    labels = {x['id']: x['label'].lower() for x in sonarr.api('tag')}
-    tags = {labels.get(x, '') for x in series.get('tags', [])}
-    require(not OVERRIDES.locked(tags), 'Series has ' + OVERRIDES.lock_tag)
-    require(OVERRIDES.agrees(tags, row['recommended']), 'Current override conflicts')
-    before = inventory(src)
-    records, associations = episode_state(sonarr, series_id, logical_src, before)
-    verify_episode_contents(sonarr, logical_src, records, before)
-    sonarr.visible(target_root, '-d')
-    require(transport is not None, 'NAS transport required')
-    transport.call('check', src, dst, before)
-    log('PREFLIGHT_OK', manifest_sha256=manifest_hash, source=str(src), destination=str(dst),
-        sonarr_id=series_id, sonarr_version=system['version'], logical_source=logical_src,
-        logical_destination=logical_dst, episode_file_count=len(records),
-        linked_episode_count=sum(bool(v[2]) for v in associations.values()))
-    if not live:
-        log('CHECK_ONLY', manifest_sha256=manifest_hash)
-        return 'CHECK_ONLY'
-    require(load_plan(base, execution_id) == (row, manifest_hash), 'Plan or approval changed')
-    require(sonarr.api(f'series/{series_id}') == series, 'Sonarr series changed during preflight')
-    require(episode_state(sonarr, series_id, logical_src, before) == (records, associations),
-            'Episode files or associations changed during preflight')
-    filesystem_ready(src, dst)
-    require(file_metadata(src) == inventory_metadata(before), 'Source changed during preflight')
-    log('RENAME_INTENT', inventory=before, episode_files=records, episode_associations=associations)
-    transport.call('rename', src, dst, before)
-    log('RENAMED')
-    verify_nfs_after_rename(src, dst, before, log)
-    for relative, size in records.values():
-        sonarr.visible(logical_dst + '/' + relative)
-    # Do not overwrite a Sonarr edit made while the NAS was verifying the rename.
-    require(sonarr.api(f'series/{series_id}') == series, 'Sonarr changed before path update')
-    require(episode_state(sonarr, series_id, logical_src, before) == (records, associations),
-            'Episode associations changed before path update')
-    log('SONARR_UPDATE_INTENT')
-    sonarr.api(f'series/{series_id}?moveFiles=false', dict(series, path=logical_dst,
-                                                        rootFolderPath=target_root))
-    after = sonarr.api(f'series/{series_id}')
-    require(after.get('id') == series_id and after.get('path') == logical_dst
-            and after.get('rootFolderPath') == target_root, 'Sonarr path verification failed')
-    for field in ('seriesType', 'seasonFolder', 'monitored', 'qualityProfileId', 'tags'):
-        require(after.get(field) == series.get(field), 'Sonarr setting changed: ' + field)
-    require(episode_state(sonarr, series_id, logical_dst, before) == (records, associations),
-            'Episode files or associations changed after update')
-    verify_episode_contents(sonarr, logical_dst, records, before)
-    verify_nfs_after_rename(src, dst, before, log, metadata_only=True)
-    require(episode_state(sonarr, series_id, logical_dst, before) == (records, associations),
-            'Episode associations changed during final verification')
-    final = sonarr.api(f'series/{series_id}')
-    require(final.get('path') == logical_dst and final.get('rootFolderPath') == target_root,
-            'Sonarr path changed during final verification')
-    log('SUCCESS', manifest_sha256=manifest_hash, episode_file_count=len(records),
-        linked_episode_count=sum(bool(v[2]) for v in associations.values()))
-    return 'SUCCESS'
-
-
-def check_journal(journal):
-    if journal.exists():
-        events = [json.loads(line) for line in journal.read_text().splitlines()]
-        require(not any(e['event'] in {'RENAME_INTENT', 'RENAMED', 'SONARR_UPDATE_INTENT', 'SUCCESS'}
-                        for e in events), 'Previous live attempt exists; reconcile manually before retrying')
 
 
 def remote_layout(disk):
@@ -355,40 +182,7 @@ def main():
     parser.add_argument('--base', type=Path, default=RUNTIME.base_path)
     parser.add_argument('--execute', action='store_true', help='Perform the approved move; default is check only')
     args = parser.parse_args()
-    require(sys.platform.startswith('linux'), 'Run on the Linux media host')
-    import fcntl
-    require(re.fullmatch(r'\d{8}T\d{6}Z-\d{4,}', args.execution_id), 'Invalid execution ID')
-    logs = args.base / 'execution_logs'
-    logs.mkdir(exist_ok=True)
-    with (logs / 'executor.lock').open('a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        journal = logs / (args.execution_id + '.jsonl')
-        check_journal(journal)
-        with journal.open('a', encoding='utf-8') as stream:
-            def log(event, **details):
-                progress(event.replace('_', ' '))
-                stream.write(json.dumps(dict(utc=datetime.now(timezone.utc).isoformat(),
-                                             execution_id=args.execution_id, event=event, **details)) + '\n')
-                stream.flush()
-                os.fsync(stream.fileno())
-            # Persist the journal directory entry before any media mutation.
-            fd = os.open(logs, os.O_RDONLY | os.O_DIRECTORY)
-            try:
-                os.fsync(fd)
-            finally:
-                os.close(fd)
-            try:
-                log('START', live=args.execute)
-                with NasTransport() as transport:
-                    result = execute(args.base, args.execution_id, args.execute, Sonarr(), log,
-                                     transport)
-                print(result + ': ' + args.execution_id)
-            except BaseException as exc:
-                log('STOPPED', error_type=type(exc).__name__, reason=str(exc))
-                print('STOPPED: ' + str(exc), file=sys.stderr)
-                print('Inspect journal: ' + str(journal) + '. No automatic rollback or retry.', file=sys.stderr)
-                return 1
-    return 0
+    return run.main(NS, args, MEDIA, TRANSFER)
 
 
 if __name__ == '__main__':

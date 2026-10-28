@@ -7,6 +7,8 @@ may still change between minor versions, always with a migration or a note here)
 
 ## [Unreleased]
 
+### Changed (internal)
+- The four `execute_*.py` executors now run on one shared execution engine (`migratarr/engine`); journals, refusals and commands are unchanged.
 ### Added
 - Setup and Settings > Services ask whether Radarr and Sonarr run in Docker
   containers (the default) or are installed directly on this machine. The second
