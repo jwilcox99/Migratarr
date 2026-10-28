@@ -4,12 +4,14 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
 from migratarr_validation import secrets_parity as old
 from runtime_config import ConfigError, RuntimeConfig, load_config
+import service_keys
 from service_keys import SecretError, parse_secrets, read_credential, read_key
 
 
@@ -187,6 +189,70 @@ class ConfiguredSourceTests(unittest.TestCase):
         c = runtime()
         with patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(SecretError, 'TMDB_TOKEN'):
             read_key('tmdb', c)
+
+    def test_docker_failures_are_named_and_its_output_never_reaches_stderr(self):
+        # A real docker that can't reach its daemon: it prints its own error on stderr and exits 1.
+        with tempfile.TemporaryDirectory() as tmp:
+            shim = Path(tmp) / 'docker'
+            shim.write_text('#!/bin/sh\necho "failed to connect to the docker API at unix:///x.sock" >&2\nexit 1\n')
+            shim.chmod(0o755)
+            script = ('import sys; sys.path[:0] = sys.argv[1:]\n'
+                      'from runtime_config import RuntimeConfig\nimport json\n'
+                      'from service_keys import SecretError, read_key\n'
+                      f'c = RuntimeConfig(json.loads({json.dumps(json.dumps(EXAMPLE))}))\n'
+                      'for s in ("radarr", "jellyfin"):\n'
+                      '    try: read_key(s, c)\n'
+                      '    except SecretError as e: print(e.docker, e)\n')
+            out = subprocess.run([sys.executable, '-c', script, str(ROOT), str(ROOT / 'tests')],
+                                 capture_output=True, text=True, timeout=60,
+                                 env=dict(os.environ, PATH=tmp + os.pathsep + os.environ.get('PATH', '')))
+        self.assertEqual(out.stderr, '')
+        self.assertIn('True Service credentials: cannot read radarr credential (docker_config_xml /config/config.xml in container '
+                      'radarr): Docker is not running or not reachable', out.stdout)
+        self.assertIn('True Service credentials: cannot read jellyfin credential', out.stdout)  # not "missing or empty"
+
+    def test_docker_failure_reasons(self):
+        cases = [
+            (FileNotFoundError('docker'), 'Docker is not installed on this machine (no docker command)'),
+            (subprocess.TimeoutExpired(['docker'], 30), 'Docker did not answer within 30 s'),
+            (subprocess.CalledProcessError(1, 'docker', stderr=b'Cannot connect to the Docker daemon at '
+                                           b'unix:///var/run/docker.sock. Is the docker daemon running?'),
+             'Docker is not running or not reachable'),
+            (subprocess.CalledProcessError(1, 'docker', stderr=b'permission denied while trying to connect to '
+                                           b'the Docker daemon socket'), 'this account may not use Docker'),
+            (subprocess.CalledProcessError(1, 'docker', stderr=b'Error response from daemon: No such container: '
+                                           b'radarr'), 'there is no container called radarr'),
+            (subprocess.CalledProcessError(1, 'docker', stderr=b'cat: /config/config.xml: No such file'), None),
+        ]
+        for exc, expected in cases:
+            with self.subTest(expected):
+                reason = service_keys.docker_failure(exc, 'radarr')
+                if expected is None:
+                    self.assertIsNone(reason)
+                else:
+                    self.assertTrue(reason.startswith(expected), reason)
+
+        def missing(*args, **kwargs):
+            raise FileNotFoundError('docker')
+        with patch('subprocess.check_output', missing), self.assertRaises(SecretError) as caught:
+            read_key('radarr', runtime())
+        self.assertTrue(caught.exception.docker)
+        self.assertIn('Docker is not installed', str(caught.exception))
+        # A file that's simply not in the container is still "missing", not a Docker problem.
+        with patch('subprocess.check_output', FakeDocker({})), self.assertRaises(SecretError) as caught:
+            read_key('jellyfin', runtime())
+        self.assertFalse(caught.exception.docker)
+        self.assertIn('missing or empty', str(caught.exception))
+
+    def test_docker_output_is_captured(self):
+        calls = []
+
+        def check_output(command, **kwargs):
+            calls.append(kwargs)
+            return RADARR_XML.encode()
+        with patch('subprocess.check_output', check_output):
+            read_key('radarr', runtime())
+        self.assertEqual(calls[0].get('stderr'), subprocess.PIPE)
 
     def test_schema_validation(self):
         for label, secrets, containers in [
