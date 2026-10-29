@@ -8,7 +8,8 @@
 Everything about the settings files goes through a settings_contract
 SettingsBackend; this module only draws forms and turns form text into typed
 values. A reviewed change is held here, in memory, under a one-time id, so
-pasted keys never travel back to the browser in a hidden field; saving also
+pasted keys never travel back to the browser in a hidden field (a form shown
+again with a problem holds its pasted keys the same way); saving also
 re-checks the files' revision so a change reviewed against older files is
 refused. Secret values are never put in a page. Standard library only.
 """
@@ -66,10 +67,17 @@ def show(value, kind):
     return str(value)
 
 
+def held_secret(value):
+    """What a blank secret field keeps: a stored key (SECRET_KEPT), or a key pasted earlier in this
+    session and held in memory (a non-empty str: the wizard's draft, a Settings form shown again)."""
+    return value if value is sc.SECRET_KEPT or (isinstance(value, str) and value) else None
+
+
 def parse_form(fields, form_data, current):
     """Turn posted text into typed values. Returns (values, problems).
 
-    Read-only fields keep their current value. A blank secret keeps what is stored.
+    Read-only fields keep their current value. A blank secret keeps what is stored, or a key pasted
+    earlier and held in memory (``current`` holds it; it is never put back into a page).
     """
     values, problems = {}, []
     for f in fields:
@@ -91,7 +99,7 @@ def parse_form(fields, form_data, current):
             values[f.path] = [line.strip() for line in (raw_list[0] if raw_list else '').splitlines()
                               if line.strip()]
         elif f.kind == sc.SECRET:
-            values[f.path] = raw if raw else (sc.SECRET_KEPT if current.get(f.path) is sc.SECRET_KEPT else None)
+            values[f.path] = raw if raw else held_secret(current.get(f.path))
         elif not raw:
             values[f.path] = None
         elif f.kind == sc.INTEGER:
@@ -136,7 +144,10 @@ def render_input(f, value):
     if f.kind == sc.LINES:
         return f'<textarea id="{ident}" name="{name}" rows="4"{off}>{e(show(value, f.kind))}</textarea>'
     if f.kind == sc.SECRET:
-        hint = 'A key is saved. Leave blank to keep it.' if value is sc.SECRET_KEPT else 'Paste the key.'
+        # Never the value: a pasted key held in memory (not saved yet) shows only that it is kept.
+        hint = ('A key is saved. Leave blank to keep it.' if value is sc.SECRET_KEPT else
+                'Key kept (not saved yet). Enter a new one to replace it.' if held_secret(value) else
+                'Paste the key.')
         return (f'<input type="password" id="{ident}" name="{name}" autocomplete="off" '
                 f'placeholder="{e(hint)}"{off}>')
     kind = 'number' if f.kind in (sc.INTEGER, sc.NUMBER) else 'text'
@@ -203,7 +214,7 @@ class SettingsPages:
 
     def __init__(self, backend, health=None, clock=time.monotonic, on_saved=lambda result: None):
         self.backend, self.health, self.clock, self.on_saved = backend, health, clock, on_saved
-        self.pending = {}
+        self.pending, self.held_keys = {}, {}
         self.last_checks = []
 
     def section(self, section_id):
@@ -263,10 +274,16 @@ class SettingsPages:
         if not editable:
             fields = [dataclasses.replace(f, read_only=True) for f in fields]
         inner = render_fields(fields, values, problems)
+        if values is current:  # opened afresh (or Cancel): keys held for an earlier form are dropped
+            self.drop_keys(section_id)
         if editable:
             busy = ('<p class="hint">A job is running; you can review a change but not save it until it '
                     'finishes.</p>' if ctx.get('job') else '')
-            inner = form(f'/settings/{section_id}/review', ctx, extra=inner + busy,
+            # Shown again with a problem: keys pasted into it stay here, in memory, under a one-time id.
+            pasted = {f.path: values[f.path] for f in fields
+                      if f.kind == sc.SECRET and isinstance(values.get(f.path), str) and values[f.path]}
+            hidden = [('keys', self.hold_keys(section_id, pasted))] if pasted else []
+            inner = form(f'/settings/{section_id}/review', ctx, hidden, extra=inner + busy,
                          button='Review changes')
             inner = inner.replace('class="inline"', 'class="settings"', 1)
         return page(spec.title, f'{crumbs}<h1>{e(spec.title)}</h1>'
@@ -276,6 +293,8 @@ class SettingsPages:
     def review(self, section_id, form_data, ctx):
         self.section(section_id)
         current = self.backend.current(section_id)
+        # Keys pasted into this form before it was shown again: a blank field keeps them.
+        current = dict(current, **self.take_keys((form_data.get('keys') or [''])[0], section_id))
         # Fields can depend on values (one group per disk): use the shape of the form that was posted,
         # which may hold a disk added (or lack one removed) since the files were read.
         posted = {k[2:] for k in form_data if k.startswith('f:')}
@@ -323,6 +342,25 @@ class SettingsPages:
         result = self.backend.save(section_id, values, revision)
         self.on_saved(result)
         return 'redirect', '/settings?' + urlencode({'done': 'saved', 'n': len(result.files)})
+
+    # pasted keys held between a form and the same form shown again (never put in a page)
+    def hold_keys(self, section_id, keys):
+        now = self.clock()
+        self.held_keys = {k: v for k, v in self.held_keys.items() if now - v[0] < PENDING_SECONDS}
+        while len(self.held_keys) >= PENDING_LIMIT:
+            self.held_keys.pop(min(self.held_keys, key=lambda k: self.held_keys[k][0]))
+        nonce = secrets.token_urlsafe(18)
+        self.held_keys[nonce] = (now, section_id, dict(keys))
+        return nonce
+
+    def take_keys(self, nonce, section_id):
+        held = self.held_keys.pop(nonce, None) if nonce else None
+        if not held or held[1] != section_id or self.clock() - held[0] >= PENDING_SECONDS:
+            return {}
+        return held[2]
+
+    def drop_keys(self, section_id):
+        self.held_keys = {k: v for k, v in self.held_keys.items() if v[1] != section_id}
 
     # held changes
     def hold(self, section_id, values):
