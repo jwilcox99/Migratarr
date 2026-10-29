@@ -181,5 +181,40 @@ class LocalTopologyTests(unittest.TestCase):
                 self.assertEqual(list(dst.parent.glob('.migratarr-*')), [])
 
 
+class SameFilesystemRefusalTests(LocalTopologyTests):
+    """Two disks on one filesystem: the shipped program refuses a cross-disk move, in one plain line."""
+
+    def setUp(self):
+        real = os.path.isdir
+        with patch('os.path.isdir', lambda p: p != '/dev/shm' and real(p)):  # both disks in one temp folder
+            super().setUp()
+        self.assertFalse(self.cross_possible)
+
+    def test_cross_disk_refusal_is_one_plain_line(self):
+        for name, folder, target in (('execute_cross_movie', 'Movies', 'Common'),
+                                     ('execute_cross_tv', 'TV', 'Current')):
+            with self.subTest(executor=name):
+                module = self.modules[name]
+                src = self.item('disk2', folder + '/Library')
+                dst = self.disks['disk1'] / folder / target / src.name
+                before = module.inventory(src)
+                shown = io.StringIO()
+                with patch('sys.stderr', shown), module.NasTransport() as transport, \
+                        self.assertRaises(module.Refused) as caught:
+                    transport.call('check', src, dst, before, EXECUTION)
+                self.assertEqual(str(caught.exception),
+                                 "NAS check refused: the source and target disks are on the same filesystem, so "
+                                 "a cross-disk move can't run between them. Use two different disks, or put both "
+                                 "categories on one disk.")
+                self.assertNotIn('Traceback', shown.getvalue())
+                self.assertIn('NAS check: Refused: NAS filesystems are not distinct', shown.getvalue())
+                self.assertTrue(src.exists())
+                self.assertFalse(dst.exists())
+
+    # Only the test above runs here (the others are LocalTopologyTests').
+    test_no_ssh_and_this_python = test_same_disk_rename_movie_and_tv = None
+    test_same_disk_refuses_changed_source = test_cross_disk_copy_then_delete = None
+
+
 if __name__ == '__main__':
     unittest.main()

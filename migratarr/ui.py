@@ -33,6 +33,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from migratarr import approval_store
+from migratarr.executor_command import plain_reason
 from migratarr import jobs
 from migratarr import read_api
 
@@ -661,7 +662,7 @@ def render_execution(view, ctx=None):
                  f'<span class="state s-{e(state["state"].lower())}">'
                  f'{e(EXECUTION_LABELS.get(state["state"], state["state"]))}</span></div>')
     if state.get('detail'):
-        head += f'<p class="reason">{e(state["detail"])}</p>'
+        head += f'<p class="reason">{e(plain_reason(state["detail"]))}</p>'
     head += render_reconcile(view, ctx)
     if not view['events']:
         return page(view['execution_id'], head + '<p class="empty">This move has not been started yet.</p>',
@@ -684,7 +685,7 @@ def render_execution(view, ctx=None):
         if name == 'START':
             label += ' (live)' if event.get('live') else ' (check only)'
         extra = {k: v for k, v in event.items() if k not in SKIPPED_DETAILS}
-        reason = extra.pop('reason', None)
+        reason = plain_reason(extra.pop('reason', None))  # older journals may hold a traceback
         facts = ''.join(f'<span class="fact">{e(k.replace("_", " "))}: {e(v if not isinstance(v, (dict, list)) else json.dumps(v))}</span>'
                         for k, v in extra.items() if k != 'live')
         why = ''

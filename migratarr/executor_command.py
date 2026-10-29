@@ -1,4 +1,5 @@
 """Shared monitored subprocess runner for executor verification commands."""
+import re
 import subprocess
 import threading
 import time
@@ -36,6 +37,50 @@ def with_status(output, returncode):
     return (output + ' ' if output else '') + '[' + exit_text(returncode) + ']'
 
 
+TRACEBACK = 'Traceback (most recent call last):'
+# Refusals the shipped program makes before it changes anything, in words for the user. The program's
+# own text is pinned byte for byte (tests/test_nas_program_parity.py), so it is translated here.
+PLAIN_REFUSALS = {
+    'NAS filesystems are not distinct':
+        "the source and target disks are on the same filesystem, so a cross-disk move can't run between "
+        'them. Use two different disks, or put both categories on one disk.',
+}
+_FAILED = ' failed or is uncertain: '
+_REFUSED_AT_END = re.compile(r'(?s)(.*?)' + re.escape(_FAILED) + r'(.*)\n(?:[\w.]+\.)?Refused: ([^\n]*?)'
+                             r'( \[[^\]\n]*\])?')
+
+
+def is_refusal_line(line):
+    """The last line of a traceback for the shipped program's own Refused: its message, else None."""
+    found = re.fullmatch(r'(?:[\w.]+\.)?Refused: (.*)', line.strip())
+    return found.group(1) if found else None
+
+
+def plain_reason(reason):
+    """A STOPPED reason without the Python traceback of a shipped program's deliberate refusal.
+
+    "<label> failed or is uncertain: <traceback> Refused: <message> [exit status 1]" becomes
+    "<label> failed or is uncertain: Refused: <message> [exit status 1]", or, for a refusal listed in
+    PLAIN_REFUSALS, "<label> refused: <what to do>". Anything else is returned unchanged (other errors
+    keep their traceback: it is what diagnoses them). Also used to show journals written before this.
+    """
+    if not isinstance(reason, str):
+        return reason
+    found = _REFUSED_AT_END.fullmatch(reason.strip())
+    if not found:
+        return reason
+    label, before, message, status = found.groups()
+    if TRACEBACK not in before and '\n  File "' not in '\n' + before:
+        return reason  # plain output that merely ends in a Refused line: already one reason per line
+    if message in PLAIN_REFUSALS:
+        return label + ' refused: ' + PLAIN_REFUSALS[message]
+    return label + _FAILED + 'Refused: ' + message + (status or '')
+
+
+def failure(label, output, returncode):
+    return plain_reason(label + _FAILED + with_status(output, returncode))
+
+
 def run_command(command, label, input_data, timeout, *, require, progress, idle_timeout=None):
     if idle_timeout is not None:
         return _run_until_idle(command, label, input_data, timeout, idle_timeout,
@@ -63,8 +108,7 @@ def run_command(command, label, input_data, timeout, *, require, progress, idle_
             process.kill()
             process.communicate()
             raise
-        require(process.returncode == 0,
-                label + ' failed or is uncertain: ' + with_status(stderr, process.returncode))
+        require(process.returncode == 0, failure(label, stderr, process.returncode))
     progress('%s complete; elapsed %.0fs' % (label, time.monotonic() - started))
     return stdout
 
@@ -90,13 +134,26 @@ def _run_until_idle(command, label, input_data, timeout, idle_timeout, *, requir
             out.append(process.stdout.read())
 
         def read_stderr():
+            # A traceback is held back until its last line: for the program's own refusal only that line
+            # is shown (the failure reason says the same); any other error is shown in full.
+            held = []
             for line in process.stderr:
                 line = line.rstrip('\n')
                 with lock:
                     state['last'] = time.monotonic()
                     state['tail'] = (state['tail'] + [line])[-tail_lines:]
-                if line.strip():
-                    progress(label + ': ' + line.strip())
+                if line.strip() == TRACEBACK or (held and (not line.strip() or line[:1].isspace())):
+                    held.append(line)
+                    continue
+                if held and is_refusal_line(line) is not None:
+                    held = []
+                for shown in held + [line]:
+                    if shown.strip():
+                        progress(label + ': ' + shown.strip())
+                held = []
+            for shown in held:
+                if shown.strip():
+                    progress(label + ': ' + shown.strip())
 
         readers = [threading.Thread(target=read_stdout, daemon=True),
                    threading.Thread(target=read_stderr, daemon=True)]
@@ -127,7 +184,6 @@ def _run_until_idle(command, label, input_data, timeout, idle_timeout, *, requir
             raise
         with lock:
             tail = '\n'.join(state['tail'])
-        require(process.returncode == 0, label + ' failed or is uncertain: '
-                + with_status(tail, process.returncode))
+        require(process.returncode == 0, failure(label, tail, process.returncode))
     progress('%s complete; elapsed %.0fs' % (label, time.monotonic() - started))
     return out[0] if out else ''
