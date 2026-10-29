@@ -37,10 +37,11 @@ branches to push).
          keeps working in a clone (PR #11)
 2. - [x] **Docs** (Claude): README, `SETUP.md`, `SECURITY.md`, settings version 2 docs (PR #10);
          `migratarr demo` and the logo in the README, absolute links so the README also works
-         on PyPI (release-prep branch). Still open: UI screenshots (Josh, from `migratarr demo`)
-3. - [ ] **Real-world checks** (Josh, with steps from Claude):
-         - Fresh machine or VM: install the built wheel, run the wizard, make a first plan
-         - One real move on local disks with `examples/local-test/` (PR #13)
+         on PyPI (release-prep branch); UI screenshots in the README (PR #7)
+3. - [x] **Real-world checks** (Josh, 2026-10-28/29, Ubuntu 26.04, Python 3.14):
+         - Fresh machine: install, wizard, plan gate
+         - Local disks with `examples/local-test/`: all four move types, real Radarr and Sonarr,
+           through the unified engine. Results: `examples/local-test/RESULTS-2026-10-29.md`
 4. - [x] **Demo mode** (Claude): `migratarr demo` (PR #12)
 5. - [x] **Version** (Claude): `0.1.0rc1` in `migratarr/cli.py`; CHANGELOG `[0.1.0]` section;
          release.yml handles pre-release tags (notes from `[0.1.0]`, marked pre-release) and
@@ -53,9 +54,11 @@ branches to push).
          reporting, the `pypi` environment (required reviewer, `v*` tags only)
 8. - [x] **PyPI** (Josh): pending trusted publisher for `migratarr` (owner `jwilcox99`, repository
          `Migratarr`, workflow `release.yml`, environment `pypi`)
-9. - [ ] **Release candidate** (Josh): `v0.1.0rc1` published 2026-10-28. Still to do: check the
-         PyPI page; on the VM `pip install --pre migratarr`, `migratarr demo`, wizard, first plan.
+9. - [x] **Release candidate** (Josh): `v0.1.0rc1` published 2026-10-28; PyPI page, `pip install
+         --pre`, `--version`, `doctor`, `demo`, wizard and plan gate checked 2026-10-28.
          Pre-release cleanup (incident scripts out of the package, developer notes in
          `docs/dev/`) lands after rc1 and ships in 0.1.0
 10. - [ ] **Release** (Claude, then Josh): `__version__ = '0.1.0'`, date the `[0.1.0]` section
-          (`## [0.1.0] — YYYY-MM-DD`); Josh tags `v0.1.0`
+          (`## [0.1.0] — YYYY-MM-DD`); Josh tags `v0.1.0`. Before it: merge the Jellyfin header
+          fix (PR #8, release blocker) and the setup fixes from the results file (kept keys,
+          disks on one filesystem); decide on a NAS check of the unified engine (gate 4)
