@@ -639,7 +639,8 @@ def render_run(view, ctx=None):
                     ''.join(f'<li>{e(p)}</li>' for p in view['integrity_problems']) + '</ul></div>', ctx=ctx)
     commit = (view['git_commit'] or '')[:7]
     head = (f'<p class="crumbs"><a href="/">Runs</a></p><h1>Run of {e(local_time(view["created_utc"]))}</h1>'
-            f'<p class="meta">{e(view["run_id"])}, code {e(commit)}, {len(view["rows"])} moves in the manifest, '
+            f'<p class="meta">{e(view["run_id"])}, ' + (f'code {e(commit)}, ' if commit else '')
+            + f'{len(view["rows"])} moves in the manifest, '
             f'{len(view["blocked"])} blocked</p>')
     sections = ''.join(render_moves(view['rows'], *group, ctx=ctx, run_id=view['run_id']) for group in GROUPS)
     if not view['rows']:
