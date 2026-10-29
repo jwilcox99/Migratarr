@@ -34,6 +34,9 @@ may still change between minor versions, always with a migration or a note here)
 - The run page no longer shows an empty "code ," label in an installed copy.
 - `migratarr demo` no longer prints dozens of "TMDB unavailable – retrying"
   lines, and `--dir` accepts a relative folder.
+- Jellyfin: the key is sent as `Authorization: MediaBrowser Token="..."`. Current
+  Jellyfin (12.4) refuses the old `X-Emby-Token` header, so the health check
+  failed with HTTP 401 and planning could not read watch history.
 
 ## [0.1.0] — unreleased
 
