@@ -21,10 +21,11 @@ ROOT = Path(__file__).resolve().parents[1]
 # scripts also read config/planner.json, config/storage-targets.json and credentials via
 # service_keys (docker exec cat, no shell), incl. service base URLs; their only writes
 # remain OUTPUT and CACHE_DIR. Re-pinned 2026-10-27 after the move into migratarr/: only the
-# four imports changed (to migratarr.<module>).
+# four imports changed (to migratarr.<module>). Re-pinned 2026-10-29: only the Jellyfin
+# request header changed (Authorization: MediaBrowser Token=...); no new writes.
 SCRIPTS = {
-    "movie": ("dry_run_movies.py", "953e8dae0a7b9a88f1112e8cb3ba4db867971ccf64ccdfadd471282524d12892"),
-    "tv": ("dry_run_tv.py", "040f5e4bd5caa2e407ef56dd58ac0fb0b797e5e4423c55d7a6c94957b73b84f8"),
+    "movie": ("dry_run_movies.py", "f6873e7be61cb436b2b4b2e40dea2e1044f09c992ac0b895a58046a7409f5d17"),
+    "tv": ("dry_run_tv.py", "3469230f30eea61a9d546367e1eefc89c9235138319355137d0840f9c81ae885"),
 }
 
 

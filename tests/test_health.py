@@ -160,6 +160,14 @@ class HealthTests(unittest.TestCase):
                 self.assertNotIn('python3 migratarr_', text)
                 self.assertNotIn("(see docs/", text)
 
+    def test_jellyfin_key_goes_in_the_authorization_header(self):
+        # Current Jellyfin (12.4 tested 2026-10-29) refuses the legacy X-Emby-Token header.
+        http = FakeHttp()
+        self.checks(http)
+        url, headers, _ = [c for c in http.calls if c[0].endswith('/System/Info')][0]
+        self.assertNotIn('X-Emby-Token', headers)
+        self.assertRegex(headers['Authorization'], r'^MediaBrowser Token="[^"]+"$')
+
     def test_missing_credential(self):
         with patch.dict(os.environ, {'T_SONARR': ''}):
             c = self.by_id(self.checks())
