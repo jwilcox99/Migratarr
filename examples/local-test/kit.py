@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
 """Throwaway Radarr, Sonarr and Jellyfin for a first real local-disk move. See README.md.
 
-    ./kit.py init            create the test folder tree under $MTEST_ROOT
-    ./kit.py up              start the test containers and wait until they answer
+    ./kit.py init            create the test folder tree under $MTEST_ROOT; disk2 is a
+                             loop-mounted ext4 image (sudo mount), so it is a separate filesystem
+    ./kit.py up              re-mount disk2 if needed (after a reboot), start the test containers
+                             and wait until they answer
     ./kit.py seed            root folders, tags, small dummy titles, Jellyfin API key
     ./kit.py wizard-values   what to type into Migratarr's setup wizard
     ./kit.py check           prove the test Migratarr settings point only at the test kit
     ./kit.py status          where each test title is: in Radarr/Sonarr and on the test disks
     ./kit.py report          write everything to send back to ~/mtest-report-<time>.txt
-    ./kit.py down [--delete] stop and remove the containers; --delete also removes $MTEST_ROOT
+    ./kit.py down [--delete] stop and remove the containers; --delete also unmounts disk2
+                             and removes $MTEST_ROOT
 
 Settings come from the environment: MTEST_ROOT (required, absolute), MTEST_PUID and
 MTEST_PGID (default: your user's uid and primary gid), TZ (optional).
 
-Touches nothing outside $MTEST_ROOT and the containers of compose project "mtest".
+Touches nothing outside $MTEST_ROOT and the containers of compose project "mtest". The only
+commands run with sudo are mount/umount of $MTEST_ROOT/disk2.img on $MTEST_ROOT/disk2, and
+chown/rmdir lost+found on that new disk; each is printed, with the reason, before it runs.
 Standard library only; Python 3.10 or newer.
 """
 import argparse
@@ -21,6 +26,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import secrets
+import shlex
 import shutil
 import socket
 import subprocess
@@ -43,6 +49,13 @@ SERVICES = {  # service: (container, host port, port inside the container)
     'jellyfin': ('mtest-jellyfin', 18096, 8096),
 }
 DISKS = ('disk1', 'disk2')
+# disk2 is an ext4 image loop-mounted on $MTEST_ROOT/disk2. Migratarr's engine refuses a
+# cross-disk move between two folders on one filesystem (same st_dev), so plain folders
+# could only ever test same-disk renames.
+LOOP_DISK = 'disk2'
+LOOP_IMAGE = 'disk2.img'
+DEFAULT_IMAGE_SIZE = '2G'
+MIN_IMAGE_SIZE = 64 * 1024 * 1024
 CATEGORIES = {'Movies': ('Common', 'Rare', 'Library', 'Archive'),
               'TV': ('Current', 'Rare', 'Library', 'Archive')}
 # Which test disk holds each category folder. compose.yaml mounts exactly these.
@@ -117,6 +130,199 @@ def compose(base, *args, capture=False):
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or '').strip()
         raise KitError('docker compose ' + ' '.join(args) + ' failed' + (': ' + detail if detail else '')) from None
+
+
+def make_folder(folder, pgid):
+    folder.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chown(folder, -1, pgid)
+    except PermissionError:
+        raise KitError(f'cannot give {folder} to group {pgid}: is your user in that group? '
+                       f'(id -nG)') from None
+    # Group-writable, and new files inherit the group (Migratarr checks group write).
+    folder.chmod(0o2775)
+
+
+# ---------------------------------------------------------------- disk2: its own filesystem
+#
+# The functions that decide what to run (parse_size, mount_steps, fixup_steps, umount_steps,
+# describe_disks) are pure, so tests can check them without sudo. run_steps runs a plan.
+
+class Step:
+    def __init__(self, argv, sudo, why):
+        self.argv, self.sudo, self.why = list(argv), sudo, why
+
+    def __eq__(self, other):
+        return isinstance(other, Step) and (self.argv, self.sudo) == (other.argv, other.sudo)
+
+    def __repr__(self):
+        return f'Step({self.argv!r}, sudo={self.sudo})'
+
+
+def parse_size(text):
+    """'2G', '512M', '2GiB' or a plain number of bytes -> bytes (K/M/G/T are binary units)."""
+    value = str(text).strip().upper()
+    value = value[:-2] if value.endswith('IB') else value[:-1] if value.endswith('B') else value
+    units = {'K': 1 << 10, 'M': 1 << 20, 'G': 1 << 30, 'T': 1 << 40}
+    factor = units.get(value[-1:], 1)
+    if value[-1:] in units:
+        value = value[:-1]
+    try:
+        size = int(float(value) * factor)
+    except ValueError:
+        raise ValueError(f'not a size: {text!r} (use e.g. 2G or 512M)') from None
+    if size < MIN_IMAGE_SIZE:
+        raise ValueError(f'{text!r} is too small for the test disk (at least 64M)')
+    return size
+
+
+def size_arg(text):
+    try:
+        return parse_size(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
+
+
+def human_size(size):
+    for unit, factor in (('GiB', 1 << 30), ('MiB', 1 << 20)):
+        if size >= factor:
+            return f'{size / factor:g} {unit}'
+    return f'{size} bytes'
+
+
+def mount_steps(base, *, image_exists, mounted, size, mkfs='mkfs.ext4'):
+    """What makes $MTEST_ROOT/disk2 a mounted filesystem of its own; nothing if it already is."""
+    disk, image = base / LOOP_DISK, base / LOOP_IMAGE
+    if mounted:
+        return []
+    steps = []
+    if not image_exists:
+        steps += [Step(['truncate', '-s', str(size), str(image)], False,
+                       f'an empty {human_size(size)} image file (sparse: it only uses space as it fills)'),
+                  Step([mkfs, '-q', '-F', str(image)], False, 'format the image as ext4')]
+    steps.append(Step(['mount', '-o', 'loop,nosuid,nodev', str(image), str(disk)], True,
+                      f'attach the image at {disk} as a separate filesystem (only root can mount)'))
+    return steps
+
+
+def fixup_steps(disk, *, owner, group, has_lost_found, uid, gid):
+    """A new ext4 filesystem's top folder is root's and holds lost+found; hand it to the kit."""
+    steps = []
+    if has_lost_found:
+        steps.append(Step(['rmdir', str(disk / 'lost+found')], True,
+                          "remove mkfs's empty, root-owned lost+found so the disk holds only test folders"))
+    if (owner, group) != (uid, gid):
+        steps.append(Step(['chown', f'{uid}:{gid}', str(disk)], True,
+                          f'give the new disk\'s top folder to you (uid {uid}) and group {gid}, '
+                          'like disk1 (mkfs makes it root\'s)'))
+    return steps
+
+
+def umount_steps(base, *, mounted):
+    if not mounted:
+        return []
+    return [Step(['umount', str(base / LOOP_DISK)], True,
+                 'detach the test disk image so the folder can be deleted')]
+
+
+def describe_disks(devices):
+    """{disk: st_dev} -> (separate filesystems?, one line saying so)."""
+    missing = [d for d in DISKS if d not in devices]
+    if missing:
+        return False, f'{", ".join(missing)} missing (run ./kit.py init)'
+    a, b = (devices[d] for d in DISKS)
+    dev = lambda d: f'{os.major(d)}:{os.minor(d)}'
+    if a == b:
+        return False, (f'disk1 and disk2 are on the SAME filesystem (device {dev(a)}): Migratarr refuses '
+                       'cross-disk moves between them ("NAS filesystems are not distinct"). '
+                       '"./kit.py init" without --no-loop makes disk2 its own filesystem; after a '
+                       'reboot, "./kit.py up" mounts it again.')
+    return True, (f'disk1 and disk2 are separate filesystems (devices {dev(a)} and {dev(b)}): '
+                  'cross-disk moves can run.')
+
+
+def disk_devices(base):
+    return {d: (base / d).stat().st_dev for d in DISKS if (base / d).is_dir()}
+
+
+def find_mkfs():
+    found = shutil.which('mkfs.ext4') or next(
+        (p for p in ('/usr/sbin/mkfs.ext4', '/sbin/mkfs.ext4') if os.access(p, os.X_OK)), None)
+    if not found:
+        raise KitError('mkfs.ext4 is not installed (Ubuntu/Debian: sudo apt install e2fsprogs), '
+                       'or use "./kit.py init --no-loop" (cross-disk moves will then be refused)')
+    return found
+
+
+def run_steps(steps, why):
+    """Print every command (and why) first, then run them in order. sudo only where marked."""
+    if not steps:
+        return
+    as_root = os.geteuid() == 0
+    if any(s.sudo for s in steps):
+        if not as_root and not shutil.which('sudo'):
+            raise KitError('sudo is not installed; the kit needs it to mount the test disk '
+                           '(or use "./kit.py init --no-loop")')
+        say(why + (' Running as root:' if as_root else
+                   ' These commands run (sudo may ask for your password; Ctrl-C there stops):'))
+    else:
+        say(why)
+    commands = []
+    for s in steps:
+        argv = (['sudo'] + s.argv) if s.sudo and not as_root else s.argv
+        commands.append(argv)
+        say(f'  {shlex.join(argv)}\n      {s.why}')
+    for argv in commands:
+        try:
+            subprocess.run(argv, check=True)
+        except FileNotFoundError:
+            raise KitError(f'{argv[0]} is not installed') from None
+        except subprocess.CalledProcessError as exc:
+            raise KitError(f'"{shlex.join(argv)}" failed (exit {exc.returncode})') from None
+
+
+def clear_mountpoint(disk):
+    """The mount point must be empty. An older init's empty folder tree is removed; files are not."""
+    files = sorted(str(p) for p in disk.rglob('*') if not p.is_dir() or p.is_symlink())
+    if files:
+        raise KitError(f'{disk} has files in it ({files[0]}{" and more" if len(files) > 1 else ""}). '
+                       'The test disk is mounted there and would hide them. Start over with '
+                       '"./kit.py down --delete", or keep plain folders with "./kit.py init --no-loop".')
+    for folder, subfolders, _ in os.walk(disk, topdown=False):
+        for name in subfolders:
+            os.rmdir(os.path.join(folder, name))
+
+
+def ensure_loop_disk(base, *, size=None, create=False, running=()):
+    """Mount disk2.img on disk2 (making the image first if create). Returns whether disk2 is mounted."""
+    disk, image = base / LOOP_DISK, base / LOOP_IMAGE
+    if os.path.ismount(disk):
+        say(f'{disk} is already a mounted filesystem; leaving it as it is.')
+        return True
+    if not image.is_file() and not create:
+        return False
+    if running:
+        raise KitError(f'{disk} is not mounted but test containers are running ({", ".join(sorted(running))}); '
+                       'they would not see the disk. "./kit.py down" first, then "./kit.py up".')
+    uid, gid = os.getuid(), ids()[1]
+    if disk.exists():
+        clear_mountpoint(disk)
+    make_folder(disk, gid)
+    steps = mount_steps(base, image_exists=image.is_file(), mounted=False,
+                        size=size or parse_size(DEFAULT_IMAGE_SIZE),
+                        mkfs=find_mkfs() if not image.is_file() else 'mkfs.ext4')
+    run_steps(steps, f'{disk} needs to be a separate filesystem: Migratarr refuses cross-disk moves '
+                     f'between two folders on one filesystem. The kit '
+                     + ('makes' if not image.is_file() else 'mounts')
+                     + f' the ext4 image {image} on it.')
+    if not os.path.ismount(disk):
+        raise KitError(f'{disk} is still not a mount point after mounting {image}')
+    st = disk.stat()
+    run_steps(fixup_steps(disk, owner=st.st_uid, group=st.st_gid,
+                          has_lost_found=(disk / 'lost+found').exists(), uid=uid, gid=gid),
+              'The new disk\'s top folder belongs to root.')
+    disk.chmod(0o2775)
+    return True
 
 
 def host_path(base, service, container_path):
@@ -202,28 +408,30 @@ def cmd_init(args):
         raise KitError(f'{base} already exists and has other files in it. Choose a new, empty folder.')
     old = os.umask(0o002)
     try:
-        folders = [base, base / 'config', base / 'seed', base / 'migratarr']
-        folders += [base / 'config' / s for s in SERVICES]
-        for disk in DISKS:
-            folders.append(base / disk)
-            for media, cats in CATEGORIES.items():
-                folders.append(base / disk / media)
-                folders += [base / disk / media / c for c in cats]
-        for folder in folders:
-            folder.mkdir(parents=True, exist_ok=True)
-            try:
-                os.chown(folder, -1, pgid)
-            except PermissionError:
-                raise KitError(f'cannot give {folder} to group {pgid}: is your user in that group? '
-                               f'(id -nG)') from None
-            # Group-writable, and new files inherit the group (Migratarr checks group write).
-            folder.chmod(0o2775)
+        for folder in [base, base / 'config', base / 'seed', base / 'migratarr'] + [
+                base / 'config' / s for s in SERVICES]:
+            make_folder(folder, pgid)
         (base / MARKER).write_text('Made by migratarr examples/local-test/kit.py. '
                                    '"./kit.py down --delete" removes this whole folder.\n')
+        if args.no_loop:
+            if (base / LOOP_IMAGE).is_file() and not os.path.ismount(base / LOOP_DISK):
+                raise KitError(f'{base / LOOP_IMAGE} is the test disk from an earlier init; run "./kit.py init" '
+                               'without --no-loop to mount it')
+        else:
+            ensure_loop_disk(base, size=args.disk2_size, create=True)
+        for disk in DISKS:
+            make_folder(base / disk, pgid)
+            for media, cats in CATEGORIES.items():
+                make_folder(base / disk / media, pgid)
+                for c in cats:
+                    make_folder(base / disk / media / c, pgid)
     finally:
         os.umask(old)
     say(f'Test folder ready: {base}')
-    say(f'  disks:    {base}/disk1, {base}/disk2 (group {pgid}, mode 2775)')
+    say(f'  disks:    {base}/disk1, {base}/disk2 (group {pgid}, mode 2775)'
+        + ('' if args.no_loop else f'; disk2 is {base / LOOP_IMAGE}, loop-mounted'))
+    separate, line = describe_disks(disk_devices(base))
+    say(('  ' if separate else '  WARNING: ') + line)
     say(f'  configs:  {base}/config/<radarr|sonarr|jellyfin>')
     say(f'  Migratarr data folder: {base}/migratarr   pasted keys: {base}/secrets')
     say(f'Containers will run as PUID {puid}, PGID {pgid}.')
@@ -277,6 +485,11 @@ def cmd_up(args):
     require_kit_folder(base)
     cmd_check_compose(args)
     mine = {c for c, _, _ in SERVICES.values()} & running_containers()
+    # After a reboot the loop mount is gone; mount it before Docker bind-mounts disk2's folders.
+    ensure_loop_disk(base, running=mine)
+    separate, line = describe_disks(disk_devices(base))
+    if not separate:
+        say('WARNING: ' + line)
     for service, (container, port, _) in SERVICES.items():
         if container not in mine and port_open(port):
             raise KitError(f'port {port} is already in use by something else; {service} cannot start there')
@@ -597,6 +810,9 @@ def cmd_check(args):
         check_targets(load_json(targets_path), base, problems)
     for line in notes:
         say('  note: ' + line)
+    # Not an isolation problem, so it doesn't fail check; but cross-disk moves need it.
+    separate, line = describe_disks(disk_devices(base))
+    say(('  disks: ' if separate else '  WARNING: ') + line)
     if problems:
         say('NOT ISOLATED. Fix these before running anything else:')
         for line in problems:
@@ -697,6 +913,8 @@ def cmd_status(args):
                 strays += [str(p.relative_to(base)) for p in sorted(folder.iterdir()) if p.name not in names]
     say('')
     say('Anything else in the category folders (should be none): ' + (', '.join(strays) or 'none'))
+    separate, line = describe_disks(disk_devices(base))
+    say(('Disks: ' if separate else 'WARNING: ') + line)
     bad = [r for r in rows if not r[0]]
     if bad:
         say('"!!": the title is missing, is in more than one place, or Radarr/Sonarr points somewhere it is not.')
@@ -761,9 +979,16 @@ def cmd_down(args):
     require_kit_folder(base)
     compose(base, 'down', '--volumes', '--remove-orphans')
     say('Containers removed.')
+    disk = base / LOOP_DISK
     if not args.delete:
         say(f'The test folder is still there: {base}. "./kit.py down --delete" removes it too.')
+        if os.path.ismount(disk):
+            say(f'{disk} stays mounted ("./kit.py up" uses it again; a reboot unmounts it).')
         return
+    run_steps(umount_steps(base, mounted=os.path.ismount(disk)),
+              f'{disk} is the mounted test disk image; it is unmounted before deleting.')
+    if os.path.ismount(disk):
+        raise KitError(f'{disk} is still mounted; nothing was deleted. Try:  sudo umount "{disk}"')
     def report(func, path, exc):
         say(f'  could not remove {path}: {exc if isinstance(exc, BaseException) else exc[1]}')
     if sys.version_info >= (3, 12):
@@ -793,6 +1018,12 @@ def main(argv=None):
         p.set_defaults(func=func)
         if name == 'report':
             p.add_argument('--output', help='file to write (default ~/mtest-report-<time>.txt)')
+        if name == 'init':
+            p.add_argument('--disk2-size', type=size_arg, default=parse_size(DEFAULT_IMAGE_SIZE),
+                           metavar='SIZE', help='size of the disk2 image, e.g. 2G or 512M (default '
+                           f'{DEFAULT_IMAGE_SIZE}; only used when the image is first made)')
+            p.add_argument('--no-loop', action='store_true',
+                           help='keep disk2 a plain folder (no sudo); cross-disk moves will then be refused')
         if name == 'down':
             p.add_argument('--delete', action='store_true', help='also delete $MTEST_ROOT')
     args = parser.parse_args(argv)
