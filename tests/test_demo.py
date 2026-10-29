@@ -25,6 +25,7 @@ class DemoTests(unittest.TestCase):
             manifest = list((home / 'manifests').glob('*.csv')) + list((home / 'manifests').glob('**/*.csv'))
             self.assertTrue(manifest, list(home.iterdir()))
             self.assertIn('nothing has moved', result.stdout)
+            self.assertNotIn('retrying', result.stdout)  # the demo's stand-in TMDB answers, never fails
             self.assertIn('CROSS_DISK_TRANSFER', result.stdout)
             self.assertIn('SAME_DISK_RENAME', result.stdout)
             ending = result.stdout.split('SAME_DISK_RENAME')[-1]
@@ -36,6 +37,15 @@ class DemoTests(unittest.TestCase):
             runtime = json.loads((home / 'config/runtime.json').read_text())
             self.assertEqual(runtime['topology'], 'local')
             self.assertFalse(list(home.glob('secrets/*')))  # no keys stored
+
+    def test_demo_accepts_a_relative_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = dict(os.environ, MIGRATARR_HOME=str(Path(tmp, 'real-home')), PYTHONPATH=str(ROOT))
+            result = subprocess.run([sys.executable, '-m', 'migratarr.cli', 'demo', '--dir', 'demo', '--no-ui'],
+                                    cwd=tmp, env=env, capture_output=True, text=True, timeout=600)
+            self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-3000:])
+            targets = json.loads(Path(tmp, 'demo/config/storage-targets.json').read_text())
+            self.assertIn(str(Path(tmp).resolve()), json.dumps(targets))  # stored as absolute paths
 
     def test_demo_refuses_a_folder_that_is_not_empty(self):
         with tempfile.TemporaryDirectory() as tmp:
