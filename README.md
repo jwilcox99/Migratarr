@@ -55,6 +55,16 @@ title that's hard to replace and isn't streaming anywhere stays in Rare even
 if nobody has watched it lately; a widely available title nobody plays may
 become an Archive candidate.
 
+<p align="center">
+  <img alt="A plan in the web UI: each move with its categories, disks, status, approval and the reasons behind it" src="https://raw.githubusercontent.com/jwilcox99/Migratarr/main/assets/screenshots/plan.png" width="800">
+</p>
+<p align="center"><sub>A plan from <code>migratarr demo</code>: nothing moves until each row is approved.</sub></p>
+
+<p align="center">
+  <img alt="Settings and health page: services, where moves run, disks and categories, streaming, scoring and override tags, each marked OK" src="https://raw.githubusercontent.com/jwilcox99/Migratarr/main/assets/screenshots/settings.png" width="800">
+</p>
+<p align="center"><sub>Settings &amp; health: set up in the browser; planning waits until every check passes.</sub></p>
+
 ## Requirements
 
 - A Linux machine with Python 3.10 or newer that can see your media disks.
