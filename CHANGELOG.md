@@ -43,6 +43,9 @@ may still change between minor versions, always with a migration or a note here)
 - A cross-disk move refused because both disks are on one filesystem shows one
   plain line on the move and job pages and in the terminal, not a Python
   traceback. Other refusals by the NAS-side program drop the traceback too.
+- Jellyfin: the key is sent as `Authorization: MediaBrowser Token="..."`. Current
+  Jellyfin (12.4) refuses the old `X-Emby-Token` header, so the health check
+  failed with HTTP 401 and planning could not read watch history.
 
 ## [0.1.0] — unreleased
 
