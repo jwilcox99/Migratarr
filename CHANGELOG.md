@@ -18,10 +18,22 @@ may still change between minor versions, always with a migration or a note here)
   run (new `arr_files` group): the container sees the media root, or, for
   Radarr and Sonarr installed directly, the folder exists here.
 
+- README screenshots of a plan and the Settings & health page.
+- Tested on Python 3.14.
+
 ### Fixed
 - Docker's own error messages (for example when Docker isn't installed or
   running) no longer appear in the terminal. Health checks and Detect say what
   went wrong instead.
+- `migratarr approve --help` works before setup, like every other command.
+- A rejected key says which key to use and links where to get it; for TMDB,
+  the API Read Access Token rather than the shorter API Key.
+- Hints and help text in an installed copy: settings-file fixes link the docs on
+  GitHub, and commands read `migratarr doctor` (and so on) instead of the
+  clone-only `python3 migratarr_*.py` scripts.
+- The run page no longer shows an empty "code ," label in an installed copy.
+- `migratarr demo` no longer prints dozens of "TMDB unavailable – retrying"
+  lines, and `--dir` accepts a relative folder.
 
 ## [0.1.0] — unreleased
 

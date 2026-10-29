@@ -71,6 +71,15 @@ class UiTests(unittest.TestCase):
         self.assertEqual({d['error'] for d in view['disks']}, {'Permission denied'})
         self.assertIn('Not readable: Permission denied', migratarr_ui.render_run(view))
 
+    def test_run_header_omits_code_when_there_is_no_commit(self):
+        view = migratarr_ui.run_view(self.base, RUN, STORAGE, {}, fake_usage)
+        view['git_commit'] = 'abcdef0123456789'
+        self.assertIn(', code abcdef0, ', migratarr_ui.render_run(view))
+        view['git_commit'] = None  # an installed copy plans without a git checkout
+        body = migratarr_ui.render_run(view)
+        self.assertNotIn('code ,', body)
+        self.assertIn(RUN + ', ' + str(len(view['rows'])) + ' moves in the manifest', body)
+
     def test_execution_timeline_and_long_reasons(self):
         status, _, body = self.get('/execution/' + eid(9))
         self.assertEqual(status, 200)

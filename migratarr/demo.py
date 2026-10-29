@@ -15,6 +15,7 @@ approved or moved. Your own settings and data folder are never read or written.
 Delete FOLDER when done. Standard library only.
 """
 import argparse
+import io
 from contextlib import contextmanager
 import json
 import os
@@ -24,6 +25,7 @@ import sys
 import tempfile
 import time
 import urllib.request
+from urllib.parse import urlsplit
 
 from migratarr import demo_library as library
 
@@ -80,7 +82,7 @@ def library_folders():
 
 def build(home):
     """Write the demo's settings and disks into ``home`` (which must be empty or missing)."""
-    home = Path(home)
+    home = Path(home).expanduser().resolve()  # settings store absolute paths; "--dir demo" is relative
     if home.exists() and any(home.iterdir()):
         raise SystemExit(f'{home} is not empty; choose an empty or new folder for the demo.')
     runtime, targets, planner = settings(home)
@@ -160,10 +162,21 @@ def demo_summary(real_summary, home):
     return summary
 
 
+def demo_urlopen(request, timeout=None):
+    """The made-up library's network, except that TMDB answers "no providers" where the tests'
+    library simulates an outage: a demo shouldn't print retry warnings for a service it fakes."""
+    try:
+        return library.fake_urlopen(request, timeout)
+    except OSError:
+        if urlsplit(request.full_url).hostname != 'api.themoviedb.org':
+            raise
+        return io.BytesIO(b'{"results": {}}')
+
+
 def make_plan(home):
     """Run the planning pipeline against the made-up library. Returns migratarr.plan's exit code."""
     from migratarr import plan
-    with swapped((urllib.request, 'urlopen', library.fake_urlopen), (time, 'sleep', lambda seconds: None),
+    with swapped((urllib.request, 'urlopen', demo_urlopen), (time, 'sleep', lambda seconds: None),
                  (plan, 'run_step', run_step_here), (plan, 'summary', demo_summary(plan.summary, home)),
                  # The preflight's health checks would contact the real services; the demo has none.
                  (plan, 'preflight', lambda repo, allow_dirty: ([], Path(home)))):

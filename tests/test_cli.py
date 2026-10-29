@@ -79,6 +79,21 @@ class CliTests(unittest.TestCase):
         self.assertIn('migratarr doctor', err)
         self.assertNotIn('Traceback', err)
 
+    def test_every_command_help_works_before_setup(self):
+        # A fresh install has no settings; "<command> --help" must still print usage.
+        import os
+        import subprocess
+        names = sorted(n for n in migratarr_cli.COMMANDS if n not in ('fake', 'gone'))
+        env = dict(os.environ, MIGRATARR_HOME=str(Path(self.tmp_path, 'fresh-home')))
+        root = Path(__file__).resolve().parents[1]
+        for name in names:
+            with self.subTest(command=name):
+                r = subprocess.run([sys.executable, '-m', 'migratarr.cli', name, '--help'], cwd=str(root),
+                                   env=env, capture_output=True, text=True, timeout=60)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertIn('usage:', r.stdout)
+        self.assertFalse(Path(self.tmp_path, 'fresh-home').exists(), '--help must not create the data folder')
+
     def test_every_listed_command_exists(self):
         import importlib.util
         missing = {name for name, (module, _) in migratarr_cli.COMMANDS.items()

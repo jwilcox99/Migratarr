@@ -33,6 +33,8 @@ OK, WARN, FAIL, SKIP = 'ok', 'warn', 'fail', 'skip'
 ORDER = {FAIL: 0, WARN: 1, OK: 2, SKIP: 3}
 GROUPS = ('config', 'services', 'arr_roots', 'arr_files', 'disks', 'nas', 'permissions')
 TIMEOUT = 10
+# Installed copies have no docs/ folder, so hints link to GitHub.
+DOCS_URL = 'https://github.com/jwilcox99/Migratarr/blob/main/docs/'
 GiB = 1024 ** 3
 
 
@@ -99,15 +101,25 @@ def config_checks(report):
             if len(errors) > 5:
                 detail += f'; and {len(errors) - 5} more'
             checks.append(Check('config.' + name, 'config', labels[name], FAIL, detail,
-                                'Fix ' + path + ' (see docs/settings.md)'))
+                                'Fix ' + path + ' (see ' + DOCS_URL + 'settings.md)'))
         elif warnings:
             checks.append(Check('config.' + name, 'config', labels[name], WARN,
                                 '; '.join(p.message for p in warnings),
-                                'Run: python3 migratarr_doctor.py --migrate'
+                                'Run: migratarr doctor --migrate'
                                 if report.needs_migration and name == 'runtime' else ''))
         else:
             checks.append(Check('config.' + name, 'config', labels[name], OK, path))
     return checks
+
+
+def rejected_key_fix(descriptor):
+    """What to do when a service answers 401/403: which key, and where to get it."""
+    fix = 'Check the ' + descriptor.credential_label
+    if descriptor.id == 'tmdb':
+        fix += (' (the long token under "API Read Access Token", not the shorter "API Key")')
+    if descriptor.help_url:
+        fix += ': ' + descriptor.help_url
+    return fix
 
 
 def _endpoint(descriptor, runtime):
@@ -143,7 +155,7 @@ def service_check(descriptor, runtime, http=http_get):
     source = describe(descriptor.id, runtime.secrets[descriptor.id])
     if status in (401, 403):
         return Check(cid, 'services', label, FAIL, f'{shown} rejected the key (HTTP {status}); {source}',
-                     'Check the ' + descriptor.credential_label), None
+                     rejected_key_fix(descriptor)), None
     if status != 200 or not isinstance(data, dict) or (probe.expect_field and probe.expect_field not in data):
         return Check(cid, 'services', label, FAIL,
                      f'{shown} answered HTTP {status} without the expected response; is this {label}?',

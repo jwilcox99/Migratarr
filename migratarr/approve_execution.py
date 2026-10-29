@@ -9,13 +9,6 @@ from pathlib import Path
 
 from migratarr import approval_store
 from migratarr.runtime_config import get_config
-RUNTIME = get_config()
-
-BASE = RUNTIME.base_path
-MANIFESTS = BASE / "manifests"
-APPROVALS = BASE / "approvals"
-
-APPROVALS.mkdir(exist_ok=True)
 
 
 def sha256(path):
@@ -177,6 +170,16 @@ if args.approve_batch:
         parser.error("--limit must be positive")
 elif args.media or args.transfer or args.limit is not None or args.yes:
     parser.error("--media, --transfer, --limit and --yes are only valid with --approve-batch")
+
+# Settings load after argument parsing so --help (and usage errors) work
+# before setup, like every other command.
+RUNTIME = get_config()
+
+BASE = RUNTIME.base_path
+MANIFESTS = BASE / "manifests"
+APPROVALS = BASE / "approvals"
+
+APPROVALS.mkdir(exist_ok=True)
 
 manifest_dir, manifest_path, rows = load_manifest(args.run)
 

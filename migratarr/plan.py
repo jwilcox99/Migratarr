@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Run the whole planning pipeline as one command, stopping at the first failure.
 
-    python3 migratarr_plan.py            # preflight, then every planning step
-    python3 migratarr_plan.py --check    # preflight only
+    migratarr plan            # preflight, then every planning step
+    migratarr plan --check    # preflight only
 
 The dry runs can take a long time on a large library; run it inside tmux.
 

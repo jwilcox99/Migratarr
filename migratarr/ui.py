@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Web UI for Migratarr: plan a run, confirm (approve) moves, run them, and watch.
 
-    python3 migratarr_ui.py [--port 8765] [--read-only]
+    migratarr ui [--port 8765] [--read-only]
 
 It listens on 127.0.0.1 only. From another computer, open an SSH tunnel and
 browse to http://localhost:8765:
@@ -319,7 +319,7 @@ def render_settings(view, ctx=None, setup=False):
         parts.append('<div class="alert"><p>Migratarr can\'t start normally: its settings have problems. '
                      'Fix the files below, then restart <code>migratarr_ui.py</code>.</p></div>')
     parts.append('<p class="meta">Read-only. Change settings in the files listed here; '
-                 '<code>python3 migratarr_doctor.py</code> runs the same checks from a terminal.</p>')
+                 '<code>migratarr doctor</code> runs the same checks from a terminal.</p>')
     errors = [p for p in report['problems'] if p['severity'] == 'error']
     warnings = [p for p in report['problems'] if p['severity'] == 'warning']
     if errors or warnings:
@@ -480,7 +480,7 @@ def render_plan_panel(ctx):
 def render_runs(runs, ctx=None):
     if not runs:
         return page('Runs', '<h1>Runs</h1>' + render_plan_panel(ctx) + '<p class="empty">No runs yet. Plan one '
-                    + ('above.' if (ctx or {}).get('actions') else 'with <code>python3 migratarr_plan.py</code>.')
+                    + ('above.' if (ctx or {}).get('actions') else 'with <code>migratarr plan</code>.')
                     + '</p>', ctx=ctx)
     items = []
     for run in runs:
@@ -639,7 +639,8 @@ def render_run(view, ctx=None):
                     ''.join(f'<li>{e(p)}</li>' for p in view['integrity_problems']) + '</ul></div>', ctx=ctx)
     commit = (view['git_commit'] or '')[:7]
     head = (f'<p class="crumbs"><a href="/">Runs</a></p><h1>Run of {e(local_time(view["created_utc"]))}</h1>'
-            f'<p class="meta">{e(view["run_id"])}, code {e(commit)}, {len(view["rows"])} moves in the manifest, '
+            f'<p class="meta">{e(view["run_id"])}, ' + (f'code {e(commit)}, ' if commit else '')
+            + f'{len(view["rows"])} moves in the manifest, '
             f'{len(view["blocked"])} blocked</p>')
     sections = ''.join(render_moves(view['rows'], *group, ctx=ctx, run_id=view['run_id']) for group in GROUPS)
     if not view['rows']:
