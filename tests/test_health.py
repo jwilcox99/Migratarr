@@ -142,6 +142,24 @@ class HealthTests(unittest.TestCase):
         self.assertIn('cannot reach', c['service.jellyfin'].detail)
         self.assertEqual(c['arr_roots.radarr'].status, health.SKIP)
 
+    def test_rejected_key_says_which_key_and_where(self):
+        c = self.by_id(self.checks(FakeHttp(status={'themoviedb': 401, ':7878': 401})))
+        tmdb, radarr = c['service.tmdb'], c['service.radarr']
+        self.assertEqual(tmdb.status, health.FAIL)
+        self.assertIn('API Read Access Token', tmdb.fix)
+        self.assertIn('not the shorter "API Key"', tmdb.fix)
+        self.assertIn('https://www.themoviedb.org/settings/api', tmdb.fix)
+        self.assertNotIn('API Read Access Token', radarr.fix)  # the TMDB note is TMDB's only
+
+    def test_hints_work_in_an_installed_copy(self):
+        # Installed copies have no docs/ folder or migratarr_*.py scripts: hints use links and the command.
+        self.assertTrue(health.DOCS_URL.startswith('https://github.com/'))
+        for module in ('health', 'doctor', 'plan', 'reconcile', 'ui'):
+            text = (Path(health.__file__).parent / (module + '.py')).read_text()
+            with self.subTest(module=module):
+                self.assertNotIn('python3 migratarr_', text)
+                self.assertNotIn("(see docs/", text)
+
     def test_missing_credential(self):
         with patch.dict(os.environ, {'T_SONARR': ''}):
             c = self.by_id(self.checks())

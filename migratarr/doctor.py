@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Check that Migratarr is set up correctly for this deployment.
 
-    python3 migratarr_doctor.py              # every check
-    python3 migratarr_doctor.py --offline    # settings files only; contacts nothing
-    python3 migratarr_doctor.py --only services,nas
-    python3 migratarr_doctor.py --json       # for scripts
-    python3 migratarr_doctor.py --migrate    # move runtime.json version 1 to version 2 first
+    migratarr doctor              # every check
+    migratarr doctor --offline    # settings files only; contacts nothing
+    migratarr doctor --only services,nas
+    migratarr doctor --json       # for scripts
+    migratarr doctor --migrate    # move runtime.json version 1 to version 2 first
 
 Checks (migratarr/health.py): settings files, each service (Radarr, Sonarr,
 Jellyfin, TMDB) reachable with a working key, Radarr/Sonarr root folders

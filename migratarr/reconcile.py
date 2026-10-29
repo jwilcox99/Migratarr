@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Record that a flagged move was checked by hand (reconcile_store.py).
 
-    python3 migratarr_reconcile.py 20261023T212605Z-0031 --outcome not_moved \
+    migratarr reconcile 20261023T212605Z-0031 --outcome not_moved \
         --note "NAS copy ended silently; source intact, Radarr unchanged, staging folder removed by hand"
-    python3 migratarr_reconcile.py 20261023T212605Z-0031 --show
+    migratarr reconcile 20261023T212605Z-0031 --show
 
 Outcomes: moved, not_moved, other. Only moves in NEEDS_RECONCILIATION, or
 UNFINISHED with nothing running, can be recorded. Changes no media, Arr
