@@ -974,6 +974,53 @@ def latest_run():
     return ids[-1] if ids else None
 
 
+def make_tree_writable(base):
+    """Give the owner rwx on every folder under base that is theirs. Migratarr makes run snapshots
+    ($MTEST_ROOT/migratarr/runs/<run>/) read-only on purpose; files in a read-only folder can't be
+    deleted until the folder is writable again. Symlinks are never followed, so nothing outside
+    base is touched. Folders owned by someone else (e.g. root, from a container) are left as they are."""
+    uid = os.getuid()
+    def fix(path):
+        st = os.lstat(path)
+        if st.st_uid == uid and (st.st_mode & 0o700) != 0o700:
+            os.chmod(path, (st.st_mode & 0o7777) | 0o700)
+    if base.is_symlink() or not base.is_dir():
+        return
+    fix(base)
+    for folder, subfolders, _ in os.walk(base):  # top-down: a folder is fixed before it is entered
+        for name in subfolders:
+            path = os.path.join(folder, name)
+            if not os.path.islink(path):
+                fix(path)
+
+
+def remove_tree(base):
+    make_tree_writable(base)
+    failed = []
+    def report(func, path, exc):
+        failed.append(path)
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(base, onexc=report)
+    else:
+        shutil.rmtree(base, onerror=report)
+    if not base.exists():
+        return
+    uid = os.getuid()
+    others = []
+    for path in failed:
+        try:
+            if uid not in (os.lstat(path).st_uid, os.lstat(os.path.dirname(path)).st_uid):
+                others.append(path)
+        except OSError:
+            pass
+    for path in (others or failed)[:10]:
+        say(f'  could not remove {path}')
+    if others:
+        raise KitError(f'{len(others)} item(s) belong to another user (a container may have made them as root). '
+                       f'Remove the rest with:  sudo rm -rf "{base}"')
+    raise KitError(f'some files under {base} could not be removed (listed above)')
+
+
 def cmd_down(args):
     base = root()
     require_kit_folder(base)
@@ -989,14 +1036,7 @@ def cmd_down(args):
               f'{disk} is the mounted test disk image; it is unmounted before deleting.')
     if os.path.ismount(disk):
         raise KitError(f'{disk} is still mounted; nothing was deleted. Try:  sudo umount "{disk}"')
-    def report(func, path, exc):
-        say(f'  could not remove {path}: {exc if isinstance(exc, BaseException) else exc[1]}')
-    if sys.version_info >= (3, 12):
-        shutil.rmtree(base, onexc=report)
-    else:
-        shutil.rmtree(base, onerror=report)
-    if base.exists():
-        raise KitError(f'some files could not be removed. Remove the rest with:  sudo rm -rf "{base}"')
+    remove_tree(base)
     say(f'Removed {base}. Nothing from the kit is left (the images stay cached: '
         'docker image rm lscr.io/linuxserver/radarr lscr.io/linuxserver/sonarr lscr.io/linuxserver/jellyfin '
         'only if your real stack does not use them).')

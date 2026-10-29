@@ -232,5 +232,47 @@ class KitFolder(unittest.TestCase):
         self.assertTrue(self.base.exists())
 
 
+class RemoveReadOnlyTree(unittest.TestCase):
+    """Run snapshots are read-only on purpose; down --delete must still remove them without sudo."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.cleanup)
+        self.base = Path(self.tmp.name) / 'root'
+        run = self.base / 'migratarr' / 'runs' / '20261029-120000'
+        (run / 'code').mkdir(parents=True)
+        for f in (run / 'move_plan.csv', run / 'SHA256SUMS', run / 'code' / 'plan.py'):
+            f.write_text('x')
+            f.chmod(0o444)
+        for d in (run / 'code', run, run.parent):
+            d.chmod(0o555)
+        self.run_dir = run
+        self.outside = Path(self.tmp.name) / 'outside'
+        self.outside.mkdir()
+        self.outside.chmod(0o555)
+        (self.base / 'link-out').symlink_to(self.outside)
+
+    def cleanup(self):
+        for folder, subfolders, _ in os.walk(self.tmp.name):
+            for name in subfolders:
+                path = os.path.join(folder, name)
+                if not os.path.islink(path):
+                    os.chmod(path, 0o755)
+        self.tmp.cleanup()
+
+    def test_folders_become_owner_writable_but_not_through_symlinks(self):
+        kit.make_tree_writable(self.base)
+        self.assertEqual(self.run_dir.stat().st_mode & 0o777, 0o755)
+        self.assertEqual((self.run_dir / 'code').stat().st_mode & 0o777, 0o755)
+        self.assertEqual(self.outside.stat().st_mode & 0o777, 0o555)
+
+    def test_remove_tree_deletes_read_only_snapshot(self):
+        with quiet():
+            kit.remove_tree(self.base)
+        self.assertFalse(self.base.exists())
+        self.assertTrue(self.outside.is_dir())
+        self.assertEqual(self.outside.stat().st_mode & 0o777, 0o555)
+
+
 if __name__ == '__main__':
     unittest.main()
