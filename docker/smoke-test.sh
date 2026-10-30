@@ -26,7 +26,7 @@ cleanup() {
         echo "::error title=smoke test::stopped unexpectedly (exit $rc) during: $STAGE"
     fi
     docker rm -f "$NAME" >/dev/null 2>&1 || true
-    $AS_ROOT rm -rf "$CONFIG" || true
+    $AS_ROOT rm -rf "$CONFIG" "$CONFIG.cookies" || true
 }
 trap cleanup EXIT
 
@@ -45,10 +45,17 @@ stage "the first visit creates the login"
 status=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "http://127.0.0.1:$PORT/")
 case "$status" in "303 "*"/account/new"*) ;; *) fail "GET / gave '$status'";; esac
 curl -sf "http://127.0.0.1:$PORT/account/new" | grep -q 'Create your login' || fail "no create-login page"
-status=$(curl -s -o /dev/null -w '%{http_code}' -H "Origin: http://127.0.0.1:$PORT" \
+JAR="$CONFIG.cookies"
+status=$(curl -s -o /dev/null -w '%{http_code}' -c "$JAR" -H "Origin: http://127.0.0.1:$PORT" \
     --data 'username=smoke&password=smoke-password&confirm=smoke-password&next=/' \
     "http://127.0.0.1:$PORT/account/new")
 [ "$status" = 303 ] || fail "creating the login gave $status"
+
+stage "setup offers what works in a container"
+page=$(curl -sf -b "$JAR" "http://127.0.0.1:$PORT/setup/services") || fail "no setup page after signing in"
+echo "$page" | grep -q 'value="http://radarr:7878"' || fail "Radarr URL default is not the container name"
+echo "$page" | grep -q 'value="docker_config_xml"' && fail "setup offers reading keys through docker" || true
+echo "$page" | grep -q 'Same media path as Migratarr' || fail "no container choice for Radarr and Sonarr"
 
 stage "files in /config belong to PUID:PGID"
 login=$($AS_ROOT find "$CONFIG" -name auth.json)

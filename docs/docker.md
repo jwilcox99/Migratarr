@@ -63,17 +63,15 @@ between disks, they must be separate filesystems; the health checks say so if no
 
 ## Setting up in the browser
 
-In **Services**:
-- Radarr `http://radarr:7878`, Sonarr `http://sonarr:8989` (the compose service
-  names), Jellyfin likewise. Paste each API key (Radarr and Sonarr: Settings >
-  General): Detect can't read another container's files.
-- "Where Radarr and Sonarr run": choose **installed directly on this machine**.
-  Migratarr then checks files through its own `/data` mount, which is the same
-  path Radarr and Sonarr see. (The Docker option uses `docker exec`, which the
-  image deliberately doesn't have.)
+The wizard knows it runs in a container:
 
-In **Where moves run**, choose "this machine's own disks" for disks mounted into the
-container, or the NAS (below).
+- **Services:** Radarr, Sonarr and Jellyfin start at `http://radarr:7878`,
+  `http://sonarr:8989` and `http://jellyfin:8096`, the usual container names in a
+  compose file; change them if yours differ. Paste each key (Radarr and Sonarr:
+  Settings > General > API Key). Migratarr checks moved files through its own
+  `/data` mount, so there's no Docker option to choose and no Docker socket to mount.
+- **Where your disks are:** "this machine's own disks" for disks mounted into the
+  container (each one a folder under `/data`), or the NAS (below).
 
 ## Settings
 

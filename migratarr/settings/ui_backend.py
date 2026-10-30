@@ -58,6 +58,29 @@ ARR_SERVICES = tuple(d.id for d in services.SERVICES.values() if d.url_base_from
 ARR_INSTALL_CHOICES = (('docker', 'Radarr and Sonarr run in Docker containers'),
                        ('host', 'Radarr and Sonarr are installed directly on this machine'))
 ARR_INSTALL_CUSTOM = ('custom', 'Set by hand in runtime.json (arr_file_checks); keep as it is')
+# Migratarr in its Docker image (MIGRATARR_IN_CONTAINER=1, set by the Dockerfile): other containers' files and
+# the Docker CLI are out of reach, so Radarr and Sonarr are checked through Migratarr's own media mount (host
+# mode, same path in every container) and keys are pasted. Fresh installs point at the usual container names.
+CONTAINER_INSTALL = ('host', 'Same media path as Migratarr')
+CONTAINER_URLS = {'radarr': 'http://radarr:7878', 'sonarr': 'http://sonarr:8989', 'jellyfin': 'http://jellyfin:8096'}
+
+
+def in_container(environ=None):
+    return (os.environ if environ is None else environ).get('MIGRATARR_IN_CONTAINER') == '1'
+
+
+def container_services(values):
+    """A Services form as it can work inside the container: host-mode checks, no key read from a container."""
+    values = dict(values)
+    if values.get(ARR_INSTALL) in (None, '', 'docker'):
+        values[ARR_INSTALL] = 'host'
+    for d in services.SERVICES.values():
+        p = 'services.' + d.id
+        if (values.get(p + '.source') or '').startswith('docker'):
+            values[p + '.source'] = PASTE
+        if p + '.container' in values:
+            values[p + '.container'] = None
+    return values
 # Where Radarr's and Sonarr's own installers keep config.xml on Linux (Detect looks only here).
 HOST_CONFIG_XML = {'radarr': ('/var/lib/radarr/config.xml', '{home}/.config/Radarr/config.xml'),
                    'sonarr': ('/var/lib/sonarr/config.xml', '{home}/.config/Sonarr/config.xml')}
@@ -101,13 +124,15 @@ def default_base(environ=None):
     return str(home(environ))
 
 
-def templates(base=None):
+def templates(base=None, container=False):
     """The three documents of a fresh install, before the wizard's values are applied."""
+    urls = {d.url_setting.split('.', 1)[1]: d.default_url for d in services.SERVICES.values() if d.url_setting}
     runtime = {'schema_version': 2, 'base_path': base or default_base(), 'topology': 'nas_ssh',
                'containers': {'radarr': 'radarr', 'sonarr': 'sonarr', 'homepage': 'homepage'},
-               'urls': {d.url_setting.split('.', 1)[1]: d.default_url
-                        for d in services.SERVICES.values() if d.url_setting},
+               'urls': {k: CONTAINER_URLS.get(k, v) for k, v in urls.items()} if container else urls,
                'nas': {'host': '', 'user': '', 'ssh_key': '', 'python': '/usr/bin/python3'}}
+    if container:
+        runtime['arr_file_checks'] = {a: {'mode': 'host'} for a in ARR_SERVICES}
     targets = {'schema_version': 1, 'defaults': {'minimum_free_space_gb': 50},
                'targets': [{'id': 'media01', 'name': 'Disk 1', 'path': '', 'remote_path': '', 'enabled': True,
                             'media_types': ['Movie', 'TV']}],
@@ -119,12 +144,18 @@ def templates(base=None):
 
 # ---------------------------------------------------------------- fields
 
-def arr_install_field(value):
-    choices = ARR_INSTALL_CHOICES + ((ARR_INSTALL_CUSTOM,) if value == ARR_INSTALL_CUSTOM[0] else ())
+def arr_install_field(value, container=False):
+    custom = (ARR_INSTALL_CUSTOM,) if value == ARR_INSTALL_CUSTOM[0] else ()
+    if container:
+        return sc.Field(ARR_INSTALL, 'Radarr and Sonarr', sc.CHOICE,
+                        'Migratarr runs in a container, so it checks moved files through its own media mount. '
+                        'Mount your media at the same path in Migratarr, Radarr and Sonarr (for example /data), '
+                        'and paste each key (Settings > General > API Key).',
+                        True, (CONTAINER_INSTALL,) + custom, 'How Radarr and Sonarr run')
     return sc.Field(ARR_INSTALL, 'Radarr and Sonarr', sc.CHOICE,
                     'Docker: Migratarr reads their keys and checks media inside their containers (docker exec). '
                     'Installed directly: it reads config.xml and checks media on this machine.',
-                    True, choices, 'How Radarr and Sonarr run')
+                    True, ARR_INSTALL_CHOICES + custom, 'How Radarr and Sonarr run')
 
 
 def on_host(d, install):
@@ -132,15 +163,16 @@ def on_host(d, install):
     return d.url_base_from_config and install == 'host'
 
 
-def service_fields(d, install='docker'):
+def service_fields(d, install='docker', container=False):
+    example = CONTAINER_URLS.get(d.id, d.default_url) if container else d.default_url
     p, g = 'services.' + d.id, d.label
     host = on_host(d, install)
-    sources = tuple(s for s in d.sources if not (host and s.startswith('docker')))
+    sources = tuple(s for s in d.sources if not ((host or container) and s.startswith('docker')))
     choices = tuple((s, SOURCE_LABELS[s]) for s in sources) + (
         ((PASTE, SOURCE_LABELS[PASTE]),) if 'file' in d.sources else ())
     out = []
     if d.url_setting:
-        out.append(sc.Field(p + '.url', 'URL', sc.URL, f'For example {d.default_url}', True, group=g))
+        out.append(sc.Field(p + '.url', 'URL', sc.URL, f'For example {example}', True, group=g))
     out.append(sc.Field(p + '.source', d.credential_label, sc.CHOICE, 'Where Migratarr reads the '
                         + d.credential_label + ' from.' + (f' Find it at {d.help_url}' if d.help_url else ''),
                         True, choices, g))
@@ -641,6 +673,7 @@ class UiBackend:
     def __init__(self, environ=None, *, base=None, http=health.http_get, run=subprocess.run,
                  docker_cat=None, read_mounts=None, health_fs=None, docker=subprocess.run):
         self.environ = os.environ if environ is None else environ
+        self.container = in_container(self.environ)
         self.base = base
         self.http, self.run, self.docker, self.health_fs = http, run, docker, health_fs or {}
         self.docker_cat, self.read_mounts = docker_cat, read_mounts
@@ -661,7 +694,7 @@ class UiBackend:
 
     def docs(self, report, draft=None):
         """The documents to edit: the files, or a fresh install's templates (plus the wizard's draft)."""
-        fresh = templates(str(self.base) if self.base else None)
+        fresh = templates(str(self.base) if self.base else None, container=self.container)
         docs = {name: copy.deepcopy(report.data.get(name)) if isinstance(report.data.get(name), dict)
                 else fresh[name] for name in store.FILES}
         for section in sc.SECTIONS:
@@ -690,9 +723,9 @@ class UiBackend:
 
     def fields(self, section, values):
         if section == sc.SERVICES:
-            install = values.get(ARR_INSTALL) or 'docker'
-            return [arr_install_field(install)] + [f for d in services.SERVICES.values()
-                                                   for f in service_fields(d, install)]
+            install = values.get(ARR_INSTALL) or ('host' if self.container else 'docker')
+            return [arr_install_field(install, self.container)] + [
+                f for d in services.SERVICES.values() for f in service_fields(d, install, self.container)]
         if section == sc.TOPOLOGY:
             configured = not self.report().missing
             return [sc.Field('topology.mode', 'Moves run', sc.CHOICE,
@@ -732,6 +765,8 @@ class UiBackend:
 
     def current(self, section):
         values = read_section(section, self.docs(self.report()), self.environ)
+        if section == sc.SERVICES and self.container:
+            values = container_services(values)
         if section == sc.DISKS:
             values['disks._topology'] = self.topology_of(self.docs(self.report()))
         return values
@@ -739,6 +774,8 @@ class UiBackend:
     def defaults(self, section):
         report = self.report()
         values = read_section(section, self.docs(report), self.environ)
+        if section == sc.SERVICES and self.container:
+            values = container_services(values)
         if section == sc.DISKS:
             values['disks._topology'] = self.topology_of(self.docs(report))
         return values
@@ -752,7 +789,7 @@ class UiBackend:
         """Called by the pages after parsing a form: "Add a disk" and "Remove" become real changes, and
         the Services form follows how Radarr and Sonarr are installed."""
         if section == sc.SERVICES:
-            return normalize_services(values)
+            return normalize_services(container_services(values) if self.container else values)
         if section != sc.DISKS:
             return values, []
         if draft and sc.TOPOLOGY in draft:
@@ -773,6 +810,14 @@ class UiBackend:
         # and a fresh install's runtime.json can't be complete before the wizard's later steps.
         mine = {p.path for p in problems}
         return problems + [p for p in translate(found) if in_section(p, section) and p.path not in mine]
+
+    def intro(self, section):
+        """The wizard's text above a step, where the container changes it (None: the usual text)."""
+        if self.container and section == sc.SERVICES:
+            return ('Radarr, Sonarr, Jellyfin and TMDB. Migratarr runs in a container: give each service\'s '
+                    'address as the other containers see it (for example http://radarr:7878) and paste its key. '
+                    'Your media must be mounted at the same path in Migratarr, Radarr and Sonarr.')
+        return None
 
     def can_discover(self, section):
         """Whether "Detect" has anything to find on this step."""
@@ -904,10 +949,14 @@ class UiBackend:
         cat = self.docker_cat or _docker_cat
         values, notes = {}, []
         mine = dict(draft.get(sc.SERVICES, {}))
-        install = mine.get(ARR_INSTALL) or 'docker'
+        install = mine.get(ARR_INSTALL) or ('host' if self.container else 'docker')
         for d in services.SERVICES.values():
             p = 'services.' + d.id
-            if on_host(d, install):
+            if self.container and d.id != 'tmdb':
+                notes.append(f'{d.label}: paste its API key' + (' (Settings > General > API Key)'
+                                                                 if d.url_base_from_config else '')
+                             + '. From inside its container Migratarr can\'t read other containers\' files.')
+            elif on_host(d, install):
                 found, url_base, where = self.discover_host_config(d, mine.get(p + '.paths') or [])
                 if found:
                     values.update({p + '.source': 'config_xml', p + '.paths': [where]})

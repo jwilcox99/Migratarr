@@ -18,6 +18,9 @@ may still change between minor versions, always with a migration or a note here)
   settings and history in `/config`, `PUID`/`PGID`/`UMASK`/`TZ` like linuxserver
   images, an SSH client for NAS setups, no Docker socket needed. `:edge` follows
   `main`. Guide and compose example: `docs/docker.md`, `examples/docker/`.
+- In the container, setup offers what works there: Radarr, Sonarr and Jellyfin at
+  their container names, pasted keys, and file checks through Migratarr's own media
+  mount (no Docker socket).
 
 ## [0.1.0] — 2026-10-30
 
