@@ -7,6 +7,12 @@ may still change between minor versions, always with a migration or a note here)
 
 ## [Unreleased]
 
+## [0.2.0] — release date set when tagged
+
+Run Migratarr like Radarr and Sonarr: a Docker image, the web UI on your
+network behind a login, and scheduled plans that tell you when a batch is
+ready. Every move is still reviewed and approved in the UI before it runs.
+
 ### Added
 - The web UI can be used from your network, like Radarr and Sonarr:
   `migratarr ui --host 0.0.0.0` (or `MIGRATARR_HOST`; `MIGRATARR_PORT` for the
