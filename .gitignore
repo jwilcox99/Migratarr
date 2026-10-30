@@ -22,6 +22,10 @@ config/storage-targets.json
 # Deployment-specific planner preferences
 config/planner.json
 
+# The web UI login (migratarr/auth.py): owner-only, never committed
+config/auth.json
+config/.auth.json.tmp
+
 # Copies of settings files made before each save or migration (docs/settings.md)
 config/backups/
 

@@ -13,7 +13,8 @@ may still change between minor versions, always with a migration or a note here)
   port). Then every page needs a sign-in, and the first visit creates the login.
 - One UI login (username and password, hashed in `config/auth.json`), required
   whenever it is set. `migratarr password` sets or changes it and ends every
-  session. Repeated wrong passwords are slowed down.
+  session. Repeated wrong passwords are slowed down. In a git clone `config/auth.json` is
+  git-ignored, so planning's clean-tree check still passes.
 - Docker image `ghcr.io/jwilcox99/migratarr` (amd64, arm64): the UI on port 8765,
   settings and history in `/config`, `PUID`/`PGID`/`UMASK`/`TZ` like linuxserver
   images, an SSH client for NAS setups, no Docker socket needed. `:edge` follows

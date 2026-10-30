@@ -88,6 +88,19 @@ class AccountTests(unittest.TestCase):
             self.assertEqual(migratarr_ui.safe_next(value), expected, value)
 
 
+class CloneTests(unittest.TestCase):
+    def test_login_file_is_git_ignored(self):
+        """In a clone the data folder is the clone: an untracked config/auth.json would make planning's
+        clean-tree preflight refuse to plan."""
+        import subprocess
+        root = Path(__file__).resolve().parents[1]
+        if not (root / '.git').exists():
+            self.skipTest('not a git clone')
+        for name in ('config/auth.json', 'config/.auth.json.tmp'):
+            result = subprocess.run(['git', 'check-ignore', '-q', name], cwd=root)
+            self.assertEqual(result.returncode, 0, name + ' is not ignored')
+
+
 class SignInServerTests(unittest.TestCase):
     """The real handler over HTTP, listening on the network (require_login) with actions on."""
     require_login = True
