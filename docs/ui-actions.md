@@ -9,6 +9,7 @@ rather than re-implementing it:
 | Plan | "Plan a new run" (Runs page) | A background job runs `migratarr_plan.py`: preflight, dry runs, plan, override audit, snapshot, manifest. Nothing is approved. |
 | Confirm | Tick moves → "Review selected" / "Review all" → "Approve and start moving" (approves, then starts the move job for exactly those moves; while a job runs, only approves) or "Approve only" | `approval_store.approve()`: one `APPROVE` history entry per row, bound to the manifest hash, with a shared `batch` record (`source: "ui"`). Executors verify these exactly as they verify `approve_execution.py` approvals. |
 | Run | For moves approved earlier: "Run N approved moves" (at the top, and under the approved moves) → "Start moving" | A background job runs each row's existing executor (`execute_movie_nas.py`, `execute_tv_nas.py`, `execute_cross_movie.py`, `execute_cross_tv.py`): check-only, then `--execute`. |
+| Done | "Mark done" (Runs page, next to a run with moves still not made) or "Mark run done" (the scheduled-planning note); "Reopen" on the run page | `approval_store.close()`: withdraws the approval of every move that hasn't run (one `REVOKE` each, `reason: "run marked done"`), records `closed` and a `CLOSE` history entry in `approvals/<run_id>.json`. `reopen()` removes `closed` (`REOPEN` entry); withdrawn approvals stay withdrawn. |
 
 ## Safety rules
 
@@ -22,6 +23,13 @@ rather than re-implementing it:
 - **Same eligibility as the CLI.** Approvable rows are `READY_FOR_REVIEW`, no
   blockers, `executed` = `NO`, and not already moved; the UI offers checkboxes
   only for rows in "Not approved" (never for rows that need attention).
+- **A run marked done runs nothing.** While `closed` is set, nothing in the run
+  can be approved (UI, `migratarr approve`), and `approval_is_current()` is false
+  for every row, so no executor or move job runs one even if an approval was
+  added by hand. Marking done is refused while a move from the run is unfinished,
+  needs reconciliation or has an unreadable journal, and while a job works on
+  that run, so a half-done move is never buried. A run marked done doesn't hold
+  up scheduled planning.
 - **One job at a time.** The job process holds `jobs/runner.lock`; the UI
   refuses to start another while a job is starting, running, or was interrupted
   and not yet dismissed.

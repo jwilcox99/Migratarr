@@ -13,8 +13,9 @@ get a message instead, when:
 
 - **the last batch is still waiting for you:** nothing in it approved or moved yet,
   or approved moves not run yet. One reminder per scheduled time. When you've
-  approved and run what you want, or want none of it, use **Done with this batch**
-  on the run page; the next scheduled time then plans;
+  approved and run what you want, or want none of it, use **Mark run done** on the
+  run page (or **Mark done** on the Runs page); the next scheduled time then plans.
+  Reopen it on its page if you change your mind;
 - **a health check fails** (Settings & health > Run health checks shows which).
 
 A job that is running when the time comes is waited for. A time missed while the UI

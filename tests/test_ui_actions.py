@@ -69,6 +69,88 @@ class ActionTests(unittest.TestCase):
         self.assertIn(f'name="token" value="{TOKEN}"', body)
         self.assertIn('Revoke', body)  # approved rows waiting to run
 
+    def clear_attention(self):
+        """Drop the fixture's journals for moves that need attention, so the run can be marked done."""
+        for n in (2, 3, 7, 8, 10, 11):
+            read_api.journal_path(self.base, eid(n)).unlink()
+
+    def test_mark_done_is_refused_while_a_move_needs_attention(self):
+        _, body = self.get('/')
+        self.assertNotIn(f'action="/run/{RUN}/close"', body)  # the list doesn't offer it
+        before = self.approval_record()
+        status, body = self.post(f'/run/{RUN}/close', back='/')
+        self.assertEqual(status, 409)
+        self.assertIn('need attention first', body)
+        self.assertEqual(self.approval_record(), before)
+
+    def test_mark_done_from_the_list_then_reopen(self):
+        self.clear_attention()
+        _, body = self.get('/')
+        self.assertIn(f'action="/run/{RUN}/close"', body)
+        self.assertIn('>Mark done<', body)
+
+        status, location = self.post(f'/run/{RUN}/close', back='/')
+        self.assertEqual((status, location), (303, '/?done=closed_withdrawn&n=2'))
+        for n in (2, 3):  # approved, not run: withdrawn
+            self.assertFalse(approval_is_current(self.base, RUN, eid(n), self.fx.hash, refuse))
+        self.assertIn(eid(1), json.loads(self.approval_record())['approved_execution_ids'])  # moved: kept
+
+        _, body = self.get('/', {'done': ['closed_withdrawn'], 'n': ['2']})
+        self.assertIn('2 approval(s) for moves that had not run were withdrawn', body)
+        self.assertIn('<span class="flag ok">Done</span>', body)
+        self.assertNotIn(f'action="/run/{RUN}/close"', body)
+        _, body = self.get('/run/' + RUN)
+        self.assertIn('Marked done', body)
+        self.assertIn(f'action="/run/{RUN}/reopen"', body)
+        self.assertNotIn('name="id" value=', body)  # nothing selectable
+        self.assertNotIn('class="steps"', body)
+
+        # Nothing can be approved or started while it's done.
+        status, body = self.post(f'/run/{RUN}/approve', id=[eid(6)], manifest_hash=self.fx.hash)
+        self.assertEqual(status, 409)
+        self.assertIn('marked done', body)
+        self.assertNotEqual(self.post(f'/run/{RUN}/start', id=[eid(3)], manifest_hash=self.fx.hash)[0], 303)
+        self.assertEqual(self.started, [])
+        self.assertEqual(self.post(f'/run/{RUN}/close')[1], f'/run/{RUN}?done=closed_already')
+
+        status, location = self.post(f'/run/{RUN}/reopen')
+        self.assertEqual((status, location), (303, f'/run/{RUN}?done=reopened'))
+        self.assertIn('class="steps"', self.get('/run/' + RUN)[1])
+        self.assertEqual(self.post(f'/run/{RUN}/approve', id=[eid(6)], manifest_hash=self.fx.hash)[0], 303)
+        self.assertFalse(approval_is_current(self.base, RUN, eid(2), self.fx.hash, refuse))  # stays withdrawn
+        history = [h['action'] for h in json.loads(self.approval_record())['history']]
+        self.assertIn('CLOSE', history)
+        self.assertIn('REOPEN', history)
+
+    def test_mark_done_waits_for_a_job_on_that_run(self):
+        self.clear_attention()
+        self.write_active()
+        patcher = patch.object(jobs, 'process_alive', lambda pid, job_id: True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        before = self.approval_record()
+        status, body = self.post(f'/run/{RUN}/close', back='/')
+        self.assertEqual(status, 409)
+        self.assertIn('A job is working on this run', body)
+        self.assertEqual(self.approval_record(), before)
+
+    def test_a_done_run_runs_nothing_even_if_still_approved(self):
+        self.clear_attention()
+        approval_store.close(self.base, RUN)
+        record = json.loads(self.approval_record())
+        record['approved_execution_ids'].append(eid(3))  # edited by hand after it was marked done
+        approval_store.write_record(self.base, RUN, record)
+        self.assertFalse(approval_is_current(self.base, RUN, eid(3), self.fx.hash, refuse))
+
+    def test_read_only_view_shows_done_without_forms(self):
+        self.clear_attention()
+        approval_store.close(self.base, RUN)
+        app = migratarr_ui.App(self.base, STORAGE, {}, fake_usage)
+        body = app.respond('/run/' + RUN)[2].decode()
+        self.assertIn('Marked done', body)
+        self.assertNotIn('<form', body)
+        self.assertIn('<span class="flag ok">Done</span>', app.respond('/')[2].decode())
+
     def test_read_only_app_has_no_forms(self):
         app = migratarr_ui.App(self.base, STORAGE, {}, fake_usage)
         body = app.respond('/run/' + RUN)[2].decode()
