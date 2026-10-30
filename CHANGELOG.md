@@ -37,6 +37,13 @@ ready. Every move is still reviewed and approved in the UI before it runs.
   run page) or a health check fails. Never approves or moves anything.
   `docs/notifications.md`.
 
+### Changed
+- Approving: the review page's main button is "Approve and start moving" (approves,
+  then starts the move job for exactly those moves); "Approve only" keeps the old
+  behavior. After approving only, "Run N approved moves" is also right under the
+  approved moves, where the page lands.
+- A job's Output shows the newest line first, so it stays readable while the page
+  reloads every few seconds.
 ### Fixed
 - Setup and Settings > Services: a key typed into the paste box is now used even
   when the dropdown still said another source (TMDB defaulted to "environment

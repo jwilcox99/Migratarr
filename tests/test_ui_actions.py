@@ -91,7 +91,8 @@ class ActionTests(unittest.TestCase):
         self.flagged = {'/mnt/nas/media03/TV/Library/S6'}
         status, body = self.post(f'/run/{RUN}/review', id=[eid(6), eid(4)], pick='selected')
         self.assertEqual(status, 200)
-        self.assertIn('Approve 2 moves (10.0 GB)', body)
+        self.assertIn('Approve and start moving (2 moves, 10.0 GB)', body)
+        self.assertIn('>Approve only<', body)
         self.assertIn('no group write', body)
         self.assertIn(f'name="manifest_hash" value="{self.fx.hash}"', body)
         self.assertEqual(self.approval_record(), before)  # reviewing writes nothing
@@ -103,10 +104,42 @@ class ActionTests(unittest.TestCase):
             self.assertTrue(approval_is_current(self.base, RUN, eid(n), self.fx.hash, refuse))
         _, body = self.get('/run/' + RUN, {'done': ['approved'], 'n': ['2']})
         self.assertIn('2 approved. Nothing has moved yet.', body)
+        # Approving lands on #waiting: the next step is right there, not only in the steps at the top.
+        waiting = body.split('id="waiting"', 1)[1].split('</section>', 1)[0]
+        self.assertIn(f'href="/run/{RUN}/confirm-run"', waiting)
+        self.assertIn('approved move', waiting)
+
+    def test_approve_and_start_moving(self):
+        before = self.approval_record()
+        status, location = self.post(f'/run/{RUN}/approve', id=[eid(6), eid(4)], manifest_hash=self.fx.hash,
+                                     then='start')
+        self.assertEqual((status, location), (303, '/job/20261023T120000Z-run'))
+        self.assertEqual(self.started, [('run', RUN, [eid(4), eid(6)])])  # only these, smallest first
+        for n in (4, 6):
+            self.assertTrue(approval_is_current(self.base, RUN, eid(n), self.fx.hash, refuse))
+        self.assertNotEqual(self.approval_record(), before)
+
+    def test_approve_and_start_while_a_job_runs_only_approves(self):
+        self.write_active()
+        patcher = patch.object(jobs, 'process_alive', lambda pid, job_id: True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        _, body = self.post(f'/run/{RUN}/review', id=[eid(4)], pick='selected')
+        self.assertNotIn('Approve and start moving', body)
+        self.assertIn('A job is running', body)
+        status, location = self.post(f'/run/{RUN}/approve', id=[eid(4)], manifest_hash=self.fx.hash, then='start')
+        self.assertIn('done=approved_busy', location)
+        self.assertEqual(self.started, [])
+        self.assertTrue(approval_is_current(self.base, RUN, eid(4), self.fx.hash, refuse))
+
+    def test_approve_and_start_refuses_a_changed_manifest(self):
+        status, body = self.post(f'/run/{RUN}/approve', id=[eid(4)], manifest_hash='0' * 64, then='start')
+        self.assertNotEqual(status, 303)
+        self.assertEqual(self.started, [])
 
     def test_review_all_selects_every_eligible_row(self):
         status, body = self.post(f'/run/{RUN}/review', pick='all')
-        self.assertIn('Approve 3 moves', body)
+        self.assertIn('Approve and start moving (3 moves', body)
         status, body = self.post(f'/run/{RUN}/review', pick='selected')
         self.assertEqual(status, 400)
 
@@ -174,6 +207,14 @@ class ActionTests(unittest.TestCase):
         self.assertEqual(self.post('/plan')[0], 303)  # start_job (faked here) is what refuses a second job
         self.assertEqual(self.post('/job/20261023T120000Z-run/stop'), (303, '/job/20261023T120000Z-run?done=stop'))
         self.assertTrue((self.base / 'jobs' / '20261023T120000Z-run.stop').exists())
+
+    def test_job_output_is_newest_first(self):
+        self.write_active()
+        (self.base / 'jobs' / '20261023T120000Z-run.log').write_text('first line\nsecond line\nlatest line\n')
+        _, body = self.get('/job/20261023T120000Z-run')
+        log = body.split('<pre class="log">', 1)[1].split('</pre>', 1)[0]
+        self.assertEqual(log.splitlines(), ['latest line', 'second line', 'first line'])
+        self.assertIn('newest first', body)
 
     def test_interrupted_job_is_shown_and_can_be_dismissed(self):
         self.write_active(pid=999999)
