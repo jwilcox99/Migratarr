@@ -76,6 +76,8 @@ uid=$(docker exec "$NAME" sh -c 'for d in /proc/[0-9]*; do grep -q "migratarr[.]
 
 stage "tools: ssh present, docker absent, TZ applied"
 docker exec "$NAME" ssh -V >/dev/null 2>&1 || fail "no ssh client"
+docker exec -u 1234:1234 "$NAME" ssh -G nas.invalid >/dev/null 2>&1 \
+    || fail "ssh can't run as PUID: $(docker exec -u 1234:1234 "$NAME" ssh -G nas.invalid 2>&1 | head -1)"
 docker exec "$NAME" sh -c 'command -v docker' >/dev/null 2>&1 && fail "docker CLI should not be in the image" || true
 [ "$(docker exec "$NAME" date +%Z)" != UTC ] || fail "TZ not applied"
 
