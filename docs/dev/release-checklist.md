@@ -41,6 +41,8 @@ branches to push).
 3. - [ ] **Real-world checks** (Josh, with steps from Claude):
          - Fresh machine or VM: install the built wheel, run the wizard, make a first plan
          - One real move on local disks with `examples/local-test/` (PR #13)
+         - [x] New engine on the NAS (gate 4, 2026-10-29): check-only parity and one live move each
+               for Movie same-disk, Movie cross-disk, TV cross-disk (`docs/dev/unified-execution-core.md`)
 4. - [x] **Demo mode** (Claude): `migratarr demo` (PR #12)
 5. - [x] **Version** (Claude): `0.1.0rc1` in `migratarr/cli.py`; CHANGELOG `[0.1.0]` section;
          release.yml handles pre-release tags (notes from `[0.1.0]`, marked pre-release) and
