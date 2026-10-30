@@ -15,15 +15,18 @@ approved or moved. Your own settings and data folder are never read or written.
 Delete FOLDER when done. Standard library only.
 """
 import argparse
+import hashlib
 import io
 from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
 import runpy
+import shutil
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
 import urllib.request
 from urllib.parse import urlsplit
 
@@ -38,6 +41,11 @@ FOLDERS = {
               'Archive': 'Movies/Archive'},
     'TV': {'Current': 'TV/Current', 'Rare': 'TV/Rare', 'Library': 'TV/Library', 'Archive': 'TV/Archive'},
 }
+# Pretend capacity of the demo disks (bytes): the planner's space checks and the UI's disk bars use these
+# instead of the real free space of the folder the demo lives in (written to demo-disks.json).
+TB = 1024 ** 4
+CAPACITY = {'demo01': (4 * TB, int(1.35 * TB)), 'demo02': (8 * TB, int(2.6 * TB))}
+DISK_FILE = 'demo-disks.json'
 KEYS = {'radarr': 'MIGRATARR_DEMO_RADARR_KEY', 'sonarr': 'MIGRATARR_DEMO_SONARR_KEY',
         'jellyfin': 'MIGRATARR_DEMO_JELLYFIN_KEY', 'tmdb': 'MIGRATARR_DEMO_TMDB_TOKEN'}
 # Settings the demo replaces for its own process, so the user's own files are never used.
@@ -95,17 +103,82 @@ def build(home):
         for media, categories in zip(FOLDERS, holds):
             for category in FOLDERS[media]:
                 (disks / disk / FOLDERS[media][category]).mkdir(parents=True, exist_ok=True)
+    sparse = None  # unknown until the first file
     for media, category, name in library_folders():
         if category is None:  # a title outside every category folder: the planner reports it
             continue
         disk = next(d for d, holds in DISKS.items() if category in holds[0 if media == 'Movie' else 1])
         folder = disks / disk / FOLDERS[media][category] / name
         folder.mkdir(parents=True, exist_ok=True)
-        (folder / ('placeholder.mkv' if media == 'Movie' else 'S01E01.mkv')).write_bytes(b'\0' * 4096)
+        sparse = sized_file(folder / ('placeholder.mkv' if media == 'Movie' else 'S01E01.mkv'),
+                            title_size(media, name) if sparse is not False else 4096)
+    if sparse is False:
+        print('This disk can\'t make sparse files, so the demo titles are tiny (sizes show as 0.0 GB).', flush=True)
+    (home / DISK_FILE).write_text(json.dumps({str(disks / d): dict(total=t, free=f) for d, (t, f) in CAPACITY.items()},
+                                             indent=2) + '\n', encoding='utf-8')
     for path in [disks, *disks.rglob('*')]:
         if path.is_dir():
             path.chmod(0o775)  # the planner checks group write, as on a real library
     return home
+
+
+def title_size(media, name):
+    """A believable size for a made-up title, the same every time: a movie 1.5-28 GB, a show 6-90 GB."""
+    low, high = (1.5, 28) if media == 'Movie' else (6, 90)
+    fraction = int(hashlib.sha256(name.encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
+    return int((low + (high - low) * fraction) * 1024 ** 3)
+
+
+def sized_file(path, size):
+    """A sparse file of ``size`` bytes: it reports that size and takes almost no space. True when sparse; on a
+    filesystem that can't make sparse files, removes it, writes a 4 KB file instead and returns False."""
+    with open(path, 'wb') as f:
+        f.truncate(size)
+    if size > 4096 and path.stat().st_blocks * 512 > 64 * 1024 * 1024:
+        path.write_bytes(b'\0' * 4096)
+        return False
+    return True
+
+
+def demo_disks(base):
+    """{disk path: (total, free)} from a demo's demo-disks.json, or None for any other data folder."""
+    try:
+        data = json.loads((Path(base) / DISK_FILE).read_text(encoding='utf-8'))
+        return {Path(p): (int(v['total']), int(v['free'])) for p, v in data.items()}
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return None
+
+
+def _pretend(disks, path):
+    path = Path(path)
+    for root, sizes in disks.items():
+        if path == root or root in path.parents:
+            return sizes
+    return None
+
+
+def disk_usage(disks, real=shutil.disk_usage):
+    """shutil.disk_usage, with the demo disks' pretend capacity."""
+    def usage(path):
+        sizes = _pretend(disks, path)
+        if sizes is None:
+            return real(path)
+        total, free = sizes
+        return shutil._ntuple_diskusage(total, total - free, free)
+    return usage
+
+
+def statvfs(disks, real=os.statvfs):
+    """os.statvfs, with the demo disks' pretend capacity (what the planner's space checks read)."""
+    def stat(path):
+        sizes = _pretend(disks, path)
+        if sizes is None:
+            return real(path)
+        total, free = sizes
+        block = 4096
+        return SimpleNamespace(f_bsize=block, f_frsize=block, f_blocks=total // block, f_bfree=free // block,
+                               f_bavail=free // block)
+    return stat
 
 
 @contextmanager
@@ -177,6 +250,7 @@ def make_plan(home):
     """Run the planning pipeline against the made-up library. Returns migratarr.plan's exit code."""
     from migratarr import plan
     with swapped((urllib.request, 'urlopen', demo_urlopen), (time, 'sleep', lambda seconds: None),
+                 (os, 'statvfs', statvfs(demo_disks(home) or {})),
                  (plan, 'run_step', run_step_here), (plan, 'summary', demo_summary(plan.summary, home)),
                  # The preflight's health checks would contact the real services; the demo has none.
                  (plan, 'preflight', lambda repo, allow_dirty: ([], Path(home)))):

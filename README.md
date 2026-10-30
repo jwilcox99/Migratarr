@@ -57,7 +57,7 @@ if nobody has watched it lately; a widely available title nobody plays may
 become an Archive candidate.
 
 <p align="center">
-  <img alt="A plan in the web UI: each move with its categories, disks, status, approval and the reasons behind it" src="https://raw.githubusercontent.com/jwilcox99/Migratarr/main/assets/screenshots/plan.png" width="800">
+  <img alt="A plan in the web UI: disk space now and after the moves, then each move with its categories, disks, size, status, approval and the reasons behind it" src="https://raw.githubusercontent.com/jwilcox99/Migratarr/main/assets/screenshots/plan.png" width="800">
 </p>
 <p align="center"><sub>A plan from <code>migratarr demo</code>: nothing moves until each row is approved.</sub></p>
 
