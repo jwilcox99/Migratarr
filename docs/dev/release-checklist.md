@@ -42,6 +42,9 @@ branches to push).
          - Fresh machine: install, wizard, plan gate
          - Local disks with `examples/local-test/`: all four move types, real Radarr and Sonarr,
            through the unified engine. Results: `examples/local-test/RESULTS-2026-10-29.md`
+         - NAS (gate 4, 2026-10-29): new engine against the old in check-only mode, then one watched
+           live move each for Movie same-disk, Movie cross-disk, TV cross-disk
+           (`docs/dev/unified-execution-core.md`, "Recorded by gate 4", PR #12)
 4. - [x] **Demo mode** (Claude): `migratarr demo` (PR #12)
 5. - [x] **Version** (Claude): `0.1.0rc1` in `migratarr/cli.py`; CHANGELOG `[0.1.0]` section;
          release.yml handles pre-release tags (notes from `[0.1.0]`, marked pre-release) and
@@ -58,7 +61,7 @@ branches to push).
          --pre`, `--version`, `doctor`, `demo`, wizard and plan gate checked 2026-10-28.
          Pre-release cleanup (incident scripts out of the package, developer notes in
          `docs/dev/`) lands after rc1 and ships in 0.1.0
-10. - [ ] **Release** (Claude, then Josh): `__version__ = '0.1.0'`, date the `[0.1.0]` section
-          (`## [0.1.0] — YYYY-MM-DD`); Josh tags `v0.1.0`. Before it: merge the Jellyfin header
-          fix (PR #8, release blocker) and the setup fixes from the results file (kept keys,
-          disks on one filesystem); decide on a NAS check of the unified engine (gate 4)
+10. - [x] **Release** (Claude, then Josh): `__version__ = '0.1.0'`, `## [0.1.0] — 2026-10-30`
+          (Unreleased folded in); Josh tags `v0.1.0`. Done before it: Jellyfin header fix (PR #8),
+          kept keys and disks on one filesystem (PR #11), NAS check of the unified engine (gate 4,
+          passed 2026-10-29, PR #12)

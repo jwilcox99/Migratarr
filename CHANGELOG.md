@@ -7,47 +7,7 @@ may still change between minor versions, always with a migration or a note here)
 
 ## [Unreleased]
 
-### Changed (internal)
-- The four `execute_*.py` executors now run on one shared execution engine (`migratarr/engine`); journals, refusals and commands are unchanged.
-### Added
-- Setup and Settings > Services ask whether Radarr and Sonarr run in Docker
-  containers (the default) or are installed directly on this machine. The second
-  sets host-side Arr file checks, hides the container fields, and Detect looks
-  for config.xml on this machine.
-- `migratarr doctor` and Settings & health check that the Arr file checks can
-  run (new `arr_files` group): the container sees the media root, or, for
-  Radarr and Sonarr installed directly, the folder exists here.
-
-- README screenshots of a plan and the Settings & health page.
-- Tested on Python 3.14.
-
-### Fixed
-- Docker's own error messages (for example when Docker isn't installed or
-  running) no longer appear in the terminal. Health checks and Detect say what
-  went wrong instead.
-- `migratarr approve --help` works before setup, like every other command.
-- A rejected key says which key to use and links where to get it; for TMDB,
-  the API Read Access Token rather than the shorter API Key.
-- Hints and help text in an installed copy: settings-file fixes link the docs on
-  GitHub, and commands read `migratarr doctor` (and so on) instead of the
-  clone-only `python3 migratarr_*.py` scripts.
-- The run page no longer shows an empty "code ," label in an installed copy.
-- `migratarr demo` no longer prints dozens of "TMDB unavailable – retrying"
-  lines, and `--dir` accepts a relative folder.
-- Pasted keys are no longer lost when a setup step or a Settings form comes back
-  with a problem. The key stays in memory only (never in the page) and the field
-  says it is kept; leave it blank to keep it.
-- Health checks flag two disks on the same filesystem: a failure when a category
-  placement moves items between them (those moves can't run), otherwise a
-  warning. Local disks are compared here, NAS disks on the NAS.
-- A cross-disk move refused because both disks are on one filesystem shows one
-  plain line on the move and job pages and in the terminal, not a Python
-  traceback. Other refusals by the NAS-side program drop the traceback too.
-- Jellyfin: the key is sent as `Authorization: MediaBrowser Token="..."`. Current
-  Jellyfin (12.4) refuses the old `X-Emby-Token` header, so the health check
-  failed with HTTP 401 and planning could not read watch history.
-
-## [0.1.0] — unreleased
+## [0.1.0] — 2026-10-30
 
 First public release: install with pip, set up and run Migratarr on your own
 stack in the browser without hand-editing JSON. Every move is still planned,
@@ -72,6 +32,15 @@ reviewed and approved before anything runs.
   opens the UI read-only. No Radarr, Sonarr, Jellyfin or TMDB needed.
 - `examples/local-test/`: throwaway Radarr, Sonarr and Jellyfin containers for trying
   local-disk moves without touching a real library.
+- Setup and Settings > Services ask whether Radarr and Sonarr run in Docker
+  containers (the default) or are installed directly on this machine. The second
+  sets host-side Arr file checks, hides the container fields, and Detect looks
+  for config.xml on this machine.
+- `migratarr doctor` and Settings & health check that the Arr file checks can
+  run (new `arr_files` group): the container sees the media root, or, for
+  Radarr and Sonarr installed directly, the folder exists here.
+- README screenshots of a plan and the Settings & health page.
+- Tested on Python 3.14.
 
 ### Changed
 - Settings version 2: one definition per disk. Version 1 files are migrated
@@ -87,12 +56,37 @@ reviewed and approved before anything runs.
 - Pipeline steps and executors start as `python -m <module>`, so they work from an
   install. Run snapshots record the Migratarr version and a hash of the code; the git
   commit and the clean-tree check apply only to a clone.
+- The four `execute_*.py` executors now run on one shared execution engine (`migratarr/engine`); journals, refusals and commands are unchanged.
 
 ### Fixed
 - Planning on "this machine's own disks" stopped at the storage consistency check
   ("remote_path disagrees"); local disks have no NAS path.
 - Setup wizard: a busy port is reported with the next free port to try instead of a
   traceback; missing NAS fields and a host/user mix-up are reported on the field.
+- Docker's own error messages (for example when Docker isn't installed or
+  running) no longer appear in the terminal. Health checks and Detect say what
+  went wrong instead.
+- `migratarr approve --help` works before setup, like every other command.
+- A rejected key says which key to use and links where to get it; for TMDB,
+  the API Read Access Token rather than the shorter API Key.
+- Hints and help text in an installed copy: settings-file fixes link the docs on
+  GitHub, and commands read `migratarr doctor` (and so on) instead of the
+  clone-only `python3 migratarr_*.py` scripts.
+- The run page no longer shows an empty "code ," label in an installed copy.
+- `migratarr demo` no longer prints dozens of "TMDB unavailable – retrying"
+  lines, and `--dir` accepts a relative folder.
+- Pasted keys are no longer lost when a setup step or a Settings form comes back
+  with a problem. The key stays in memory only (never in the page) and the field
+  says it is kept; leave it blank to keep it.
+- Health checks flag two disks on the same filesystem: a failure when a category
+  placement moves items between them (those moves can't run), otherwise a
+  warning. Local disks are compared here, NAS disks on the NAS.
+- A cross-disk move refused because both disks are on one filesystem shows one
+  plain line on the move and job pages and in the terminal, not a Python
+  traceback. Other refusals by the NAS-side program drop the traceback too.
+- Jellyfin: the key is sent as `Authorization: MediaBrowser Token="..."`. Current
+  Jellyfin (12.4) refuses the old `X-Emby-Token` header, so the health check
+  failed with HTTP 401 and planning could not read watch history.
 
 ## History before 0.1.0 (personally operated, not released)
 
