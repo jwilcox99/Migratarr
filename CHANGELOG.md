@@ -14,6 +14,10 @@ may still change between minor versions, always with a migration or a note here)
 - One UI login (username and password, hashed in `config/auth.json`), required
   whenever it is set. `migratarr password` sets or changes it and ends every
   session. Repeated wrong passwords are slowed down.
+- Docker image `ghcr.io/jwilcox99/migratarr` (amd64, arm64): the UI on port 8765,
+  settings and history in `/config`, `PUID`/`PGID`/`UMASK`/`TZ` like linuxserver
+  images, an SSH client for NAS setups, no Docker socket needed. `:edge` follows
+  `main`. Guide and compose example: `docs/docker.md`, `examples/docker/`.
 
 ## [0.1.0] — 2026-10-30
 

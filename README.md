@@ -67,8 +67,8 @@ become an Archive candidate.
 
 ## Requirements
 
-- A Linux machine with Python 3.10 or newer that can see your media disks.
-  Migratarr uses only the standard library.
+- A Linux machine with Python 3.10 or newer that can see your media disks
+  (Migratarr uses only the standard library), or Docker.
 - Radarr and Sonarr (Sonarr v4 recommended), Jellyfin, and a
   [TMDB API Read Access Token](https://www.themoviedb.org/settings/api).
 - Radarr's and Sonarr's root folders already pointing at the disks and
@@ -90,6 +90,17 @@ pip install migratarr
 Install it into a virtual environment, or with `pipx install migratarr`, if
 your system Python doesn't allow `pip install`. Check it worked with
 `migratarr --version`.
+
+Or run it in Docker next to Radarr and Sonarr, with nothing to install on the host:
+
+```sh
+docker run -d --name migratarr -p 8765:8765 -e PUID=1000 -e PGID=1000 \
+  -v ./migratarr:/config -v /srv/data:/data ghcr.io/jwilcox99/migratarr:latest
+```
+
+Mount your media at the same path as in your Radarr and Sonarr containers. See
+[Docker](https://github.com/jwilcox99/Migratarr/blob/main/docs/docker.md) for a
+compose example and setup.
 
 ## Try it first
 
@@ -240,6 +251,7 @@ your user only; see [SECURITY.md](https://github.com/jwilcox99/Migratarr/blob/ma
 ## Documentation
 
 - [SETUP.md](https://github.com/jwilcox99/Migratarr/blob/main/SETUP.md): the setup wizard step by step, and editing settings by hand
+- [Docker](https://github.com/jwilcox99/Migratarr/blob/main/docs/docker.md): running Migratarr in a container
 - [Settings](https://github.com/jwilcox99/Migratarr/blob/main/docs/settings.md): the settings files, version 2 and the health checks
 - [Runtime configuration](https://github.com/jwilcox99/Migratarr/blob/main/docs/runtime-configuration.md): `runtime.json` reference
 - [Storage targets](https://github.com/jwilcox99/Migratarr/blob/main/docs/storage-targets.md): disks, categories and placement
