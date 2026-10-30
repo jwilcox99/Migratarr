@@ -16,10 +16,11 @@ pay for, and how your household actually watches it.
 Every move is planned first. Nothing moves until you review the plan and
 approve it.
 
-> **Status: 0.1.0, the first public release.** Migratarr was built for one
-> home media stack and has moved real libraries there over a NAS. Moving
-> files between disks attached to the same machine is new in 0.1.0 and
-> **experimental**. Linux only. Read [Safety model](#safety-model) before
+> **Status: 0.2.0.** Migratarr was built for one home media stack and has
+> moved real libraries there over a NAS. 0.2.0 adds a Docker image, a login
+> for using the UI from your network, and scheduled plans with notifications.
+> Moving files between disks attached to the same machine is **experimental**.
+> Linux only. Read [Safety model](#safety-model) before
 > pointing it at a library you care about.
 
 ## Who it's for
@@ -168,7 +169,7 @@ through each step.
 | | How it works | Status |
 | --- | --- | --- |
 | **NAS over SSH** | Migratarr runs on a machine that mounts the NAS disks and sends each move to the NAS over SSH, so files are copied on the NAS rather than over the network | Used on a real library |
-| **This machine's own disks** | Moves run directly on disks attached to the machine running Migratarr | **Experimental**: not yet run end to end against a real Radarr and Sonarr |
+| **This machine's own disks** | Moves run directly on disks attached to the machine running Migratarr | **Experimental**: tested end to end with real Radarr and Sonarr in a throwaway test setup (`examples/local-test/`), not yet on a real library |
 
 Both use the same plan, approval and safety checks.
 
