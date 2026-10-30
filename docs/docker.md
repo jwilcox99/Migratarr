@@ -110,6 +110,17 @@ The image has an SSH client. Put a key used only by Migratarr and the NAS's
 In **Where moves run**, set the SSH key to `/config/.ssh/<key file>`. Host keys are
 checked strictly, so `known_hosts` must already list the NAS.
 
+## Check your first move
+
+After the first move, check that the moved folder and its files belong to your media user
+(the `PUID`/`PGID` you set), like the rest of your library:
+
+```sh
+stat -c '%U:%G %a %n' "/srv/data/<disk>/<category>/<title>" "/srv/data/<disk>/<category>/<title>"/*
+```
+
+If they show `root` or another user, stop and open an issue with that output.
+
 ## Updating and backups
 
 ```sh
