@@ -1,0 +1,55 @@
+# Migratarr next to Radarr and Sonarr, all in Docker (docs/docker.md).
+#
+# The one rule: every container sees your media at the SAME path. Here that is /data,
+# from /srv/data on the host; change the left side to where your disks are mounted.
+# Radarr's and Sonarr's root folders must then be under /data (for example /data/disk1/Movies/Common).
+#
+#   docker compose up -d
+#   open http://<this host>:8765 and create the login, then set up Migratarr in the browser:
+#   Radarr  http://radarr:7878    Sonarr  http://sonarr:8989   (keys: Settings > General in each)
+
+services:
+  migratarr:
+    image: ghcr.io/jwilcox99/migratarr:latest
+    container_name: migratarr
+    environment:
+      - PUID=1000            # the user that owns your media (id -u)
+      - PGID=1000            # its group (id -g)
+      - TZ=America/Denver
+    volumes:
+      - ./migratarr:/config
+      - /srv/data:/data
+      # NAS over SSH only: a key and known_hosts for the NAS, read-only
+      # - ./migratarr-ssh:/config/.ssh:ro
+    ports:
+      - 8765:8765
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Denver
+    volumes:
+      - ./radarr:/config
+      - /srv/data:/data
+    ports:
+      - 7878:7878
+    restart: unless-stopped
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Denver
+    volumes:
+      - ./sonarr:/config
+      - /srv/data:/data
+    ports:
+      - 8989:8989
+    restart: unless-stopped

@@ -18,7 +18,7 @@ Have these ready:
   `known_hosts`: Migratarr refuses unknown hosts and never asks for a
   password.
 
-Install with `pip install migratarr` (see the [README](README.md#install)).
+Install with `pipx install migratarr`, or run the Docker image (see the [README](README.md#install)).
 To see what Migratarr does before connecting anything, run `migratarr demo`:
 it plans a made-up library offline and opens the UI read-only.
 

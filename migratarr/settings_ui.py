@@ -35,7 +35,7 @@ legend{padding:0 6px;color:var(--muted);font-size:14px}
 .field label{font-weight:600;padding-top:6px}
 .field .help,.field .err{grid-column:2;font-size:13px;margin:0}
 .field .help{color:var(--muted)}.field .err{color:var(--red)}.field .warn{color:var(--amber)}
-input[type=text],input[type=password],input[type=number],select,textarea{width:100%;max-width:560px;
+input[type=text],input[type=password],input[type=number],input[type=time],select,textarea{width:100%;max-width:560px;
 background:var(--bg);color:var(--text);border:1px solid var(--slate);border-radius:6px;padding:6px 8px;font:inherit}
 input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--teal);outline-offset:1px}
 .field.bad input,.field.bad select,.field.bad textarea{border-color:var(--red)}
@@ -224,9 +224,10 @@ class SettingsPages:
         raise sc.SettingsError('There is no settings section called ' + section_id + '.')
 
     # GET
-    def index(self, ctx, notice='', run_checks=False, overview='', setup=False):
+    def index(self, ctx, notice='', run_checks=False, overview='', setup=False, extra=()):
         """Sections with edit links, health checks (only when asked: they contact services), then
-        ``overview`` (the effective settings, from the Phase 2 view)."""
+        ``overview`` (the effective settings, from the Phase 2 view). ``extra``: more sections kept outside the
+        settings files, as (href, title, summary, state HTML)."""
         status = self.backend.status()
         by_section = {}
         for p in sc.blocking(status.problems):
@@ -238,6 +239,9 @@ class SettingsPages:
                      else '<span class="ok">OK</span>')
             items.append(f'<li><span><a href="/settings/{e(spec.id)}">{e(spec.title)}</a>'
                          f'<br><span class="hint">{e(spec.summary)}</span></span>{state}</li>')
+        for href, title, summary, state in extra:
+            items.append(f'<li><span><a href="{e(href)}">{e(title)}</a>'
+                         f'<br><span class="hint">{e(summary)}</span></span>{state}</li>')
         note = f'<p class="notice">{e(notice)}</p>' if notice else ''
         if setup:
             note += ('<div class="alert"><p>Migratarr\'s settings have problems, so planning, approving and '

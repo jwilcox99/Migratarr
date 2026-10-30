@@ -126,7 +126,8 @@ class SetupWizard:
                   if can is None or can(step) else '')
         back = ('<button type="submit" name="action" value="back" class="btn" formnovalidate>Back</button>'
                 if index_of(step) else '')
-        inner = (f'<p class="meta">{e(INTRO.get(step, ""))}</p>{found}'
+        intro = getattr(self.backend, 'intro', lambda step: None)(step) or INTRO.get(step, '')
+        inner = (f'<p class="meta">{e(intro)}</p>{found}'
                  f'<form method="post" action="/setup/{e(step)}" class="settings">'
                  f'<input type="hidden" name="token" value="{e(ctx["token"])}">'
                  f'{render_fields(fields, values, problems)}<div class="actions">{back}'

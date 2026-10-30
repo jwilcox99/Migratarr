@@ -15,6 +15,21 @@ may still change between minor versions, always with a migration or a note here)
   whenever it is set. `migratarr password` sets or changes it and ends every
   session. Repeated wrong passwords are slowed down. In a git clone `config/auth.json` is
   git-ignored, so planning's clean-tree check still passes.
+- Docker image `ghcr.io/jwilcox99/migratarr` (amd64, arm64): the UI on port 8765,
+  settings and history in `/config`, `PUID`/`PGID`/`UMASK`/`TZ` like linuxserver
+  images, an SSH client for NAS setups, no Docker socket needed. `:edge` follows
+  `main`. Guide and compose example: `docs/docker.md`, `examples/docker/`.
+- README: install with `pipx` first (a plain `pip install` is refused on current
+  Debian and Ubuntu), then Docker.
+- In the container, setup offers what works there: Radarr, Sonarr and Jellyfin at
+  their container names, pasted keys, and file checks through Migratarr's own media
+  mount (no Docker socket).
+- Schedule & notifications (Settings & health): plan automatically on chosen days
+  at a time; messages to Discord, a webhook (JSON) or email when a batch is ready,
+  moves finish or something fails, with links to the UI. A scheduled plan waits
+  while the last batch is still waiting (one reminder; "Done with this batch" on the
+  run page) or a health check fails. Never approves or moves anything.
+  `docs/notifications.md`.
 
 ## [0.1.0] — 2026-10-30
 

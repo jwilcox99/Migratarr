@@ -67,8 +67,8 @@ become an Archive candidate.
 
 ## Requirements
 
-- A Linux machine with Python 3.10 or newer that can see your media disks.
-  Migratarr uses only the standard library.
+- A Linux machine with Python 3.10 or newer that can see your media disks
+  (Migratarr uses only the standard library), or Docker.
 - Radarr and Sonarr (Sonarr v4 recommended), Jellyfin, and a
   [TMDB API Read Access Token](https://www.themoviedb.org/settings/api).
 - Radarr's and Sonarr's root folders already pointing at the disks and
@@ -83,13 +83,29 @@ become an Archive candidate.
 
 ## Install
 
+With [pipx](https://pipx.pypa.io/), which keeps Migratarr in its own environment:
+
 ```sh
-pip install migratarr
+sudo apt install pipx    # Debian and Ubuntu; other systems: see the pipx docs
+pipx install migratarr
+migratarr --version
 ```
 
-Install it into a virtual environment, or with `pipx install migratarr`, if
-your system Python doesn't allow `pip install`. Check it worked with
-`migratarr --version`.
+Update later with `pipx upgrade migratarr`. Inside a virtual environment you
+manage yourself, `pip install migratarr` works too. A plain `pip install` into
+the system Python is refused on current Debian and Ubuntu
+("externally-managed-environment"); use pipx instead.
+
+Or run it in Docker next to Radarr and Sonarr, with nothing to install on the host:
+
+```sh
+docker run -d --name migratarr -p 8765:8765 -e PUID=1000 -e PGID=1000 \
+  -v ./migratarr:/config -v /srv/data:/data ghcr.io/jwilcox99/migratarr:latest
+```
+
+Mount your media at the same path as in your Radarr and Sonarr containers. See
+[Docker](https://github.com/jwilcox99/Migratarr/blob/main/docs/docker.md) for a
+compose example and setup.
 
 ## Try it first
 
@@ -170,6 +186,12 @@ The web UI covers the whole cycle:
    current move.
 
 Jobs keep running if you close the browser or restart the UI.
+
+Settings & health > **Schedule & notifications** plans automatically on the days
+and at the time you pick, and sends a message to Discord, a webhook or email when a
+batch is ready, moves finish or something fails. A scheduled plan waits while the
+last batch is still waiting for you. See
+[Schedule and notifications](https://github.com/jwilcox99/Migratarr/blob/main/docs/notifications.md).
 `migratarr ui --read-only` shows everything with every action switched off.
 
 ## Safety model
@@ -240,6 +262,8 @@ your user only; see [SECURITY.md](https://github.com/jwilcox99/Migratarr/blob/ma
 ## Documentation
 
 - [SETUP.md](https://github.com/jwilcox99/Migratarr/blob/main/SETUP.md): the setup wizard step by step, and editing settings by hand
+- [Docker](https://github.com/jwilcox99/Migratarr/blob/main/docs/docker.md): running Migratarr in a container
+- [Schedule and notifications](https://github.com/jwilcox99/Migratarr/blob/main/docs/notifications.md): planning automatically, Discord, webhook and email
 - [Settings](https://github.com/jwilcox99/Migratarr/blob/main/docs/settings.md): the settings files, version 2 and the health checks
 - [Runtime configuration](https://github.com/jwilcox99/Migratarr/blob/main/docs/runtime-configuration.md): `runtime.json` reference
 - [Storage targets](https://github.com/jwilcox99/Migratarr/blob/main/docs/storage-targets.md): disks, categories and placement
