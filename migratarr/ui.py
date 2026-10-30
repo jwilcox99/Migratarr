@@ -583,6 +583,14 @@ def render_moves(rows, key, title, note, ctx=None, run_id=None):
              '<th>Title</th><th>Move</th><th>Disks</th>'
              '<th class="num">Size</th><th>Status</th><th>Approval</th><th>Notes</th></tr></thead><tbody>'
              + ''.join(body) + '</tbody></table></div>')
+    if revoke:
+        # The next step, right where approving lands (#waiting); the same button as in the steps at the top.
+        n = len(rows)
+        table += ('<div class="actions">' + (
+            f'<a class="btn primary" href="/run/{e(run_id)}/confirm-run">Run {n} approved move{"s" if n != 1 else ""}'
+            f' ({size_text(total)})</a><span class="hint">Next: check the order, then start moving.</span>'
+            if not job_busy(ctx) else '<span class="hint">Available when the current job is finished.</span>')
+            + '</div>')
     if select:
         count = sum(1 for r in rows if r.get('eligible'))
         buttons = ('<div class="actions"><button type="submit" class="btn primary" name="pick" value="selected">'
@@ -764,11 +772,17 @@ def render_review(view, ctx):
         return f'<td data-label="Notes">{codes}{problem_notes(r)}{why}</td>'
     count = len(view['rows'])
     fields = [('manifest_hash', view['manifest_hash'])] + [('id', r['execution_id']) for r in view['rows']]
-    confirm = ('<div class="actions">' + form(f'/run/{run_id}/approve', ctx, fields,
-                                               f'Approve {count} move{"s" if count != 1 else ""} '
-                                               f'({size_text(view["total_gb"])})', 'btn primary')
-               + f'<a class="btn" href="/run/{e(run_id)}#unapproved">Back</a><span class="hint">Records one '
-               'approval per move, bound to this exact manifest. Nothing moves until you run them.</span></div>')
+    moves = f'{count} move{"s" if count != 1 else ""}, {size_text(view["total_gb"])}'
+    if job_busy(ctx):  # a job is running: approving is all that can happen now
+        buttons = f'<button type="submit" class="btn primary">Approve ({moves})</button>'
+        hint = 'A job is running: these are approved now; start them from the run when it finishes.'
+    else:
+        buttons = (f'<button type="submit" class="btn primary" name="then" value="start">Approve and start moving '
+                   f'({moves})</button><button type="submit" class="btn">Approve only</button>')
+        hint = ('Records one approval per move, bound to this exact manifest, then moves them one at a time, '
+                'smallest first; each is checked again before it moves. "Approve only" moves nothing yet.')
+    confirm = ('<div class="actions">' + form(f'/run/{run_id}/approve', ctx, fields, extra=buttons)
+               + f'<a class="btn" href="/run/{e(run_id)}#unapproved">Back</a><span class="hint">{hint}</span></div>')
     body = (head + f'<p class="meta">{count} moves, {size_text(view["total_gb"])}</p>' + warn
             + simple_table(view['rows'], '<th>Notes</th>', notes)
             + render_disks(view['disks'], 'Free space now, and after these moves if they all run.') + confirm)
@@ -853,7 +867,10 @@ def render_job(job, log, ctx):
         parts.append('<h2>Skipped or held</h2><ul class="plain">' + ''.join(
             f'<li><a href="/execution/{e(d["execution_id"])}">{e(d["title"])}</a>'
             f'<span class="note">{e(d["reason"])}</span></li>' for d in job['skipped']) + '</ul>')
-    parts.append(f'<h2>Output</h2><pre class="log">{e(log) or "No output yet."}</pre>')
+    # Newest line first: the page reloads every few seconds while running, and opens at the top.
+    newest_first = '\n'.join(reversed((log or '').rstrip('\n').splitlines()))
+    parts.append('<h2>Output <span class="count">newest first</span></h2>'
+                 f'<pre class="log">{e(newest_first) or "No output yet."}</pre>')
     return page('Job ' + job['job_id'], ''.join(parts), refresh=running, ctx=ctx, seconds=5)
 
 
@@ -1036,7 +1053,9 @@ POST_ROUTES = [
 SETTINGS_POSTS = {'settings_review', 'settings_save', 'setup_step'}
 NOTICES = {'approved': '{n} approved. Nothing has moved yet.', 'unchanged': 'Those were already approved.',
            'revoked': 'Approval revoked.', 'stop': 'Stop requested: the job stops before its next move.',
-           'reviewed': 'Done with this batch: the next scheduled plan will run.'}
+           'reviewed': 'Done with this batch: the next scheduled plan will run.',
+           'approved_busy': '{n} approved. A job is running, so they were not started; run them when it finishes.',
+           'approved_none': '{n} approved, but none can run right now (see each move); nothing was started.'}
 NOTIFY_NOTICES = {'saved': 'Saved.', 'unchanged': 'Nothing changed, so nothing was saved.'}
 SETTINGS_NOTICES = {'saved': 'Saved. The previous file was backed up.',
                     'unchanged': 'Nothing changed, so nothing was saved.'}
@@ -1220,6 +1239,18 @@ class App:
             if name == 'approve':
                 new = approval_store.approve(self.base, arg, ids, expected, source='ui')
                 query = {'done': 'approved', 'n': len(new)} if new else {'done': 'unchanged'}
+                if (form_data.get('then') or [''])[0] == 'start':
+                    # "Approve and start moving": exactly the moves on the review page, in the job's order.
+                    if ctx['job']:
+                        query = {'done': 'approved_busy', 'n': len(ids)}
+                        return 'redirect', f'/run/{arg}?{urlencode(query)}#waiting'
+                    queue, _, manifest_hash = jobs.move_queue(self.base, arg)
+                    if manifest_hash != expected:
+                        raise jobs.JobError('The manifest changed since this page was opened; review it again.')
+                    chosen = [r['execution_id'] for r in queue if r['execution_id'] in set(ids)]
+                    if chosen:
+                        return 'redirect', '/job/' + self.start_job(self.base, 'run', arg, chosen)
+                    query = {'done': 'approved_none', 'n': len(ids)}
                 return 'redirect', f'/run/{arg}?{urlencode(query)}#waiting'
             if name == 'revoke':
                 if len(ids) != 1:

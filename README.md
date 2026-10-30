@@ -181,7 +181,8 @@ The web UI covers the whole cycle:
    while.
 2. **Review and approve:** pick moves (or "Review all"), check sizes, free
    space afterwards and folder permissions, then approve them.
-3. **Run:** "Run N approved moves", check the order, then "Start moving".
+3. **Run:** "Approve and start moving" on the review page does both; or "Approve only"
+   now and "Run N approved moves" later, check the order, then "Start moving".
    Each move is checked again just before it runs. You can stop after the
    current move.
 

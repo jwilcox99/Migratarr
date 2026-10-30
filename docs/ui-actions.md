@@ -7,8 +7,8 @@ rather than re-implementing it:
 | Step | In the UI | What actually runs |
 | --- | --- | --- |
 | Plan | "Plan a new run" (Runs page) | A background job runs `migratarr_plan.py`: preflight, dry runs, plan, override audit, snapshot, manifest. Nothing is approved. |
-| Confirm | Tick moves → "Review selected" / "Review all" → "Approve N moves" | `approval_store.approve()`: one `APPROVE` history entry per row, bound to the manifest hash, with a shared `batch` record (`source: "ui"`). Executors verify these exactly as they verify `approve_execution.py` approvals. |
-| Run | "Run N approved moves" → "Start moving" | A background job runs each row's existing executor (`execute_movie_nas.py`, `execute_tv_nas.py`, `execute_cross_movie.py`, `execute_cross_tv.py`): check-only, then `--execute`. |
+| Confirm | Tick moves → "Review selected" / "Review all" → "Approve and start moving" (approves, then starts the move job for exactly those moves; while a job runs, only approves) or "Approve only" | `approval_store.approve()`: one `APPROVE` history entry per row, bound to the manifest hash, with a shared `batch` record (`source: "ui"`). Executors verify these exactly as they verify `approve_execution.py` approvals. |
+| Run | For moves approved earlier: "Run N approved moves" (at the top, and under the approved moves) → "Start moving" | A background job runs each row's existing executor (`execute_movie_nas.py`, `execute_tv_nas.py`, `execute_cross_movie.py`, `execute_cross_tv.py`): check-only, then `--execute`. |
 
 ## Safety rules
 

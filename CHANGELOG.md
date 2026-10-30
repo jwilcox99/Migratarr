@@ -31,6 +31,14 @@ may still change between minor versions, always with a migration or a note here)
   run page) or a health check fails. Never approves or moves anything.
   `docs/notifications.md`.
 
+### Changed
+- Approving: the review page's main button is "Approve and start moving" (approves,
+  then starts the move job for exactly those moves); "Approve only" keeps the old
+  behavior. After approving only, "Run N approved moves" is also right under the
+  approved moves, where the page lands.
+- A job's Output shows the newest line first, so it stays readable while the page
+  reloads every few seconds.
+
 ## [0.1.0] — 2026-10-30
 
 First public release: install with pip, set up and run Migratarr on your own
