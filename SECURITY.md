@@ -62,15 +62,25 @@ key can't be forwarded to another host.
 
 ## The web UI
 
-- It listens on 127.0.0.1 only. To use it from another computer, use an SSH
-  tunnel: `ssh -L 8765:localhost:8765 media-host.example`.
-- It answers only requests addressed to `localhost`, `127.0.0.1` or `::1`, and
-  refuses any other `Host` header (protection against DNS rebinding).
+- By default it listens on 127.0.0.1 only and answers only requests addressed
+  to `localhost`, `127.0.0.1` or `::1` (protection against DNS rebinding). To
+  use it from another computer, use an SSH tunnel, or listen on your network
+  with `--host 0.0.0.0` (below).
+- **Login.** One username and password, stored in the data folder as
+  `config/auth.json` (owner-only), the password as a PBKDF2-SHA256 hash. It is
+  required whenever it is set, and always when the UI listens beyond this
+  machine; then the first visit creates it, so open the UI as soon as you start
+  it. `migratarr password` sets or changes it in a terminal and ends every
+  session.
+- Sessions are signed cookies (`HttpOnly`, `SameSite=Lax`, 30 days). After 5
+  wrong passwords in 5 minutes, an address has to wait.
 - Every action is a form carrying a token made when the UI starts. Requests
-  from other sites are refused.
-- **There is no login.** Anyone who can connect to that port on the machine,
-  including other users of it, can use the UI. Run it on a machine you don't
-  share, or with `migratarr ui --read-only`, which switches every action off.
+  from other sites (`Origin` / `Sec-Fetch-Site`) are refused.
+- The UI speaks plain HTTP. Use it on a network you trust; don't expose it to
+  the internet. Put it behind a reverse proxy with TLS if you need it elsewhere.
+- Without a login, anyone who can connect to that port on the machine, including
+  other users of it, can use the UI. Set one with `migratarr password`, or use
+  `migratarr ui --read-only`, which switches every action off.
 
 ## The NAS SSH key
 

@@ -48,10 +48,12 @@ rather than re-implementing it:
 - **Interrupted jobs are reported, not cleared.** If the job process is gone
   without finishing, the UI says so and offers "Dismiss" only after you've
   looked; any move it was running shows as in progress or needs attention.
-- **Loopback only.** The server binds 127.0.0.1 and answers only `localhost`
-  host names. Every form carries a random per-process token; cross-site
-  requests (`Origin` / `Sec-Fetch-Site`) and non-form bodies are refused. The
-  CSP allows forms to post only to the UI itself.
+- **Loopback by default.** The server binds 127.0.0.1 and answers only
+  `localhost` host names. With `--host` set to another address, every page,
+  API call and action needs a signed-in session (`migratarr/auth.py`), and any
+  host name is answered. Every form carries a random per-process token;
+  cross-site requests (`Origin` / `Sec-Fetch-Site`) and non-form bodies are
+  refused. The CSP allows forms to post only to the UI itself.
 
 ## Files
 

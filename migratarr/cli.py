@@ -28,6 +28,7 @@ COMMANDS = {  # name: (module, one-line help)
     'doctor': ('migratarr.doctor', 'check settings, services and disks'),
     'reconcile': ('migratarr.reconcile', 'record that a flagged move was checked by hand'),
     'demo': ('migratarr.demo', 'try it on a made-up library, read-only (no services needed)'),
+    'password': ('migratarr.auth', 'set or change the web UI login'),
 }
 
 

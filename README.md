@@ -111,13 +111,26 @@ Run Migratarr as a user that can read and write your media folders, then:
 migratarr ui
 ```
 
-It prints the address, `http://localhost:8765`. The UI listens on this machine
-only (127.0.0.1). If Migratarr runs on a server, open an SSH tunnel from your
-own computer and browse to the same address:
+It prints the address, `http://localhost:8765`. By default the UI listens on
+this machine only (127.0.0.1). If Migratarr runs on a server, either:
 
-```sh
-ssh -L 8765:localhost:8765 media-host.example
-```
+- **use it on your network** with a sign-in, like Radarr and Sonarr:
+
+  ```sh
+  migratarr ui --host 0.0.0.0
+  ```
+
+  Then browse to `http://<server>:8765`. The first visit asks you to create a
+  login, so open it right away. Change it later with `migratarr password`.
+  Don't expose the port to the internet.
+- or keep it local and open an SSH tunnel from your own computer, then browse
+  to `http://localhost:8765`:
+
+  ```sh
+  ssh -L 8765:localhost:8765 media-host.example
+  ```
+
+`MIGRATARR_HOST` and `MIGRATARR_PORT` set the same as `--host` and `--port`.
 
 With no settings yet, every page leads to the setup wizard:
 
