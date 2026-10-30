@@ -53,6 +53,9 @@ ready. Every move is still reviewed and approved in the UI before it runs.
   when the dropdown still said another source (TMDB defaulted to "environment
   variable", so a pasted token was silently dropped). In the Docker image, TMDB
   now defaults to "paste" unless `TMDB_TOKEN` is set.
+- Docker: NAS over SSH failed with "No user exists for uid …". The container now
+  gives `PUID`/`PGID` a user entry at start.
+- Health checks: folders that can't be read no longer show as "10 of 0 folders".
 
 ## [0.1.0] — 2026-10-30
 

@@ -381,7 +381,8 @@ def permission_checks(targets, *, limit=5, lstat=os.lstat, listdir=os.listdir):
     if problems:
         shown = '; '.join(problems[:limit]) + (f'; and {len(problems) - limit} more' if len(problems) > limit else '')
         checks.append(Check('permissions.group_write', 'permissions', 'Group write on media folders', WARN,
-                            f'{len(problems)} of {checked} folders lack group write: {shown}',
+                            (f'{len(problems)} of {checked} folders lack group write: {shown}' if checked >= len(problems)
+                             else f'{len(problems)} folders could not be checked or lack group write: {shown}'),
                             'chmod g+w those folders (a move of an item without it stops before deleting)'))
     else:
         checks.append(Check('permissions.group_write', 'permissions', 'Group write on media folders', OK,

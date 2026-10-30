@@ -14,6 +14,13 @@ if [ "$(id -u)" = 0 ]; then
     if [ "$PUID" = 0 ]; then
         echo "migratarr: running as root (PUID=0). Set PUID/PGID to the user that owns your media." >&2
     fi
+    # Programs like ssh need a name for the user they run as: add PUID/PGID to the
+    # container's user list when the image doesn't have them yet.
+    if [ "$PUID" != 0 ]; then
+        getent group "$PGID" >/dev/null 2>&1 || echo "migratarr:x:$PGID:" >> /etc/group
+        getent passwd "$PUID" >/dev/null 2>&1 \
+            || echo "migratarr:x:$PUID:$PGID:Migratarr:$CONFIG_DIR:/usr/sbin/nologin" >> /etc/passwd
+    fi
     mkdir -p "$CONFIG_DIR"
     # Only files on /config's own filesystem: a read-only mount inside it (an SSH key) is left alone.
     find "$CONFIG_DIR" -xdev \( ! -user "$PUID" -o ! -group "$PGID" \) -exec chown -h "$PUID:$PGID" {} + \
