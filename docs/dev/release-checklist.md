@@ -42,9 +42,6 @@ branches to push).
          - Fresh machine: install, wizard, plan gate
          - Local disks with `examples/local-test/`: all four move types, real Radarr and Sonarr,
            through the unified engine. Results: `examples/local-test/RESULTS-2026-10-29.md`
-         - NAS (gate 4, 2026-10-29): new engine against the old in check-only mode, then one watched
-           live move each for Movie same-disk, Movie cross-disk, TV cross-disk
-           (`docs/dev/unified-execution-core.md`, "Recorded by gate 4")
 4. - [x] **Demo mode** (Claude): `migratarr demo` (PR #12)
 5. - [x] **Version** (Claude): `0.1.0rc1` in `migratarr/cli.py`; CHANGELOG `[0.1.0]` section;
          release.yml handles pre-release tags (notes from `[0.1.0]`, marked pre-release) and

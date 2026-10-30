@@ -7,9 +7,10 @@ Each check returns Check(id, group, label, status, detail, fix):
   arr_roots    Radarr/Sonarr root folders include every category folder Migratarr moves into
   arr_files    the Arr file checks moves rely on can run (runtime.json arr_file_checks): docker, the
                container sees arr_root; host, this machine does
-  disks        each disk exists, is mounted (nas_ssh), writable (local), above its reserve
+  disks        each disk exists, is mounted (nas_ssh), writable (local), above its reserve;
+               (local) no two disks share a filesystem (cross-disk moves need two)
   nas          (nas_ssh) SSH with the configured key works, the NAS Python runs, each
-               NAS disk root exists and is writable there
+               NAS disk root exists and is writable there, no two share a filesystem there
   permissions  category folders and the item folders in them are group-writable
 
 Read-only: nothing here writes a file, changes a service, or prints a
@@ -275,6 +276,60 @@ def disk_checks(runtime, targets, *, ismount=os.path.ismount, statvfs=os.statvfs
     return checks
 
 
+def cross_disk_pairs(targets):
+    """{frozenset({a, b})} for disks a category placement can move items between: a category placed on
+    one and a different category of the same media type placed on the other (that move is a cross-disk
+    copy, which needs two filesystems)."""
+    pairs = set()
+    for categories in targets.placement.values():
+        for first, ids in categories.items():
+            for second, others in categories.items():
+                if first != second:
+                    pairs.update(frozenset((a, b)) for a in ids for b in others if a != b)
+    return pairs
+
+
+def same_filesystem_checks(devices, targets, where, group='disks'):
+    """Disks whose folders are on one filesystem (``devices``: {disk id: st_dev}). Cross-disk moves
+    between them are refused when they run, so say so now: FAIL when a placement needs such moves,
+    WARN otherwise. Nothing (no OK row) when every disk has its own filesystem."""
+    needed = cross_disk_pairs(targets)
+    by_device = {}
+    for disk, device in sorted(devices.items()):
+        by_device.setdefault(device, []).append(disk)
+    checks = []
+    for disks in by_device.values():
+        for i, a in enumerate(disks):
+            for b in disks[i + 1:]:
+                cid, label = f'disks.same_filesystem.{a}.{b}', f'Disks {a} and {b}'
+                if frozenset((a, b)) in needed:
+                    checks.append(Check(cid, group, label, FAIL,
+                                        f'{a} and {b} are on the same filesystem{where}: moves between them '
+                                        "can't run.",
+                                        'Use two different disks, or put both categories on one disk.'))
+                else:
+                    checks.append(Check(cid, group, label, WARN,
+                                        f'{a} and {b} are on the same filesystem{where}. No category placement '
+                                        "moves items between them now; if one does, those moves can't run.",
+                                        'Use two different disks, or keep categories that move between '
+                                        'each other on one disk.'))
+    return checks
+
+
+def filesystem_checks(runtime, targets, *, stat_path=os.stat):
+    """topology local: compare the disks' folders here. nas_ssh: the NAS checks compare them on the NAS
+    (a folder here is a network mount, whose device says nothing about the NAS's filesystems)."""
+    if runtime.topology != 'local':
+        return []
+    devices = {}
+    for target in targets.targets:
+        try:
+            devices[target.id] = stat_path(str(target.path)).st_dev
+        except OSError:
+            continue  # its disk check already says the folder is missing
+    return same_filesystem_checks(devices, targets, '')
+
+
 def _destinations(targets):
     """(disk id, media, category, folder) for every placement destination."""
     by_id = {t.id: t for t in targets.targets}
@@ -348,6 +403,7 @@ for disk, root in roots.items():
     entry = {"exists": os.path.isdir(root)}
     if entry["exists"]:
         entry["writable"] = os.access(root, os.W_OK)
+        entry["device"] = os.stat(root).st_dev
         try:
             s = os.statvfs(root)
             entry["free"] = s.f_bavail * s.f_frsize
@@ -364,7 +420,7 @@ def ssh_command(runtime, remote):
             '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=15', runtime.ssh_target, remote]
 
 
-def nas_checks(runtime, run=subprocess.run):
+def nas_checks(runtime, run=subprocess.run, targets=None):
     if runtime.topology != 'nas_ssh':
         return [Check('nas', 'nas', 'NAS over SSH', SKIP, 'topology local: no NAS')]
     remote = shlex.quote(runtime.remote_python) + ' -c ' + shlex.quote(NAS_PROBE)
@@ -404,6 +460,10 @@ def nas_checks(runtime, run=subprocess.run):
             free = entry.get('free')
             checks.append(Check('nas.disk.' + disk, 'nas', label, OK,
                                 root + (f'; {free / GiB:.0f} GiB free' if free is not None else '')))
+    if targets is not None:
+        devices = {disk: entry['device'] for disk, entry in facts.get('roots', {}).items()
+                   if entry.get('exists') and entry.get('device') is not None}
+        checks += same_filesystem_checks(devices, targets, ' on the NAS', 'nas')
     return checks
 
 
@@ -438,8 +498,9 @@ def run_checks(report=None, *, environ=None, groups=GROUPS, http=http_get, run=s
     if 'disks' in groups:
         checks += disk_checks(runtime, targets, **{k: v for k, v in fs.items()
                                                    if k in ('ismount', 'statvfs', 'access')})
+        checks += filesystem_checks(runtime, targets, **{k: v for k, v in fs.items() if k == 'stat_path'})
     if 'nas' in groups:
-        checks += nas_checks(runtime, run)
+        checks += nas_checks(runtime, run, targets)
     if 'permissions' in groups:
         checks += permission_checks(targets, **{k: v for k, v in fs.items() if k in ('lstat', 'listdir')})
     return checks

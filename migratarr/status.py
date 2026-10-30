@@ -7,11 +7,13 @@ from pathlib import Path
 import sys
 
 from migratarr import read_api
+from migratarr.executor_command import plain_reason
 
 
 def shorten(text, limit=160):
-    # STOPPED reasons can embed a whole shipped NAS program; --execution and --json keep them in full.
-    text = ' '.join(str(text).split())
+    # STOPPED reasons can embed a whole shipped NAS program or (older journals) the traceback of its
+    # refusal; --execution and --json keep them in full.
+    text = ' '.join(str(plain_reason(text)).split())
     return text if len(text) <= limit else text[:limit - 1] + '…'
 
 

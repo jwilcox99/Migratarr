@@ -5,6 +5,7 @@ import threading
 import unittest
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlencode
 
 import migratarr_ui
 import settings_contract as sc
@@ -130,6 +131,42 @@ class SettingsPageTests(Base):
         status, body = self.post('/settings/services/save', change=nonce)
         self.assertEqual(status, 409)
         self.assertEqual(len(self.fake.saves), 1)
+
+    def test_form_shown_again_keeps_pasted_key_without_showing_it(self):
+        status, body = self.post('/settings/services/review', **self.f(
+            services__radarr__url='ftp://radarr', services__radarr__source='file', services__radarr__key=PASTED,
+            services__sonarr__url='http://localhost:8989', services__sonarr__source='docker_config_xml'))
+        self.assertEqual(status, 400)
+        self.assertNotIn(PASTED, body)
+        self.assertIn('Key kept (not saved yet)', body)
+        keys = body.split('name="keys" value="')[1].split('"')[0]
+        self.assertNotIn(PASTED, keys)
+        # Fix the URL, leave the key blank: the held key is used, once.
+        form = self.f(services__radarr__url='http://radarr:7878', services__radarr__source='file',
+                      services__radarr__key='', services__sonarr__url='http://localhost:8989',
+                      services__sonarr__source='docker_config_xml')
+        status, body = self.post('/settings/services/review', keys=keys, **form)
+        self.assertEqual(status, 200, body)
+        self.assertEqual(self.app.settings.held_keys, {})  # one-time
+        self.assertNotIn(PASTED, body)
+        self.assertIn('new key', body)
+        nonce = body.split('name="change" value="')[1].split('"')[0]
+        self.assertEqual(self.post('/settings/services/save', change=nonce)[0], 303)
+        self.assertEqual(self.fake.saves[0][1]['services.radarr.key'], PASTED)
+        self.assertNotIn(PASTED, str(vars(self.app.settings)))
+
+    def test_held_keys_bound_to_section_and_dropped_on_cancel(self):
+        status, body = self.post('/settings/services/review', **self.f(
+            services__radarr__url='ftp://radarr', services__radarr__source='file', services__radarr__key=PASTED,
+            services__sonarr__url='http://localhost:8989', services__sonarr__source='docker_config_xml'))
+        keys = body.split('name="keys" value="')[1].split('"')[0]
+        self.assertEqual(self.app.settings.take_keys(keys, sc.STREAMING), {})
+        status, body = self.post('/settings/services/review', **self.f(
+            services__radarr__url='ftp://radarr', services__radarr__source='file', services__radarr__key=PASTED,
+            services__sonarr__url='http://localhost:8989', services__sonarr__source='docker_config_xml'))
+        self.assertIn(PASTED, str(self.app.settings.held_keys))
+        self.get('/settings/services')  # Cancel goes back to the section
+        self.assertEqual(self.app.settings.held_keys, {})
 
     def review_streaming(self, region='GB'):
         status, body = self.post('/settings/streaming/review',
@@ -269,6 +306,59 @@ class SetupModeTests(Base):
         self.assertEqual(self.get('/')[0], 200)  # setup mode is over
         self.assertEqual(self.get('/setup/services'), (303, '/settings'))
         self.assertEqual(self.post('/setup/services', action='next')[0], 409)
+
+    def test_step_shown_again_keeps_pasted_key_without_showing_it(self):
+        # Radarr's key pasted, Sonarr set to "paste" but left blank: the step comes back with a problem.
+        status, body = self.post('/setup/services', action='next', **self.f(
+            services__radarr__url='http://localhost:7878', services__radarr__source='file',
+            services__radarr__key=PASTED,
+            services__sonarr__url='http://localhost:8989', services__sonarr__source='file'))
+        self.assertEqual(status, 400)
+        self.assertNotIn(PASTED, body)
+        self.assertEqual(body.count('Key kept (not saved yet)'), 1)  # Radarr's; Sonarr still asks
+        self.assertEqual(self.fake.created, [])
+        # Back and Detect keep it too.
+        self.assertNotIn(PASTED, self.get('/setup/services')[1])
+        self.assertIn('Key kept (not saved yet)', self.get('/setup/services')[1])
+        # Paste only Sonarr's this time; Radarr's field is blank and keeps the held key.
+        self.assertEqual(self.post('/setup/services', action='next', **self.f(
+            services__radarr__url='http://localhost:7878', services__radarr__source='file',
+            services__radarr__key='', services__sonarr__url='http://localhost:8989',
+            services__sonarr__source='file', services__sonarr__key='SONARR-PASTED-5555')),
+            (303, '/setup/topology'))
+        self.assertEqual(self.app.wizard.draft[sc.SERVICES]['services.radarr.key'], PASTED)
+        self.assertEqual(self.app.wizard.draft[sc.SERVICES]['services.sonarr.key'], 'SONARR-PASTED-5555')
+
+    def test_step_shown_again_over_http_never_sends_the_key(self):
+        server = ThreadingHTTPServer(('127.0.0.1', 0), migratarr_ui.make_handler(self.app))
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+
+        def send(method, path, fields=None):
+            conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=5)
+            body = urlencode(fields, doseq=True) if fields is not None else None
+            headers = {'Host': 'localhost', 'Content-Type': 'application/x-www-form-urlencoded'}
+            conn.request(method, path, body=body, headers=headers)
+            response = conn.getresponse()
+            raw = response.read()
+            conn.close()
+            return response, raw
+        first = dict(token=TOKEN, action='next', **self.f(
+            services__radarr__url='http://localhost:7878', services__radarr__source='file',
+            services__radarr__key=PASTED,
+            services__sonarr__url='http://localhost:8989', services__sonarr__source='file'))
+        response, raw = send('POST', '/setup/services', first)
+        self.assertEqual(response.status, 400)
+        self.assertNotIn(PASTED.encode(), raw + str(response.getheaders()).encode())
+        self.assertIn(b'Key kept (not saved yet)', raw)
+        second = dict(first, **self.f(services__radarr__key='', services__sonarr__key='SONARR-PASTED-5555'))
+        response, raw = send('POST', '/setup/services', second)
+        self.assertEqual((response.status, response.getheader('Location')), (303, '/setup/topology'))
+        self.assertNotIn(PASTED.encode(), raw + str(response.getheaders()).encode())
+        response, raw = send('GET', '/setup/services')
+        self.assertNotIn(PASTED.encode(), raw)
+        self.assertNotIn(b'SONARR-PASTED-5555', raw)
 
     def test_done_withholds_plan_when_checks_fail(self):
         self.fake.configured = True
