@@ -82,6 +82,15 @@ key can't be forwarded to another host.
   other users of it, can use the UI. Set one with `migratarr password`, or use
   `migratarr ui --read-only`, which switches every action off.
 
+## Notifications
+
+- Discord and webhook URLs and the mail password are kept in
+  `config/notifications.json` (owner-only), never shown back in the page and never
+  written to logs or error messages.
+- Delivery doesn't follow redirects. Discord messages switch mentions off.
+- A webhook receives the event, a title, a short text, a link to the UI and counts:
+  titles and sizes of your library, no keys.
+
 ## The NAS SSH key
 
 The key is referenced by path in `runtime.json` and should be a key used only
