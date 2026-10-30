@@ -481,6 +481,72 @@ class ArrInstallTests(Env, unittest.TestCase):
         self.assertIn('Docker is not installed', checks['arr_files.radarr'].detail)
 
 
+class ContainerTests(Env, unittest.TestCase):
+    """Migratarr in its Docker image (MIGRATARR_IN_CONTAINER=1): host-mode checks, pasted keys, container URLs."""
+
+    def make(self, configured=True, topology='nas_ssh'):
+        backend = super().make(configured=False, topology=topology)
+        self.env['MIGRATARR_IN_CONTAINER'] = '1'
+        self.backend = UiBackend(self.env, base=self.base, http=offline_http, run=no_ssh, docker=no_docker)
+        if configured:
+            self.backend.create(self.draft(topology))
+        return self.backend
+
+    def test_fresh_install_defaults(self):
+        b = self.make(configured=False)
+        values = b.defaults(sc.SERVICES)
+        self.assertEqual(values['services.arr_install'], 'host')
+        self.assertEqual((values['services.radarr.url'], values['services.sonarr.url'], values['services.jellyfin.url']),
+                         ('http://radarr:7878', 'http://sonarr:8989', 'http://jellyfin:8096'))
+        for service in ('radarr', 'sonarr', 'jellyfin'):
+            self.assertEqual(values[f'services.{service}.source'], 'paste', service)
+
+    def test_only_choices_that_work_in_a_container(self):
+        b = self.make(configured=False)
+        fields = {f.path: f for f in b.fields(sc.SERVICES, b.defaults(sc.SERVICES))}
+        self.assertEqual([v for v, _ in fields['services.arr_install'].choices], ['host'])
+        self.assertIn('same path', fields['services.arr_install'].help)
+        for service in ('radarr', 'sonarr', 'jellyfin', 'tmdb'):
+            self.assertFalse([v for v, _ in fields[f'services.{service}.source'].choices if v.startswith('docker')],
+                             service)
+            self.assertNotIn(f'services.{service}.container', fields)
+
+    def test_a_docker_choice_from_an_old_form_becomes_host_and_paste(self):
+        b = self.make(configured=False)
+        values = dict(b.defaults(sc.SERVICES), **{'services.arr_install': 'docker',
+                                                  'services.sonarr.source': 'docker_config_xml',
+                                                  'services.jellyfin.source': 'docker_file'})
+        values, _ = b.normalize(sc.SERVICES, values)
+        self.assertEqual(values['services.arr_install'], 'host')
+        self.assertEqual((values['services.sonarr.source'], values['services.jellyfin.source']), ('paste', 'paste'))
+
+    def test_created_settings_check_through_the_own_mount(self):
+        b = self.make()
+        runtime = store.load(environ=self.env).data['runtime']
+        self.assertEqual(runtime['arr_file_checks'], {'radarr': {'mode': 'host'}, 'sonarr': {'mode': 'host'}})
+        self.assertNotIn('radarr', runtime.get('containers', {}))
+        self.assertEqual(runtime['urls']['radarr'], 'http://radarr:7878')
+
+    def test_detect_says_to_paste(self):
+        b = self.make(configured=False)
+        found = b.discover(sc.SERVICES, {sc.SERVICES: b.defaults(sc.SERVICES)})
+        notes = ' '.join(found.notes)
+        self.assertIn("Radarr: paste its API key (Settings > General > API Key)", notes)
+        self.assertNotIn('docker', notes.lower().replace("can't read other containers", ''))
+
+    def test_wizard_text_and_examples_fit_the_container(self):
+        b = self.make(configured=False)
+        self.assertIn('paste its key', b.intro(sc.SERVICES))
+        self.assertIsNone(b.intro(sc.DISKS))
+        fields = {f.path: f for f in b.fields(sc.SERVICES, b.defaults(sc.SERVICES))}
+        self.assertEqual(fields['services.radarr.url'].help, 'For example http://radarr:7878')
+
+    def test_outside_a_container_nothing_changes(self):
+        b = super().make(configured=False)
+        self.assertEqual(b.defaults(sc.SERVICES)['services.arr_install'], 'docker')
+        self.assertEqual(b.defaults(sc.SERVICES)['services.radarr.url'], 'http://localhost:7878')
+
+
 class AppTests(Env, unittest.TestCase):
     """The UI as main() builds it, against real files."""
 

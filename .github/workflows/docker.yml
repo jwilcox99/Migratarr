@@ -1,0 +1,73 @@
+# Container image: built and smoke-tested on every pull request and push; published to
+# ghcr.io/jwilcox99/migratarr for amd64 and arm64:
+#   push to main  -> :edge
+#   tag vX.Y.Z    -> :X.Y.Z, :X.Y and :latest (pre-release tags like v0.2.0rc1 get only their own tag)
+name: docker
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/jwilcox99/migratarr
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (amd64)
+        run: docker build --build-arg VERSION=test -t migratarr:test .
+      - name: Smoke test
+        run: docker/smoke-test.sh migratarr:test
+
+  publish:
+    needs: smoke-test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches the package version
+        id: release
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then
+            version=$(python3 -c 'import migratarr.cli; print(migratarr.cli.__version__)')
+            test "v$version" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != version $version"; exit 1; }
+            if echo "$version" | grep -Eq '(a|b|rc)[0-9]+$'; then echo "final=false" >> "$GITHUB_OUTPUT"
+            else echo "final=true" >> "$GITHUB_OUTPUT"; fi
+          else
+            echo "final=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=edge,branch=main
+            type=pep440,pattern={{version}}
+            type=pep440,pattern={{major}}.{{minor}},enable=${{ steps.release.outputs.final }}
+            type=raw,value=latest,enable=${{ steps.release.outputs.final }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: VERSION=${{ github.ref_name }}
