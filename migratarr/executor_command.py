@@ -145,8 +145,10 @@ def _run_until_idle(command, label, input_data, timeout, idle_timeout, *, requir
                 if line.strip() == TRACEBACK or (held and (not line.strip() or line[:1].isspace())):
                     held.append(line)
                     continue
-                if held and is_refusal_line(line) is not None:
+                refusal = is_refusal_line(line) if held else None
+                if refusal is not None:
                     held = []
+                    line = 'Refused: ' + refusal  # Python 3.10 prints "__main__.Refused" for a script's class
                 for shown in held + [line]:
                     if shown.strip():
                         progress(label + ': ' + shown.strip())
