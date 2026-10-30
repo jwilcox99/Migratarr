@@ -439,6 +439,9 @@ def run(argv=None):
                 run_moves(job, args.run_id, args.execution_ids or None)
         except Exception as exc:  # record why, keep files and journals as they are
             job.finish(FAILED, f'{type(exc).__name__}: {exc}')
+        # Discord / webhook / email, per config/notifications.json (migratarr/notify.py); never raises.
+        from migratarr import notify
+        notify.job_finished(args.base, job.record, log=job.say)
     return 0
 
 

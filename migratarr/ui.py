@@ -881,7 +881,9 @@ a:focus-visible,summary:focus-visible{outline:2px solid var(--teal);outline-offs
 .mark{width:28px;height:28px}
 .readonly{color:var(--muted);font-size:13px}
 .nav{display:flex;gap:16px;align-items:center;font-size:14px}
-.signin{display:grid;gap:12px;max-width:360px}.signin label{display:grid;gap:4px}
+.signin{display:grid;gap:12px;max-width:360px}
+.days{display:flex;flex-wrap:wrap;gap:6px 14px}.field-error{color:var(--red);margin:4px 0 0}
+input[type=time]{max-width:140px;color-scheme:dark}.signin label{display:grid;gap:4px}
 .signout{display:flex;gap:8px;align-items:center}.signout .who{color:var(--muted)}
 button.link{background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit}
 table+h2,table+p+h2,ul.plain+h2{margin-top:28px}
@@ -1008,6 +1010,7 @@ ROUTES = [
     (re.compile(r'/static/app\.css'), 'css'),
     (re.compile(r'/settings'), 'settings'),
     (re.compile(r'/api/settings'), 'api_settings'),
+    (re.compile(r'/settings/notifications'), 'notifications'),
     (re.compile(r'/settings/([a-z_]+)'), 'settings_section'),
     (re.compile(r'/setup'), 'setup'),
     (re.compile(r'/setup/([a-z_]+)'), 'setup_step'),
@@ -1023,13 +1026,18 @@ POST_ROUTES = [
     (re.compile(r'/job/(\d{8}T\d{6}Z-(?:plan|run))/stop'), 'stop'),
     (re.compile(r'/job/(\d{8}T\d{6}Z-(?:plan|run))/dismiss'), 'dismiss'),
     (re.compile(r'/execution/(\d{8}T\d{6}Z-\d{4,})/reconcile'), 'reconcile'),
+    (re.compile(r'/settings/notifications'), 'notify_save'),
+    (re.compile(r'/settings/notifications/test'), 'notify_test'),
+    (re.compile(r'/run/(\d{8}T\d{6}Z)/reviewed'), 'reviewed'),
     (re.compile(r'/settings/([a-z_]+)/review'), 'settings_review'),
     (re.compile(r'/settings/([a-z_]+)/save'), 'settings_save'),
     (re.compile(r'/setup/([a-z_]+)'), 'setup_step'),
 ]
 SETTINGS_POSTS = {'settings_review', 'settings_save', 'setup_step'}
 NOTICES = {'approved': '{n} approved. Nothing has moved yet.', 'unchanged': 'Those were already approved.',
-           'revoked': 'Approval revoked.', 'stop': 'Stop requested: the job stops before its next move.'}
+           'revoked': 'Approval revoked.', 'stop': 'Stop requested: the job stops before its next move.',
+           'reviewed': 'Done with this batch: the next scheduled plan will run.'}
+NOTIFY_NOTICES = {'saved': 'Saved.', 'unchanged': 'Nothing changed, so nothing was saved.'}
 SETTINGS_NOTICES = {'saved': 'Saved. The previous file was backed up.',
                     'unchanged': 'Nothing changed, so nothing was saved.'}
 SETUP_OPEN = {'setup', 'setup_step', 'css'}  # what setup mode serves; everything else redirects to /setup
@@ -1046,7 +1054,8 @@ def match_route(routes, path):
 class App:
     def __init__(self, base, storage=None, reserves=None, usage=shutil.disk_usage, actions=False,
                  token=None, start_job=jobs.start_job, permissions=jobs.permission_problems,
-                 setup=False, health=None, load_settings=None, settings=None, wizard=None, plan_gate=None):
+                 setup=False, health=None, load_settings=None, settings=None, wizard=None, plan_gate=None,
+                 notifications=None):
         self.base, self.storage, self.reserves, self.usage = Path(base), storage or {}, reserves or {}, usage
         # Without editable settings pages, setup mode is view-only (Phase 2); with them, settings can be
         # fixed from the browser while plan, approve and run stay refused (see respond_post).
@@ -1066,6 +1075,8 @@ class App:
         # plan_gate() -> failing health checks; planning is refused while any fail (decision 2026-10-26).
         self.plan_gate, self.gate_failures = plan_gate, None
         self.on_reload = None
+        # notify_ui.NotificationsPage: schedule & notifications (config/notifications.json); None: not offered.
+        self.notifications = notifications
 
     def setup_mode(self):
         return bool(self.wizard and self.wizard.active())
@@ -1093,7 +1104,7 @@ class App:
                     notice=notice.format(n=e((query.get('n') or [''])[0])) if notice else '',
                     plan_blocked=self.gate_failures or None)
 
-    def respond(self, path, query=None):
+    def respond(self, path, query=None, host=None):
         """Return (status, content type, body bytes) for a GET of `path`. Never writes."""
         name, arg = match_route(ROUTES, path)
         if not name:
@@ -1106,6 +1117,15 @@ class App:
                 return 200, 'text/css; charset=utf-8', (CSS + extra).encode()
             if name in ('setup', 'setup_step', 'settings_section'):
                 return self.respond_settings(name, arg, query)
+            if name == 'notifications':
+                if not self.notifications:
+                    return self.not_found('Schedule and notifications are not available here.')
+                ctx = self.ctx(query) or {}
+                notice = NOTIFY_NOTICES.get(((query or {}).get('done') or [''])[0], '')
+                body = self.notifications.get(notice, token=ctx.get('token', ''), host=host)
+                if not ctx.get('actions'):
+                    body = '<div class="alert"><p>Read-only view: start the UI without --read-only to change these.</p></div>' + body
+                return self.html(page('Schedule & notifications', body, ctx=ctx or None))
             if name in ('settings', 'api_settings') or self.setup:
                 if self.setup and name not in ('settings', 'api_settings', 'runs'):
                     return self.not_found('Fix the settings first: see Settings & health.')
@@ -1130,7 +1150,9 @@ class App:
                 return self.json(runs_view(self.base))
             if name in ('run', 'api_run'):
                 view = run_view(self.base, arg, self.storage, self.reserves, self.usage)
-                return self.json(view) if name == 'api_run' else self.html(render_run(view, ctx))
+                if name == 'api_run':
+                    return self.json(view)
+                return self.html(self.with_waiting_note(render_run(view, ctx), arg, ctx))
             if name == 'confirm_run':
                 view = confirm_run_view(self.base, arg, self.storage, self.reserves, self.usage, self.permissions)
                 return self.html(render_confirm_run(view, ctx))
@@ -1164,6 +1186,23 @@ class App:
         if self.setup:  # files present but invalid: settings can be fixed, nothing else runs
             return self.problem('Fix the settings first', 'The settings files have problems, so planning, '
                                 'approving and moving are off. Nothing was changed.', 409, '/settings')
+        if name in ('notify_save', 'notify_test', 'reviewed') and not self.notifications:
+            return 405, 'text/plain; charset=utf-8', b'Not allowed.\n'
+        if name in ('notify_save', 'notify_test'):
+            from migratarr import notify
+            try:
+                result = (self.notifications.post(form_data, token=self.token) if name == 'notify_save'
+                          else self.notifications.test(token=self.token))
+            except (notify.NotifySettingsError, OSError) as exc:
+                return self.problem('Not saved', str(exc), 500, '/settings/notifications')
+            if result[0] == 'redirect':
+                return result
+            return result[0], 'text/html; charset=utf-8', page('Schedule & notifications', result[1], ctx=ctx).encode()
+        if name == 'reviewed':
+            from migratarr import schedule
+            read_api.get_manifest(self.base, arg)  # a real run, or ReadError (404)
+            schedule.mark_reviewed(self.notifications.state_file, arg)
+            return 'redirect', f'/run/{arg}?done=reviewed'
         try:
             if name == 'plan':
                 failing = self.check_plan_gate()
@@ -1223,6 +1262,30 @@ class App:
                                 '/run/' + arg if arg and read_api.RUN_ID.fullmatch(arg) else '/')
         return self.not_found('There is no action at this address.')
 
+    def with_waiting_note(self, body, run_id, ctx):
+        """On the newest batch, while scheduled planning waits for it: say so, with "Done with this batch"."""
+        if not (ctx and ctx.get('actions') and self.notifications):
+            return body
+        from migratarr import notify, schedule
+        try:
+            if not notify.load(self.notifications.settings_file)['schedule'].get('enabled'):
+                return body
+            waiting = schedule.batch_waiting(self.base, schedule.load_state(self.notifications.state_file))
+        except Exception:  # a note, never a reason the page fails
+            return body
+        if not waiting or waiting['run_id'] != run_id:
+            return body
+        what = ('approved moves here have not run yet' if waiting['kind'] == 'approved'
+                else 'nothing here has been approved yet')
+        note = (f'<div class="notice"><p>Scheduled planning waits for this batch: {e(what)}. When you have '
+                'approved and run what you want, or if you want none of it, mark it done; the next scheduled '
+                'plan then runs.</p>' + form(f'/run/{run_id}/reviewed', ctx, button='Done with this batch',
+                                           cls='btn') + '</div>')
+        marker = '<p class="meta">'
+        at = body.find(marker)
+        end = body.find('</p>', at) + len('</p>') if at != -1 else -1
+        return body[:end] + note + body[end:] if end > 0 else body
+
     def respond_settings(self, name, arg, query):
         from migratarr import settings_contract as sc
         ctx = self.ctx()  # settings pages carry their own notices (NOTICES' codes mean other things)
@@ -1237,8 +1300,12 @@ class App:
                 query = query or {}
                 notice = SETTINGS_NOTICES.get(query.get('done', [''])[0], '')
                 run = query.get('check') == ['1']  # probes contact services: only on request
+                extra = ()
+                if self.notifications:
+                    summary, state = self.notifications.summary()
+                    extra = (('/settings/notifications', 'Schedule & notifications', summary, state),)
                 result = 200, self.settings.index(ctx, notice, run_checks=run, overview=self.settings_overview(),
-                                                  setup=self.setup)
+                                                  setup=self.setup, extra=extra)
                 if run:
                     self.gate_failures = [c for c in self.settings.last_checks if c.status == sc.FAIL]
             else:
@@ -1506,7 +1573,7 @@ def make_handler(app, accounts=None, require_login=False, throttle=None):
                 return self.auth_get(path, parse_qs(query), head)
             if self.gate(path, head):
                 return
-            result = app.respond(path, parse_qs(query))
+            result = app.respond(path, parse_qs(query), host=self.headers.get('Host'))
             if result[0] == 'redirect':
                 return self.send(HTTPStatus.SEE_OTHER, 'text/plain; charset=utf-8', b'', head, location=result[1])
             self.send(*result, head=head)
@@ -1604,7 +1671,11 @@ def build_app(base=None, actions=True, backend=None):
     gate = lambda: [c for c in backend.run_checks() if c.status == sc.FAIL]  # the checks doctor runs
     report = backend.report()
     environ = backend.environ if backend.environ is not os.environ else None
+    from migratarr import notify, notify_ui, schedule
+    notifications = notify_ui.NotificationsPage(notify.settings_path(backend.environ),
+                                                schedule.state_path(backend.environ))
     common = dict(actions=actions, settings=pages, wizard=wizard, plan_gate=gate, load_settings=backend.report,
+                  notifications=notifications,
                   health=lambda report: health.run_checks(report, environ=backend.environ, http=backend.http,
                                                           run=backend.run))
     if report.missing:
@@ -1649,6 +1720,25 @@ class ServerV6(ThreadingHTTPServer):
     address_family = _socket.AF_INET6
 
 
+def start_scheduler(app):
+    """Scheduled planning (migratarr/schedule.py) in a background thread. Returns the Event that stops it."""
+    import threading
+    from migratarr import notify, schedule
+    stop = threading.Event()
+    log = lambda line: print(line, file=sys.stderr, flush=True)
+
+    def tick_once(now):
+        if not app.notifications or app.setup or app.setup_mode():
+            return
+        schedule.tick(app.base, now, settings_file=app.notifications.settings_file,
+                      state_file=app.notifications.state_file, active_job=lambda: jobs.active_job(app.base),
+                      start_plan=lambda: app.start_job(app.base, 'plan'), gate=app.check_plan_gate,
+                      send=notify.send, log=log)
+    threading.Thread(target=schedule.run_forever, args=(stop, tick_once), kwargs=dict(log=log),
+                     name='migratarr-schedule', daemon=True).start()
+    return stop
+
+
 def main(argv=None, environ=None):
     import os
     environ = os.environ if environ is None else environ
@@ -1687,6 +1777,7 @@ def main(argv=None, environ=None):
                   'interface, or 127.0.0.1 for this machine only.', file=sys.stderr)
             return 2
         raise
+    stop_scheduler = start_scheduler(app) if not args.read_only else None
     mode = 'read-only view' if args.read_only else 'UI (plan, confirm, run)'
     if network:
         shown = 'http://<this host>:' + str(args.port) if args.host in ('0.0.0.0', '::') else \
@@ -1705,6 +1796,8 @@ def main(argv=None, environ=None):
     except KeyboardInterrupt:
         pass
     finally:
+        if stop_scheduler:
+            stop_scheduler.set()
         server.server_close()
     return 0
 

@@ -24,6 +24,12 @@ may still change between minor versions, always with a migration or a note here)
 - In the container, setup offers what works there: Radarr, Sonarr and Jellyfin at
   their container names, pasted keys, and file checks through Migratarr's own media
   mount (no Docker socket).
+- Schedule & notifications (Settings & health): plan automatically on chosen days
+  at a time; messages to Discord, a webhook (JSON) or email when a batch is ready,
+  moves finish or something fails, with links to the UI. A scheduled plan waits
+  while the last batch is still waiting (one reminder; "Done with this batch" on the
+  run page) or a health check fails. Never approves or moves anything.
+  `docs/notifications.md`.
 
 ## [0.1.0] — 2026-10-30
 

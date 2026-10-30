@@ -186,6 +186,12 @@ The web UI covers the whole cycle:
    current move.
 
 Jobs keep running if you close the browser or restart the UI.
+
+Settings & health > **Schedule & notifications** plans automatically on the days
+and at the time you pick, and sends a message to Discord, a webhook or email when a
+batch is ready, moves finish or something fails. A scheduled plan waits while the
+last batch is still waiting for you. See
+[Schedule and notifications](https://github.com/jwilcox99/Migratarr/blob/main/docs/notifications.md).
 `migratarr ui --read-only` shows everything with every action switched off.
 
 ## Safety model
@@ -257,6 +263,7 @@ your user only; see [SECURITY.md](https://github.com/jwilcox99/Migratarr/blob/ma
 
 - [SETUP.md](https://github.com/jwilcox99/Migratarr/blob/main/SETUP.md): the setup wizard step by step, and editing settings by hand
 - [Docker](https://github.com/jwilcox99/Migratarr/blob/main/docs/docker.md): running Migratarr in a container
+- [Schedule and notifications](https://github.com/jwilcox99/Migratarr/blob/main/docs/notifications.md): planning automatically, Discord, webhook and email
 - [Settings](https://github.com/jwilcox99/Migratarr/blob/main/docs/settings.md): the settings files, version 2 and the health checks
 - [Runtime configuration](https://github.com/jwilcox99/Migratarr/blob/main/docs/runtime-configuration.md): `runtime.json` reference
 - [Storage targets](https://github.com/jwilcox99/Migratarr/blob/main/docs/storage-targets.md): disks, categories and placement
