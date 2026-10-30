@@ -38,6 +38,10 @@ ready. Every move is still reviewed and approved in the UI before it runs.
   `docs/notifications.md`.
 
 ### Changed
+- `migratarr demo` shows believable sizes (a few GB per movie, tens of GB per show)
+  and disk space (a 4 TB and an 8 TB disk), so the disk-space view means something.
+  The titles are sparse files: they take almost no real space (on a filesystem
+  without sparse files the demo falls back to tiny files).
 - Approving: the review page's main button is "Approve and start moving" (approves,
   then starts the move job for exactly those moves); "Approve only" keeps the old
   behavior. After approving only, "Run N approved moves" is also right under the

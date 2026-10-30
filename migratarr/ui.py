@@ -1732,6 +1732,10 @@ def build_app(base=None, actions=True, backend=None):
         app.gate_failures = None
 
     pages.on_saved = wizard.on_created = app.on_reload = reload
+    from migratarr import demo
+    pretend = demo.demo_disks(app.base)
+    if pretend:  # a `migratarr demo` folder: its disks' pretend capacity, like its plan used
+        app.usage = demo.disk_usage(pretend)
     return app
 
 
