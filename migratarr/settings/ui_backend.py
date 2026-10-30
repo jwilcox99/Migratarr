@@ -373,6 +373,12 @@ def normalize_services(values):
     values, notes = dict(values), []
     install = values.get(ARR_INSTALL) or 'docker'
     for d in services.SERVICES.values():
+        # A key typed into the paste box means "paste": otherwise it would be dropped without a word.
+        key = values.get('services.' + d.id + '.key')
+        if 'file' in d.sources and isinstance(key, str) and key.strip() and \
+                values.get('services.' + d.id + '.source') != PASTE:
+            values['services.' + d.id + '.source'] = PASTE
+    for d in services.SERVICES.values():
         if not d.url_base_from_config:
             continue
         p = 'services.' + d.id
@@ -776,6 +782,10 @@ class UiBackend:
         values = read_section(section, self.docs(report), self.environ)
         if section == sc.SERVICES and self.container:
             values = container_services(values)
+            tmdb = 'services.tmdb.'
+            if report.missing and values.get(tmdb + 'source') == 'env' and \
+                    not self.environ.get(values.get(tmdb + 'variable') or 'TMDB_TOKEN'):
+                values[tmdb + 'source'] = PASTE  # a fresh container install: no variable set, so paste it
         if section == sc.DISKS:
             values['disks._topology'] = self.topology_of(self.docs(report))
         return values

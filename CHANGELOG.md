@@ -37,6 +37,12 @@ ready. Every move is still reviewed and approved in the UI before it runs.
   run page) or a health check fails. Never approves or moves anything.
   `docs/notifications.md`.
 
+### Fixed
+- Setup and Settings > Services: a key typed into the paste box is now used even
+  when the dropdown still said another source (TMDB defaulted to "environment
+  variable", so a pasted token was silently dropped). In the Docker image, TMDB
+  now defaults to "paste" unless `TMDB_TOKEN` is set.
+
 ## [0.1.0] — 2026-10-30
 
 First public release: install with pip, set up and run Migratarr on your own
