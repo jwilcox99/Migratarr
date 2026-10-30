@@ -83,13 +83,18 @@ become an Archive candidate.
 
 ## Install
 
+With [pipx](https://pipx.pypa.io/), which keeps Migratarr in its own environment:
+
 ```sh
-pip install migratarr
+sudo apt install pipx    # Debian and Ubuntu; other systems: see the pipx docs
+pipx install migratarr
+migratarr --version
 ```
 
-Install it into a virtual environment, or with `pipx install migratarr`, if
-your system Python doesn't allow `pip install`. Check it worked with
-`migratarr --version`.
+Update later with `pipx upgrade migratarr`. Inside a virtual environment you
+manage yourself, `pip install migratarr` works too. A plain `pip install` into
+the system Python is refused on current Debian and Ubuntu
+("externally-managed-environment"); use pipx instead.
 
 Or run it in Docker next to Radarr and Sonarr, with nothing to install on the host:
 
