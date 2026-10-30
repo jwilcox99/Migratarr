@@ -58,7 +58,7 @@ class Env:
                                # environment sources fail fast offline (no docker in tests)
                                'services.sonarr.source': 'env', 'services.sonarr.variable': 'NO_SONARR_KEY',
                                'services.jellyfin.source': 'env', 'services.jellyfin.variable': 'NO_JF_KEY',
-                               'services.tmdb.variable': 'NO_TMDB_TOKEN'})
+                               'services.tmdb.source': 'env', 'services.tmdb.variable': 'NO_TMDB_TOKEN'})
         d[sc.TOPOLOGY].update({'topology.mode': topology, 'topology.base_path': str(self.base)})
         if topology == 'nas_ssh':
             d[sc.TOPOLOGY].update({'topology.nas.host': 'nas.example', 'topology.nas.user': 'mig',
@@ -481,6 +481,32 @@ class ArrInstallTests(Env, unittest.TestCase):
         self.assertIn('Docker is not installed', checks['arr_files.radarr'].detail)
 
 
+class PastedKeyTests(Env, unittest.TestCase):
+    """A key typed into the paste box is used, whatever the dropdown said (it was silently dropped)."""
+
+    def test_typed_key_switches_the_source_to_paste_and_is_saved(self):
+        b = self.make(configured=False)
+        draft = self.draft()
+        draft[sc.SERVICES].update({'services.tmdb.source': 'env', 'services.tmdb.variable': 'NO_TMDB_TOKEN',
+                                   'services.tmdb.key': 'TYPED-TMDB-TOKEN'})
+        draft[sc.SERVICES], _ = b.normalize(sc.SERVICES, draft[sc.SERVICES])
+        self.assertEqual(draft[sc.SERVICES]['services.tmdb.source'], 'paste')
+        b.create(draft)
+        runtime = store.load(environ=self.env).data['runtime']
+        self.assertEqual(runtime['secrets']['tmdb']['source'], 'file')
+        key_file = Path(runtime['secrets']['tmdb']['path'])
+        self.assertEqual(key_file.read_text().strip(), 'TYPED-TMDB-TOKEN')
+        self.assertEqual(stat.S_IMODE(key_file.stat().st_mode), 0o600)
+
+    def test_blank_or_kept_key_leaves_the_source_alone(self):
+        b = self.make()
+        values = b.current(sc.SERVICES)
+        before = values['services.sonarr.source']
+        for key in (None, '', '   ', sc.SECRET_KEPT):
+            out, _ = b.normalize(sc.SERVICES, dict(values, **{'services.sonarr.key': key}))
+            self.assertEqual(out['services.sonarr.source'], before, repr(key))
+
+
 class ContainerTests(Env, unittest.TestCase):
     """Migratarr in its Docker image (MIGRATARR_IN_CONTAINER=1): host-mode checks, pasted keys, container URLs."""
 
@@ -540,6 +566,12 @@ class ContainerTests(Env, unittest.TestCase):
         self.assertIsNone(b.intro(sc.DISKS))
         fields = {f.path: f for f in b.fields(sc.SERVICES, b.defaults(sc.SERVICES))}
         self.assertEqual(fields['services.radarr.url'].help, 'For example http://radarr:7878')
+
+    def test_tmdb_is_pasted_unless_its_variable_is_set(self):
+        b = self.make(configured=False)
+        self.assertEqual(b.defaults(sc.SERVICES)['services.tmdb.source'], 'paste')
+        self.env['TMDB_TOKEN'] = 'from-the-container-environment'
+        self.assertEqual(b.defaults(sc.SERVICES)['services.tmdb.source'], 'env')
 
     def test_outside_a_container_nothing_changes(self):
         b = super().make(configured=False)
