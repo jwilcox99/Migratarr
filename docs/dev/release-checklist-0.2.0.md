@@ -28,11 +28,16 @@ pull requests). The 0.1.0 checklist is [release-checklist.md](release-checklist.
 
 1. - [x] **Version** (Claude): `0.2.0rc1` in `migratarr/cli.py`; CHANGELOG `[0.2.0]` section;
          README status and local-disk wording
-2. - [ ] **GHCR package public** (Josh): Packages > migratarr > Package settings > Change
+2. - [x] **GHCR package public** (Josh, 2026-10-30): Packages > migratarr > Package settings > Change
          visibility. Check with `docker logout ghcr.io && docker pull ghcr.io/jwilcox99/migratarr:edge`
-3. - [ ] **Container test on the VM** (Josh): `2026-10-30-docker-vm-runbook.md`, steps 1–10:
-         health checks OK in the container, a real same-disk and cross-disk move, files owned by
-         `PUID`/`PGID`, nothing in `/config` owned by root
+3. - [x] **Container test on the VM** (Josh, 2026-10-30, `:edge` @ `d66df6d`): setup through the
+         container's wizard (login, pasted keys, container URLs), health checks OK, a real same-disk
+         move (Night of the Living Dead) and cross-disk move (Nosferatu): `./kit.py status` ok for
+         every title, nothing left behind, no errors in the container log. Found and fixed: a pasted
+         TMDB token was dropped (PR #19); fewer clicks to approve and run, newest output first
+         (PR #20). Not recorded: the moved files' owner on disk (VM wiped first); covered by the
+         smoke test (UI and its jobs run as `PUID`, nothing in `/config` owned by root) and by the
+         "check your first move" step in `docs/docker.md`
 4. - [ ] **A real notification** (Josh, optional): runbook step 11, or accept the risk
 5. - [ ] **arm64** (Josh, optional): pull and start the image on an arm64 machine, or accept the
          risk (only built in CI, never run)
