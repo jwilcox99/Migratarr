@@ -205,6 +205,32 @@ class SignInServerTests(unittest.TestCase):
         self.cookie = 'v1.am9zaA.9999999999.forged'
         self.assertEqual(self.request('GET', '/')[0].status, 303)
 
+    def test_ping_and_icon_answer_without_sign_in_and_are_not_logged(self):
+        self.accounts.set('josh', PASSWORD)
+        lines = []
+        self.server.RequestHandlerClass.log_message = lambda handler, fmt, *args: lines.append(fmt)
+        response, body = self.request('GET', '/ping')
+        self.assertEqual((response.status, body), (200, 'OK\n'))
+        self.assertEqual(self.request('GET', '/favicon.ico?x=1')[0].status, 204)
+        self.assertEqual(self.request('HEAD', '/ping')[0].status, 200)
+        self.assertEqual(lines, [])
+        self.assertEqual(self.request('GET', '/')[0].status, 303)  # every other page still needs a sign-in
+        self.assertEqual(len(lines), 1)
+
+    def test_log_line_has_the_status_and_no_query_string(self):
+        self.accounts.set('josh', PASSWORD)
+        real = migratarr_ui.make_handler(self.app, self.accounts, self.require_login).log_message  # setUp silenced it
+        self.server.RequestHandlerClass.log_message = real
+        import io
+        from unittest.mock import patch
+        with patch('sys.stderr', new_callable=io.StringIO) as err:
+            self.request('GET', '/api/runs?apikey=secret')
+            self.request('GET', '/run/' + RUN + '?token=secret')
+        out = err.getvalue()
+        self.assertIn(' GET /api/runs 401\n', out)
+        self.assertIn(' GET /run/' + RUN + ' 303\n', out)
+        self.assertNotIn('secret', out)
+
     def test_wrong_passwords_are_slowed_down(self):
         self.accounts.set('josh', PASSWORD)
         for _ in range(auth.Throttle.LIMIT):

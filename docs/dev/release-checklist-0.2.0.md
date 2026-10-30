@@ -37,15 +37,23 @@ pull requests). The 0.1.0 checklist is [release-checklist.md](release-checklist.
          TMDB token was dropped (PR #19); fewer clicks to approve and run, newest output first
          (PR #20). Not recorded: the moved files' owner on disk (VM wiped first); covered by the
          smoke test (UI and its jobs run as `PUID`, nothing in `/config` owned by root) and by the
-         "check your first move" step in `docs/docker.md`
+         "check your first move" step in `docs/docker.md`.
+         **Again on Debian 13** (Josh, 2026-10-30, `:0.2.0rc1`, `DOCKER-WALKTHROUGH.md` as a new
+         tester): same two moves, `./kit.py status` ok for all six titles, nothing left behind, disks
+         on separate filesystems; moved folders `jwilc:jwilc 2775`, files 664 (uid/gid 1000), nothing
+         in `/config` owned by root; container log clean. Found: Debian has no `docker-compose-v2`
+         (walkthrough step 1); the compose example had no Jellyfin; the log had no status codes and a
+         healthcheck line every 30 s. All fixed for rc2
 4. - [ ] **A real notification** (Josh, optional): runbook step 11, or accept the risk
 5. - [ ] **arm64** (Josh, optional): pull and start the image on an arm64 machine, or accept the
          risk (only built in CI, never run)
-6. - [ ] **Release candidate** (Josh): tag `v0.2.0rc1`. PyPI marks it pre-release; Docker gets
-         only `:0.2.0rc1` (no `:latest`). Check the PyPI page, `pip install --pre migratarr`,
-         `docker pull ghcr.io/jwilcox99/migratarr:0.2.0rc1`, `--version`
+6. - [ ] **Release candidate** (Josh): `v0.2.0rc1` published 2026-10-30 (`868c017`). Tag
+         **`v0.2.0rc2`** after the Debian/log PR, since the image changed (`/ping` healthcheck,
+         status in logs). PyPI marks it pre-release; Docker gets only `:0.2.0rc2` (no `:latest`).
+         Check `docker pull ghcr.io/jwilcox99/migratarr:0.2.0rc2`, `--version`, and that the
+         container turns healthy
 7. - [ ] **Friend's install** (Josh): from `docs/docker.md` and `examples/docker/compose.yaml`
-         only, with `:0.2.0rc1`. Fixes found here go into `main` before the final tag
+         only, with `:0.2.0rc2`. Fixes found here go into `main` before the final tag
 8. - [ ] **Release** (Claude, then Josh): `__version__ = '0.2.0'`, the CHANGELOG heading gets
          the date; Josh tags `v0.2.0` (PyPI, GitHub release, Docker `:0.2.0`, `:0.2`, `:latest`)
 9. - [ ] **After** (Josh, optional): delete merged branches (`feature/docker`,

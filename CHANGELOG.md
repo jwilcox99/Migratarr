@@ -48,6 +48,15 @@ ready. Every move is still reviewed and approved in the UI before it runs.
   approved moves, where the page lands.
 - A job's Output shows the newest line first, so it stays readable while the page
   reloads every few seconds.
+- The UI's log lines end with the HTTP status (`GET /run/... 200`), so a failed request
+  stands out. Still no query strings or form fields.
+- The Docker healthcheck asks the new `/ping` (open without sign-in, like Radarr's), and
+  neither `/ping` nor the browser's `/favicon.ico` is logged: the log no longer gets a
+  line every 30 seconds.
+- `docs/docker.md` says what to have first (Docker with Compose v2, including on Debian;
+  Jellyfin; a TMDB token), and `examples/docker/compose.yaml` includes Jellyfin. The
+  test-kit walkthrough has a Debian install path (Debian has no `docker-compose-v2`).
+
 ### Fixed
 - Setup and Settings > Services: a key typed into the paste box is now used even
   when the dropdown still said another source (TMDB defaulted to "environment

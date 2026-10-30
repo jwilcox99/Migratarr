@@ -20,11 +20,39 @@ If something doesn't match what a step says to expect, stop there and send the o
 
 ## 1. Install Docker and the tools
 
+**Ubuntu:**
+
 ```bash
 sudo apt update
 sudo apt install -y git python3 e2fsprogs docker.io docker-compose-v2
 sudo usermod -aG docker "$USER"
 ```
+
+**Debian:** Debian has no `docker-compose-v2` package, so this uses Docker's own repository,
+as in [Docker's install guide](https://docs.docker.com/engine/install/debian/):
+
+```bash
+sudo apt install -y git python3 e2fsprogs
+sudo apt update
+sudo apt install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/debian
+Suites: $(. /etc/os-release && echo "$VERSION_CODENAME")
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker "$USER"
+```
+
+If Debian's own `docker.io` or `docker-compose` is already installed, remove them first
+(`sudo apt remove docker.io docker-compose`): they conflict with Docker's packages.
 
 Then **log out of the machine completely and log back in** (or reboot). Docker only works
 without `sudo` in a new login. Check:
