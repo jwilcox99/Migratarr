@@ -155,7 +155,7 @@ def get_approvals(base, run_id, manifest_hash):
     """Approval state per execution ID, same rule as executor_manifest.approval_is_current()."""
     path = Path(base) / 'approvals' / (_checked_run_id(run_id) + '.json')
     if not path.exists():
-        return dict(run_id=run_id, record_present=False, states={}, batches=[])
+        return dict(run_id=run_id, record_present=False, states={}, batches=[], closed=None)
     try:
         record = _load_json_retry(path)
     except ValueError as exc:
@@ -166,6 +166,8 @@ def get_approvals(base, run_id, manifest_hash):
     approved_ids = set(record['approved_execution_ids'])
     latest, batches = {}, {}
     for entry in record['history']:
+        if entry.get('execution_id') is None:  # CLOSE / REOPEN: about the run, not one move
+            continue
         latest[entry.get('execution_id')] = entry
         batch = entry.get('batch')
         if entry.get('action') == 'APPROVE' and isinstance(batch, dict):
@@ -183,7 +185,8 @@ def get_approvals(base, run_id, manifest_hash):
         states[execution_id] = dict(state=state, utc=entry.get('utc'),
                                     batch_utc=(entry.get('batch') or {}).get('utc'))
     return dict(run_id=run_id, record_present=True, states=states,
-                batches=sorted(batches.values(), key=lambda b: b.get('utc') or ''))
+                batches=sorted(batches.values(), key=lambda b: b.get('utc') or ''),
+                closed=record.get('closed') if isinstance(record.get('closed'), dict) else None)
 
 
 def journal_path(base, execution_id):
@@ -254,10 +257,11 @@ def run_status(base, run_id):
     manifest = get_manifest(base, run_id)
     result = dict(run_id=run_id, integrity_ok=manifest['integrity_ok'],
                   integrity_problems=manifest['integrity_problems'],
-                  manifest_hash=manifest['manifest_hash'], rows=[], totals={})
+                  manifest_hash=manifest['manifest_hash'], rows=[], totals={}, closed=None)
     if not manifest['integrity_ok']:
         return result
     approvals = get_approvals(base, run_id, manifest['manifest_hash'])
+    result['closed'] = approvals['closed']
     for row in manifest['rows']:
         execution_id = row['execution_id']
         approval = approvals['states'].get(execution_id, dict(state=UNAPPROVED, utc=None,
