@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Web UI for Migratarr: plan a run, confirm (approve) moves, run them, and watch.
 
-    migratarr ui [--port 8765] [--read-only]
+    migratarr ui [--host 127.0.0.1] [--port 8765] [--read-only]
 
-It listens on 127.0.0.1 only. From another computer, open an SSH tunnel and
-browse to http://localhost:8765:
-
-    ssh -L 8765:localhost:8765 <user>@<media host>
+By default it listens on 127.0.0.1 only; from another computer, use an SSH tunnel
+(ssh -L 8765:localhost:8765 <user>@<media host>) and browse to http://localhost:8765.
+--host 0.0.0.0 (or $MIGRATARR_HOST, as in Docker) makes it reachable on your
+network: then every page needs a sign-in, and the first visit creates the login
+(migratarr/auth.py). Don't expose it to the internet.
 
 Pages (GET) come from read_api.py (docs/dev/ui-data-contract.md) plus the disks'
 free space, and never write, rename or lock anything; they never open
@@ -880,6 +881,9 @@ a:focus-visible,summary:focus-visible{outline:2px solid var(--teal);outline-offs
 .mark{width:28px;height:28px}
 .readonly{color:var(--muted);font-size:13px}
 .nav{display:flex;gap:16px;align-items:center;font-size:14px}
+.signin{display:grid;gap:12px;max-width:360px}.signin label{display:grid;gap:4px}
+.signout{display:flex;gap:8px;align-items:center}.signout .who{color:var(--muted)}
+button.link{background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit}
 table+h2,table+p+h2,ul.plain+h2{margin-top:28px}
 main{max-width:1240px;margin:0 auto;padding:24px}
 h1{font-size:28px;line-height:1.2;margin:4px 0 6px;font-weight:650}
@@ -1296,6 +1300,53 @@ class App:
         return 404, 'text/html; charset=utf-8', body.encode()
 
 
+SESSION_COOKIE = 'migratarr_session'
+AUTH_PAGES = {'/login', '/logout', '/account/new'}
+OPEN_WITHOUT_LOGIN = AUTH_PAGES | {'/static/app.css'}
+
+
+def safe_next(value):
+    """Where to go after signing in: a path on this UI only (no other site, no //host)."""
+    value = (value or '').strip()
+    if not value.startswith('/') or value.startswith('//') or '\\' in value or any(ord(c) < 32 for c in value):
+        return '/'
+    return value
+
+
+def render_sign_in(create, error='', next_path='/', username=''):
+    """The sign-in page, or (create) the first-visit page that sets the login."""
+    title = 'Create your login' if create else 'Sign in'
+    intro = ('<p>Migratarr is reachable from your network, so it needs a login before anything else. '
+             'Choose a username and password; you will sign in with them from now on. '
+             'To change it later, run <code>migratarr password</code>.</p>' if create else '')
+    password = ('<label>Password<input type="password" name="password" autocomplete="new-password" '
+                'minlength="8" required></label><label>Same password again<input type="password" '
+                'name="confirm" autocomplete="new-password" minlength="8" required></label>' if create else
+                '<label>Password<input type="password" name="password" autocomplete="current-password" '
+                'required></label>')
+    body = (f'<h1>{title}</h1>{intro}' + (f'<div class="alert"><p>{e(error)}</p></div>' if error else '') +
+            f'<form class="signin" method="post" action="{"/account/new" if create else "/login"}">'
+            f'<input type="hidden" name="next" value="{e(safe_next(next_path))}">'
+            f'<label>Username<input type="text" name="username" autocomplete="username" maxlength="64" required '
+            f'value="{e(username)}"></label>{password}'
+            f'<button type="submit" class="btn primary">{"Create login" if create else "Sign in"}</button></form>')
+    # No page links before signing in: they would only lead back here.
+    return page(title, body, ctx=dict(actions=True)).replace('<a href="/settings">Settings &amp; health</a>', '', 1)
+
+
+def with_account_nav(body, username, form_token):
+    """Adds "Signed in as … / Sign out" to a page's top bar."""
+    signout = (f'<form class="signout" method="post" action="/logout"><input type="hidden" name="token" '
+               f'value="{e(form_token)}"><span class="who">{e(username)}</span>'
+               f'<button type="submit" class="link">Sign out</button></form>')
+    return body.replace('</nav>', signout + '</nav>', 1)
+
+
+def same_origin(origin, host_header):
+    """Origin header (scheme://host[:port]) names the same host and port as the request's Host header."""
+    return (origin or '').split('://', 1)[-1].strip().lower() == (host_header or '').strip().lower()
+
+
 def host_is_loopback(host_header):
     host = (host_header or '').strip().lower()
     if host.startswith('['):
@@ -1305,21 +1356,37 @@ def host_is_loopback(host_header):
     return name in LOOPBACK_NAMES
 
 
-def make_handler(app):
+def make_handler(app, accounts=None, require_login=False, throttle=None):
+    """The HTTP handler. ``accounts`` (auth.Accounts) turns sign-in on: required whenever a login exists,
+    and, with ``require_login`` (the UI listens beyond this machine), always, the first visit creating it.
+    Without ``require_login`` only localhost Host names are served (DNS rebinding); with it, any Host name,
+    since every page then needs a session cookie, which a rebound name never carries."""
+    from migratarr import auth as auth_module
+    throttle = throttle or auth_module.Throttle()
+
     class Handler(BaseHTTPRequestHandler):
         server_version = 'Migratarr-UI'
         sys_version = ''
 
-        def send(self, status, content_type, body, head=False, location=None):
+        def log_message(self, fmt, *args):  # never log a query string or form (keys, passwords)
+            sys.stderr.write('%s - - [%s] %s %s\n' % (self.address_string(), self.log_date_time_string(),
+                                                      self.command, self.path.split('?', 1)[0]))
+
+        def send(self, status, content_type, body, head=False, location=None, cookie=None):
+            if content_type.startswith('text/html') and self.user and accounts is not None:
+                body = with_account_nav(body.decode(), self.user, accounts.form_token(self.cookie)).encode()
             self.send_response(status)
             self.send_header('Content-Type', content_type)
             self.send_header('Content-Length', str(len(body)))
             if location:
                 self.send_header('Location', location)
+            if cookie is not None:
+                self.send_header('Set-Cookie', cookie)
             self.send_header('Cache-Control', 'no-store')
+            forms = app.actions or self.login_on()
             self.send_header('Content-Security-Policy',
                              "default-src 'none'; style-src 'self'; img-src 'self'; "
-                             f"form-action {chr(39) + 'self' + chr(39) if app.actions else chr(39) + 'none' + chr(39)}; "
+                             f"form-action {chr(39) + 'self' + chr(39) if forms else chr(39) + 'none' + chr(39)}; "
                              "frame-ancestors 'none'; base-uri 'none'")
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Referrer-Policy', 'no-referrer')
@@ -1327,12 +1394,118 @@ def make_handler(app):
             if not head:
                 self.wfile.write(body)
 
+        # ---- sign-in
+
+        def login_on(self):
+            """Whether this request needs a signed-in session ('create' while no login exists yet)."""
+            if accounts is None:
+                return False
+            try:
+                exists = accounts.exists()
+            except auth_module.AuthError:
+                return True  # a damaged file still locks the UI; `migratarr password` fixes it
+            return True if exists else ('create' if require_login else False)
+
+        def read_session(self):
+            self.user = self.cookie = None
+            if accounts is None:
+                return
+            for part in (self.headers.get('Cookie') or '').split(';'):
+                name, _, value = part.strip().partition('=')
+                if name == SESSION_COOKIE:
+                    self.cookie = value
+                    self.user = accounts.session_user(value)
+
+        def session_cookie(self, value, max_age):
+            return (f'{SESSION_COOKIE}={value}; Path=/; Max-Age={max_age}; HttpOnly; SameSite=Lax')
+
+        def gate(self, path, head=False):
+            """None when the request may go on; otherwise the response was sent."""
+            need = self.login_on()
+            if not need or self.user or path in OPEN_WITHOUT_LOGIN:
+                return None
+            target = '/account/new' if need == 'create' else '/login'
+            if path.startswith('/api/'):
+                self.send(HTTPStatus.UNAUTHORIZED, 'application/json; charset=utf-8',
+                          b'{"error": "sign in first"}\n', head)
+            elif self.command in ('GET', 'HEAD'):
+                query = urlencode({'next': self.path}) if self.path not in ('/', '') else ''
+                self.send(HTTPStatus.SEE_OTHER, 'text/plain; charset=utf-8', b'', head,
+                          location=target + ('?' + query if query else ''))
+            else:
+                self.send(HTTPStatus.UNAUTHORIZED, 'text/plain; charset=utf-8',
+                          b'Sign in first. Nothing was changed.\n')
+            return True
+
+        def auth_get(self, path, query, head):
+            need = self.login_on()
+            next_path = safe_next((query.get('next') or ['/'])[0])
+            if path == '/logout' or not need:
+                return self.send(HTTPStatus.SEE_OTHER, 'text/plain; charset=utf-8', b'', head, location='/')
+            create = need == 'create'
+            if (path == '/account/new') != create:  # only the page that applies right now
+                return self.send(HTTPStatus.SEE_OTHER, 'text/plain; charset=utf-8', b'', head,
+                                 location='/account/new' if create else '/login')
+            if self.user:
+                return self.send(HTTPStatus.SEE_OTHER, 'text/plain; charset=utf-8', b'', head, location=next_path)
+            self.send(200, 'text/html; charset=utf-8', render_sign_in(create, next_path=next_path).encode(), head)
+
+        def auth_post(self, path, data):
+            field = lambda name: (data.get(name) or [''])[0]
+            next_path = safe_next(field('next'))
+            if path == '/logout':
+                if self.user and hmac.compare_digest(field('token'), accounts.form_token(self.cookie)):
+                    self.user = None
+                    return self.send(HTTPStatus.SEE_OTHER, 'text/plain; charset=utf-8', b'',
+                                     location='/login', cookie=self.session_cookie('', 0))
+                return self.send(HTTPStatus.SEE_OTHER, 'text/plain; charset=utf-8', b'', location='/')
+            need = self.login_on()
+            create = need == 'create'
+            if not need or (path == '/account/new') != create:
+                return self.send(HTTPStatus.CONFLICT, 'text/plain; charset=utf-8',
+                                 b'This page no longer applies; reload it.\n')
+            address = self.client_address[0]
+            wait = throttle.blocked_for(address)
+            if wait and not create:
+                body = render_sign_in(False, f'Too many wrong passwords. Try again in {wait} seconds.',
+                                      next_path, field('username'))
+                return self.send(HTTPStatus.TOO_MANY_REQUESTS, 'text/html; charset=utf-8', body.encode())
+            if create:
+                problem = auth_module.check_new_login(field('username'), field('password'), field('confirm'))
+                if not problem:
+                    try:
+                        accounts.set(field('username'), field('password'))
+                    except (auth_module.AuthError, OSError) as exc:
+                        problem = str(exc)
+                if problem:
+                    body = render_sign_in(True, problem, next_path, field('username'))
+                    return self.send(HTTPStatus.BAD_REQUEST, 'text/html; charset=utf-8', body.encode())
+            elif not accounts.verify(field('username'), field('password')):
+                throttle.failed(address)
+                body = render_sign_in(False, 'Wrong username or password.', next_path, field('username'))
+                return self.send(HTTPStatus.UNAUTHORIZED, 'text/html; charset=utf-8', body.encode())
+            throttle.succeeded(address)
+            value = accounts.issue()
+            self.user, self.cookie = accounts.session_user(value), value
+            return self.send(HTTPStatus.SEE_OTHER, 'text/plain; charset=utf-8', b'', location=next_path,
+                             cookie=self.session_cookie(value, auth_module.SESSION_DAYS * 86400))
+
+        # ---- requests
+
+        def host_allowed(self):
+            # Localhost only unless listening on the network with sign-in (see make_handler).
+            return require_login and accounts is not None or host_is_loopback(self.headers.get('Host'))
+
         def handle_get(self, head):
-            # Reject other host names (DNS rebinding): this is reachable on loopback only.
-            if not host_is_loopback(self.headers.get('Host')):
+            self.read_session()
+            if not self.host_allowed():
                 return self.send(HTTPStatus.MISDIRECTED_REQUEST, 'text/plain; charset=utf-8',
                                  b'Open this page through localhost.\n', head)
             path, _, query = self.path.split('#', 1)[0].partition('?')
+            if accounts is not None and path in AUTH_PAGES:
+                return self.auth_get(path, parse_qs(query), head)
+            if self.gate(path, head):
+                return
             result = app.respond(path, parse_qs(query))
             if result[0] == 'redirect':
                 return self.send(HTTPStatus.SEE_OTHER, 'text/plain; charset=utf-8', b'', head, location=result[1])
@@ -1345,20 +1518,26 @@ def make_handler(app):
             self.handle_get(head=True)
 
         def refuse(self):
+            self.user = None
             self.send(HTTPStatus.METHOD_NOT_ALLOWED, 'text/plain; charset=utf-8',
                       b'This view is read-only.\n')
 
         def do_POST(self):
-            if not app.actions:
+            self.read_session()
+            path = self.path.split('?', 1)[0]
+            auth_page = accounts is not None and path in AUTH_PAGES
+            if not (app.actions or auth_page):
                 return self.refuse()
-            if not host_is_loopback(self.headers.get('Host')):
+            if not self.host_allowed():
                 return self.send(HTTPStatus.MISDIRECTED_REQUEST, 'text/plain; charset=utf-8',
                                  b'Open this page through localhost.\n')
             # Browsers send these on cross-site requests; refuse anything not from this UI's own pages.
             site = self.headers.get('Sec-Fetch-Site')
             origin = self.headers.get('Origin')
+            host = self.headers.get('Host')
             if (site and site not in ('same-origin', 'none')) or (
-                    origin and origin != 'null' and not host_is_loopback(origin.split('://', 1)[-1])):
+                    origin and origin != 'null' and not (same_origin(origin, host) or (
+                        not require_login and host_is_loopback(origin.split('://', 1)[-1])))):
                 return self.send(HTTPStatus.FORBIDDEN, 'text/plain; charset=utf-8', b'Cross-site request refused.\n')
             kind = (self.headers.get('Content-Type') or '').split(';', 1)[0].strip()
             try:
@@ -1368,7 +1547,11 @@ def make_handler(app):
             if kind != 'application/x-www-form-urlencoded' or not 0 <= length <= 256 * 1024:
                 return self.send(HTTPStatus.BAD_REQUEST, 'text/plain; charset=utf-8', b'Bad form.\n')
             data = parse_qs(self.rfile.read(length).decode('utf-8', 'replace'), keep_blank_values=True)
-            result = app.respond_post(self.path.split('?', 1)[0], data)
+            if auth_page:
+                return self.auth_post(path, data)
+            if self.gate(path):
+                return
+            result = app.respond_post(path, data)
             if result[0] == 'redirect':
                 return self.send(HTTPStatus.SEE_OTHER, 'text/plain; charset=utf-8', b'', location=result[1])
             self.send(*result)
@@ -1450,28 +1633,73 @@ def build_app(base=None, actions=True, backend=None):
     return app
 
 
-def main(argv=None):
+LOOPBACK_BINDS = {'127.0.0.1', 'localhost', '::1'}
+
+
+def env_port(environ):
+    value = environ.get('MIGRATARR_PORT') or '8765'
+    try:
+        return int(value)
+    except ValueError:
+        raise SystemExit(f'MIGRATARR_PORT must be a number, not {value!r}.')
+
+
+class ServerV6(ThreadingHTTPServer):
+    import socket as _socket
+    address_family = _socket.AF_INET6
+
+
+def main(argv=None, environ=None):
+    import os
+    environ = os.environ if environ is None else environ
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--port', type=int, default=8765, help='Port on 127.0.0.1 (default 8765)')
+    parser.add_argument('--host', default=environ.get('MIGRATARR_HOST') or '127.0.0.1',
+                        help='address to listen on (default 127.0.0.1, or $MIGRATARR_HOST); '
+                             'anything else needs a sign-in, set on the first visit')
+    parser.add_argument('--port', type=int, default=env_port(environ),
+                        help='port (default 8765, or $MIGRATARR_PORT)')
     parser.add_argument('--base', type=Path, help='Migratarr base path (default: runtime.json base_path)')
     parser.add_argument('--read-only', action='store_true',
                         help='View only: no planning, approving or moving from the browser')
     args = parser.parse_args(argv)
     # One-time move of runtime.json to version 2 (docs/settings.md); never blocks startup.
     from migratarr.settings import migrate_if_needed
+    from migratarr.auth import Accounts, AuthError
     migrate_if_needed(log=lambda message: print(message, file=sys.stderr, flush=True))
     app = build_app(args.base, actions=not args.read_only)
+    network = args.host not in LOOPBACK_BINDS
+    accounts = Accounts()
     try:
-        server = ThreadingHTTPServer(('127.0.0.1', args.port), make_handler(app))
+        has_login = accounts.exists()
+    except AuthError as exc:
+        print(str(exc), file=sys.stderr)
+        has_login = True
+    server_class = ServerV6 if ':' in args.host else ThreadingHTTPServer
+    try:
+        server = server_class((args.host, args.port), make_handler(app, accounts, require_login=network))
     except OSError as exc:
         if exc.errno == errno.EADDRINUSE:
             print(f'Port {args.port} is already in use (is another Migratarr UI running?). '
                   f'Stop it, or start this one with --port {args.port + 1}.', file=sys.stderr)
             return 2
+        if exc.errno in (errno.EADDRNOTAVAIL, errno.EAFNOSUPPORT):
+            print(f'Cannot listen on {args.host}: {exc.strerror}. Use 0.0.0.0 for every network '
+                  'interface, or 127.0.0.1 for this machine only.', file=sys.stderr)
+            return 2
         raise
     mode = 'read-only view' if args.read_only else 'UI (plan, confirm, run)'
-    print(f'Migratarr {mode} on http://localhost:{args.port}  (Ctrl+C to stop; running jobs keep going)\n'
-          f'From another computer: ssh -L {args.port}:localhost:{args.port} <user>@<this host>', flush=True)
+    if network:
+        shown = 'http://<this host>:' + str(args.port) if args.host in ('0.0.0.0', '::') else \
+            f'http://{args.host}:{args.port}'
+        print(f'Migratarr {mode} on {shown}  (Ctrl+C to stop; running jobs keep going)\n'
+              + ('Sign-in required.' if has_login else
+                 'No login yet: the first visit creates it. Open it now, before anyone else on your network does.')
+              + " Don't expose this port to the internet.", flush=True)
+    else:
+        print(f'Migratarr {mode} on http://localhost:{args.port}  (Ctrl+C to stop; running jobs keep going)\n'
+              f'From another computer: ssh -L {args.port}:localhost:{args.port} <user>@<this host>, '
+              'or start it with --host 0.0.0.0 to use it on your network with a sign-in'
+              + (' (sign-in required: a login is set)' if has_login else ''), flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -28,8 +28,10 @@ it plans a made-up library offline and opens the UI read-only.
 migratarr ui
 ```
 
-Open `http://localhost:8765` (through an SSH tunnel if Migratarr runs on a
-server: `ssh -L 8765:localhost:8765 media-host.example`). With no settings
+Open `http://localhost:8765`. If Migratarr runs on a server, start it with
+`migratarr ui --host 0.0.0.0` and open `http://<server>:8765`, creating the
+login on the first visit, or use an SSH tunnel
+(`ssh -L 8765:localhost:8765 media-host.example`). With no settings
 yet, every page leads to the wizard. Nothing is written until the last step.
 
 ### 1. Connect your services
