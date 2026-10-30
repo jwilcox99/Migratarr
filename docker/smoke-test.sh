@@ -64,7 +64,7 @@ root_owned=$($AS_ROOT find "$CONFIG" -user 0 | head -5)
 [ -z "$root_owned" ] || fail "root-owned files in /config: $root_owned"
 
 stage "the UI process runs as PUID"
-uid=$(docker exec "$NAME" sh -c 'for d in /proc/[0-9]*; do grep -q "migratarr.cli" $d/cmdline 2>/dev/null && awk "/^Uid:/{print \$2}" $d/status && break; done')
+uid=$(docker exec "$NAME" sh -c 'for d in /proc/[0-9]*; do grep -q "migratarr[.]cli" $d/cmdline 2>/dev/null && awk "/^Uid:/{print \$2}" $d/status && break; done')
 [ "$uid" = 1234 ] || fail "UI runs as uid '$uid'"
 
 stage "tools: ssh present, docker absent, TZ applied"
