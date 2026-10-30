@@ -1,6 +1,6 @@
 # Unified execution core: Step 2 design spec
 
-**Status:** In progress. Gates 1–3 done (offline); gates 4–6 not started. Gate 4 (live check-only parity on the NAS) is the next step and must pass before release. 2026-10-26: the transport layer (SSH or this host, by `topology`) landed ahead of gate 3; see [Execution transport](execution-transport.md). Written 2026-09-24 against `main` @ `7a1d084`.
+**Status:** In progress. Gates 1–3 done (offline); gate 4 passed on the NAS 2026-10-29 (three of four pairings, see below); gates 5–6 not started. 2026-10-26: the transport layer (SSH or this host, by `topology`) landed ahead of gate 3; see [Execution transport](execution-transport.md). Written 2026-09-24 against `main` @ `7a1d084`.
 **Plan reference:** Step 2 of `2026-09-24-release-path-plan` and the Phase Two handoff in `docs/dev/phase-one-closeout.md` ("a unified execution core that preserves the Phase One safety invariants while removing duplicated Movie/TV and same-disk/cross-disk code").
 **Goal:** one execution engine replaces the four live executors. Every journal, refusal and Arr call stays exactly as it is today. The engine reports what it does as structured data, so the CLI now and a web UI later are both clients of the same code.
 
@@ -190,6 +190,37 @@ Offline tests can't cover:
 - the real Radarr/Sonarr HTTP calls through the shared `arr.py` client (URL building and docker commands are pinned by `test_service_urls` / `test_arr_file_checks`, but not run live);
 - SSH channel commands on the NAS;
 - NFS visibility timing after a real rename.
+
+### Recorded by gate 4
+
+Done 2026-10-29 on Josh's media host (NAS over SSH). Old = `a9fc7df` (before gate 3), new = `ae73108` (gate 3 + PR #7). Run `20261029T173659Z` (16 moves), planned fresh the same day. Both versions read the same settings (`MIGRATARR_HOME` = the clone).
+
+**Check-only parity:** for each row, old then new without `--execute`; the two attempts in the journal compared with every field except `utc`.
+
+| Pairing | Row | Title | Size | Old | New | Journals |
+| --- | --- | --- | --- | --- | --- | --- |
+| Movie, same disk | `-0006` | Trapped in Paradise (1994) | 11.05 GB | `CHECK_ONLY` | `CHECK_ONLY` | identical (3 events) |
+| Movie, cross disk | `-0012` | SLC Punk (1998) | 12.02 GB | `CHECK_ONLY` | `CHECK_ONLY` | identical (3 events) |
+| TV, cross disk | `-0016` | Nathan for You | 21.88 GB | `CHECK_ONLY` | `CHECK_ONLY` | identical (3 events) |
+
+No `STOPPED` event in any of the three journals.
+
+**Watched live moves (new engine), smallest row of each pairing:**
+
+| Row | How run | Result | Checked after |
+| --- | --- | --- | --- |
+| `-0006` | `execute_movie_nas --execute` | `SUCCESS`; rename on `media04`, Archive → Library | Radarr path; plays in Jellyfin |
+| `-0012` | `execute_cross_movie --execute` | `SUCCESS`; `media04` → `media01`, ~32 min | both files at the journaled byte sizes, dates and folder mode kept, source gone; Radarr path; plays |
+| `-0016` | web UI Run | `SUCCESS`, 31 episode files / 31 linked | Sonarr path; plays |
+
+**TV same disk was not run:** the plan had no such row. Accepted (Josh, 2026-10-29) because the new engine builds it from parts the other rows ran live (`SameDiskRename`, the Sonarr adapter and client); its one specific branch (re-reading the association table before each mutation) is covered by the goldens. The first real TV same-disk move should be watched.
+
+**Not engine problems, found on the way:**
+- Jellyfin 10.11.11 failed to re-add the renamed movie: a library-cleanup bug (`UNIQUE constraint failed: UserData…`, jellyfin/jellyfin#16975) triggered by an unrelated duplicate title. Fixed in Jellyfin's database; then it played.
+- Both movie folders held 8–9 GB `.mkv.partial.old` transcode leftovers, which were moved (and, cross-disk, copied) with the title.
+- TV cross-disk spent ~52 min after the copy (pre-delete verification, removal, final check) for 31 episodes.
+
+These are follow-ups (planner warning for `.partial` files, a Jellyfin library coverage check, TV verification speed), not release blockers.
 
 ## 6. Decisions needed from Josh
 
