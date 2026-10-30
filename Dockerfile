@@ -43,7 +43,7 @@ ENV MIGRATARR_HOME=/config \
 VOLUME /config
 EXPOSE 8765
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD python -c "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('MIGRATARR_PORT', '8765') + '/static/app.css', timeout=4)"
+  CMD python -c "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('MIGRATARR_PORT', '8765') + '/ping', timeout=4)"
 
 ENTRYPOINT ["tini", "--", "migratarr-entrypoint"]
 CMD ["migratarr", "ui"]

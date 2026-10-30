@@ -12,9 +12,21 @@ Image: `ghcr.io/jwilcox99/migratarr` for amd64 and arm64.
 | `0.2`, `0.2.0` | a release line, or one exact release |
 | `edge` | the newest code on `main`: for trying changes before a release |
 
+## Before you start
+
+- **Docker with Compose v2** (`docker compose version` works). Ubuntu:
+  `sudo apt install docker.io docker-compose-v2`. Debian has no `docker-compose-v2`: use
+  [Docker's own repository](https://docs.docker.com/engine/install/debian/)
+  (`docker-ce` and `docker-compose-plugin`). Then add yourself to the `docker` group
+  (`sudo usermod -aG docker "$USER"`) and log in again.
+- **Radarr, Sonarr and Jellyfin**, or start them with the compose example below.
+  Migratarr reads play history from Jellyfin, so it's required.
+- A free **TMDB API Read Access Token** (themoviedb.org > Settings > API; the long token
+  starting with `eyJ`, not the short "API Key").
+
 ## Quick start
 
-A complete example with Radarr and Sonarr is in
+A complete example with Radarr, Sonarr and Jellyfin is in
 [`examples/docker/compose.yaml`](https://github.com/jwilcox99/Migratarr/blob/main/examples/docker/compose.yaml).
 The Migratarr part:
 
@@ -72,6 +84,9 @@ The wizard knows it runs in a container:
   `/data` mount, so there's no Docker option to choose and no Docker socket to mount.
 - **Where your disks are:** "this machine's own disks" for disks mounted into the
   container (each one a folder under `/data`), or the NAS (below).
+
+A first-time Jellyfin needs its own setup at `http://<your server>:8096` (a user, and the
+`/data` folders as libraries), then an API key for Migratarr: Dashboard > API Keys.
 
 ## Settings
 

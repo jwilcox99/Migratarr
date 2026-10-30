@@ -1401,6 +1401,7 @@ class App:
 SESSION_COOKIE = 'migratarr_session'
 AUTH_PAGES = {'/login', '/logout', '/account/new'}
 OPEN_WITHOUT_LOGIN = AUTH_PAGES | {'/static/app.css'}
+QUIET_PATHS = {'/ping', '/favicon.ico'}  # answered before sign-in and never logged
 
 
 def safe_next(value):
@@ -1466,9 +1467,19 @@ def make_handler(app, accounts=None, require_login=False, throttle=None):
         server_version = 'Migratarr-UI'
         sys_version = ''
 
-        def log_message(self, fmt, *args):  # never log a query string or form (keys, passwords)
-            sys.stderr.write('%s - - [%s] %s %s\n' % (self.address_string(), self.log_date_time_string(),
-                                                      self.command, self.path.split('?', 1)[0]))
+        quiet = False  # set for /ping and /favicon.ico: polled constantly, nothing worth logging
+
+        def log_request(self, code='-', size='-'):
+            if not self.quiet:
+                super().log_request(code, size)  # -> log_message('"%s" %s %s', requestline, code, size)
+
+        def log_message(self, fmt, *args):
+            # Never log a query string or form (keys, passwords): method, path and status only. The request
+            # line in args, and http.server's error messages, may hold a query string, so neither is written.
+            status = args[1] if fmt == '"%s" %s %s' and len(args) == 3 else '-'
+            sys.stderr.write('%s - - [%s] %s %s %s\n' % (
+                self.address_string(), self.log_date_time_string(), getattr(self, 'command', None) or '-',
+                (getattr(self, 'path', None) or '-').split('?', 1)[0], status))
 
         def send(self, status, content_type, body, head=False, location=None, cookie=None):
             if content_type.startswith('text/html') and self.user and accounts is not None:
@@ -1595,6 +1606,12 @@ def make_handler(app, accounts=None, require_login=False, throttle=None):
             return require_login and accounts is not None or host_is_loopback(self.headers.get('Host'))
 
         def handle_get(self, head):
+            path = self.path.split('#', 1)[0].split('?', 1)[0]
+            self.quiet = path in QUIET_PATHS
+            if self.quiet:  # the container healthcheck and the browser's icon: no login, no log line
+                self.user = None
+                status, body = (HTTPStatus.OK, b'OK\n') if path == '/ping' else (HTTPStatus.NO_CONTENT, b'')
+                return self.send(status, 'text/plain; charset=utf-8', body, head)
             self.read_session()
             if not self.host_allowed():
                 return self.send(HTTPStatus.MISDIRECTED_REQUEST, 'text/plain; charset=utf-8',
