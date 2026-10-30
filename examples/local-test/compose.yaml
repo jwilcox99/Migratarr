@@ -6,9 +6,12 @@
 # removes all of it. Ports are bound to 127.0.0.1 only and differ from the standard
 # ones (7878, 8989, 8096), so nothing here can clash with a real Radarr, Sonarr or Jellyfin.
 #
-# Two test "disks" ($MTEST_ROOT/disk1 and disk2) are plain folders. Each category
-# folder is bind-mounted on its own at /media/<category folder>, the path Migratarr's
-# settings call the Arr root, so a category can live on either disk:
+# Two test "disks": $MTEST_ROOT/disk1 is a plain folder; $MTEST_ROOT/disk2 is the ext4
+# image $MTEST_ROOT/disk2.img, loop-mounted by kit.py (init, and up after a reboot), so
+# the two are separate filesystems. Migratarr refuses a cross-disk move between two
+# folders on one filesystem. Each category folder is bind-mounted on its own at
+# /media/<category folder>, the path Migratarr's settings call the Arr root, so a
+# category can live on either disk:
 #
 #   Movies: Common, Rare on disk1   Library, Archive on disk2
 #   TV:     Current, Rare on disk2  Library, Archive on disk1

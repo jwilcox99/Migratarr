@@ -34,6 +34,11 @@ may still change between minor versions, always with a migration or a note here)
 - The run page no longer shows an empty "code ," label in an installed copy.
 - `migratarr demo` no longer prints dozens of "TMDB unavailable – retrying"
   lines, and `--dir` accepts a relative folder.
+- Local-disk test kit (`examples/local-test/`): disk2 is now a loop-mounted ext4
+  image, a separate filesystem from disk1, so the cross-disk test moves are no longer
+  refused ("NAS filesystems are not distinct"). `kit.py init` and `up` print each
+  `sudo` command before running it; `--no-loop` keeps plain folders. `down --delete`
+  unmounts it and removes the read-only run snapshots without `sudo`.
 - Pasted keys are no longer lost when a setup step or a Settings form comes back
   with a problem. The key stays in memory only (never in the page) and the field
   says it is kept; leave it blank to keep it.
