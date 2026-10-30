@@ -18,6 +18,10 @@ The titles are 20-second dummy videos (about 0.5 MB each). Radarr tags force the
 and The Andy Griffith Show carry `migratarr-lock` so they must never move
 ([override tags](../../docs/planner-settings.md)).
 
+
+**Testing the Docker image instead?** Follow [DOCKER-WALKTHROUGH.md](DOCKER-WALKTHROUGH.md):
+the same kit, with Migratarr running in Docker, written to be followed from a fresh machine.
+
 ## What it creates, and what keeps it separate
 
 Everything is under one folder you choose, `$MTEST_ROOT` (e.g. `~/migratarr-test`):

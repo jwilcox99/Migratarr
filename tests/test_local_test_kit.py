@@ -232,6 +232,36 @@ class KitFolder(unittest.TestCase):
         self.assertTrue(self.base.exists())
 
 
+class DockerCheck(unittest.TestCase):
+    """up and seed say what to do when Docker is missing or needs sudo (not a traceback)."""
+
+    def check(self, which, returncode=0, stderr=''):
+        result = mock.Mock(returncode=returncode, stderr=stderr, stdout='')
+        return lambda: kit.require_docker(run=lambda *a, **k: result, which=lambda name: which)
+
+    def test_missing(self):
+        with self.assertRaisesRegex(kit.KitError, 'apt install docker.io docker-compose-v2'):
+            self.check(None)()
+
+    def test_needs_sudo(self):
+        with self.assertRaisesRegex(kit.KitError, 'log out of this machine and back in'):
+            self.check('/usr/bin/docker', 1, 'permission denied while trying to connect to the docker API')()
+
+    def test_not_running(self):
+        with self.assertRaisesRegex(kit.KitError, 'not answering'):
+            self.check('/usr/bin/docker', 1, 'Cannot connect to the Docker daemon')()
+
+    def test_fine(self):
+        self.assertIsNone(self.check('/usr/bin/docker')())
+
+    def test_seed_reports_instead_of_crashing(self):
+        err = io.StringIO()
+        with mock.patch.object(kit, 'require_docker', side_effect=kit.KitError('Docker is not installed.')), \
+                contextlib.redirect_stderr(err):
+            self.assertEqual(kit.main(['seed']), 1)
+        self.assertIn('kit: Docker is not installed.', err.getvalue())
+
+
 class RemoveReadOnlyTree(unittest.TestCase):
     """Run snapshots are read-only on purpose; down --delete must still remove them without sudo."""
 

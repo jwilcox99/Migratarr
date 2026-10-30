@@ -114,6 +114,23 @@ def require_kit_folder(base):
         raise KitError(f'{base} was not made by "./kit.py init" (no {MARKER} file). Run init first.')
 
 
+def require_docker(run=subprocess.run, which=shutil.which):
+    """Docker installed, running, and usable without sudo; else what to do about it."""
+    if not which('docker'):
+        raise KitError('Docker is not installed. Ubuntu/Debian: sudo apt install docker.io docker-compose-v2, '
+                       'then sudo usermod -aG docker "$USER", then log out and back in')
+    result = run(['docker', 'info', '--format', '{{.ServerVersion}}'], capture_output=True, text=True)
+    if result.returncode == 0:
+        return
+    detail = (result.stderr or result.stdout or '').strip()
+    if 'permission denied' in detail.lower():
+        raise KitError('Docker needs sudo for you right now. Add yourself to the docker group '
+                       '(sudo usermod -aG docker "$USER"), then log out of this machine and back in '
+                       '(a new terminal is not enough); "id -nG" should then list docker')
+    raise KitError('Docker is installed but not answering (is it running? sudo systemctl start docker)'
+                   + (': ' + detail.splitlines()[-1] if detail else ''))
+
+
 def compose_env(base):
     puid, pgid = ids()
     env = dict(os.environ, MTEST_ROOT=str(base), MTEST_PUID=str(puid), MTEST_PGID=str(pgid))
@@ -1068,6 +1085,8 @@ def main(argv=None):
             p.add_argument('--delete', action='store_true', help='also delete $MTEST_ROOT')
     args = parser.parse_args(argv)
     try:
+        if args.command in ('up', 'seed'):
+            require_docker()
         return args.func(args) or 0
     except KitError as exc:
         print('kit: ' + str(exc), file=sys.stderr)
