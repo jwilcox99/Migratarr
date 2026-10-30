@@ -108,9 +108,9 @@ class HealthTests(unittest.TestCase):
         run.calls = calls
         return run
 
-    def checks(self, http=None, run=None, docker=None, **fs):
+    def checks(self, http=None, run=None, docker=None, groups=health.GROUPS, **fs):
         report = settings.load(environ=self.d.env)
-        return health.run_checks(report, http=http or FakeHttp(), run=run or self.nas(),
+        return health.run_checks(report, http=http or FakeHttp(), run=run or self.nas(), groups=groups,
                                  docker=docker or fake_docker(), **dict(self.fs, **fs))
 
     def by_id(self, checks):
@@ -159,6 +159,14 @@ class HealthTests(unittest.TestCase):
             with self.subTest(module=module):
                 self.assertNotIn('python3 migratarr_', text)
                 self.assertNotIn("(see docs/", text)
+
+    def test_jellyfin_key_goes_in_the_authorization_header(self):
+        # Current Jellyfin (12.4 tested 2026-10-29) refuses the legacy X-Emby-Token header.
+        http = FakeHttp()
+        self.checks(http)
+        url, headers, _ = [c for c in http.calls if c[0].endswith('/System/Info')][0]
+        self.assertNotIn('X-Emby-Token', headers)
+        self.assertRegex(headers['Authorization'], r'^MediaBrowser Token="[^"]+"$')
 
     def test_missing_credential(self):
         with patch.dict(os.environ, {'T_SONARR': ''}):
@@ -236,6 +244,7 @@ class HealthTests(unittest.TestCase):
                              capture_output=True, check=True).stdout
         facts = json.loads(out)
         self.assertTrue(facts['roots']['a']['exists'] and facts['roots']['a']['writable'])
+        self.assertEqual(facts['roots']['a']['device'], os.stat(self.d.base).st_dev)
         self.assertFalse(facts['roots']['b']['exists'])
 
     def test_local_topology_skips_nas_and_needs_writable_disks(self):
@@ -251,6 +260,68 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(c['nas'].status, health.SKIP)
         self.assertEqual(c['disk.media01'].status, health.OK)  # not a mount point is fine locally
         self.assertEqual(c['disk.media03'].status, health.FAIL)
+
+    def make_local(self, move=None):
+        """topology local; ``move``: {disk id: new folder} for disks put somewhere else."""
+        report = settings.load(environ=self.d.env)
+        runtime = copy.deepcopy(report.data['runtime'])
+        runtime['topology'] = 'local'
+        del runtime['nas']
+        targets = copy.deepcopy(report.data['storage_targets'])
+        for t in targets['targets']:
+            del t['remote_path']
+            if move and t['id'] in move:
+                t['path'] = str(move[t['id']])
+                for media in targets['category_paths'].values():
+                    for folder in media.values():
+                        (move[t['id']] / folder).mkdir(parents=True, exist_ok=True)
+        settings.save({'runtime': runtime, 'storage_targets': targets}, report=report, environ=self.d.env)
+
+    def test_local_disks_on_one_filesystem_fail(self):
+        self.make_local()  # every disk is a folder in one temporary folder: one filesystem
+        c = self.by_id(self.checks())
+        check = c['disks.same_filesystem.media01.media02']
+        self.assertEqual((check.group, check.status), ('disks', health.FAIL))
+        self.assertEqual(check.detail, "media01 and media02 are on the same filesystem: moves between them "
+                                       "can't run.")
+        self.assertEqual(check.fix, 'Use two different disks, or put both categories on one disk.')
+        self.assertEqual(len([k for k in c if k.startswith('disks.same_filesystem.')]), 6)
+
+    def test_local_disks_on_different_filesystems_pass(self):
+        base = Path(self.d.base)
+        if not os.path.isdir('/dev/shm') or os.stat('/dev/shm').st_dev == os.stat(base).st_dev:
+            self.skipTest('needs /dev/shm on another filesystem than the temporary folder')
+        shm = tempfile.TemporaryDirectory(dir='/dev/shm')
+        self.addCleanup(shm.cleanup)
+        self.make_local({'media01': Path(shm.name) / 'media01'})
+        c = self.by_id(self.checks())
+        same = sorted(k for k in c if k.startswith('disks.same_filesystem.'))
+        self.assertEqual(same, ['disks.same_filesystem.media02.media03', 'disks.same_filesystem.media02.media04',
+                                'disks.same_filesystem.media03.media04'])  # media01 is on its own
+
+    def test_same_filesystem_warns_when_no_placement_moves_between_them(self):
+        targets = settings.load(environ=self.d.env).targets
+        devices = {'media01': 7, 'media02': 8, 'media03': 9, 'media04': 9}
+        c = self.by_id(health.same_filesystem_checks(devices, targets, ''))
+        self.assertEqual(list(c), ['disks.same_filesystem.media03.media04'])
+        self.assertEqual(c['disks.same_filesystem.media03.media04'].status, health.FAIL)  # Library -> Archive
+        one_category = type('T', (), {'placement': {'Movie': {'Library': ('media03', 'media04')}}})()
+        check = health.same_filesystem_checks(devices, one_category, '')[0]
+        self.assertEqual(check.status, health.WARN)
+        self.assertIn('media03 and media04 are on the same filesystem.', check.detail)
+        self.assertEqual(health.same_filesystem_checks({'a': 1, 'b': 2}, targets, ''), [])
+
+    def test_nas_disks_on_one_filesystem_are_found_on_the_nas(self):
+        facts = {'python': [3, 11, 2], 'roots': {d: {'exists': True, 'writable': True, 'free': 900 * health.GiB,
+                                                      'device': 41 if d in ('media01', 'media02') else ord(d[-1])}
+                                                  for d in ('media01', 'media02', 'media03', 'media04')}}
+        c = self.by_id(self.checks(run=self.nas(facts)))
+        check = c['disks.same_filesystem.media01.media02']
+        self.assertEqual((check.group, check.status), ('nas', health.FAIL))
+        self.assertIn('media01 and media02 are on the same filesystem on the NAS', check.detail)
+        self.assertEqual([k for k in c if k.startswith('disks.same_filesystem.')], [check.id])
+        # The NAS folders here are network mounts in one temporary folder: never compared on this host.
+        self.assertEqual(self.by_id(self.checks(groups=('disks',))).keys() & {check.id}, set())
 
     def set_arr_file_checks(self, checks, arr_root=None):
         runtime = self.d.read('runtime.json')

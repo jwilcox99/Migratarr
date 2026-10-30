@@ -89,6 +89,18 @@ class UiTests(unittest.TestCase):
         status, _, body = self.get('/execution/' + eid(6))
         self.assertIn('has not been started yet', body)
 
+    def test_refusal_traceback_in_an_older_journal_shows_as_one_plain_line(self):
+        reason = ('NAS check failed or is uncertain: Traceback (most recent call last):\n'
+                  '  File "<string>", line 9, in <module>\n  File "<string>", line 4, in nas_operation\n'
+                  'Refused: NAS filesystems are not distinct [exit status 1]')
+        journal = self.base / 'execution_logs' / (eid(4) + '.jsonl')
+        journal.write_text(journal.read_text().rsplit('\n', 2)[0] + '\n'
+                           + json.dumps(dict(event='STOPPED', error_type='Refused', reason=reason)) + '\n')
+        status, _, body = self.get('/execution/' + eid(4))
+        self.assertEqual(status, 200)
+        self.assertNotIn('Traceback', body)
+        self.assertIn('NAS check refused: the source and target disks are on the same filesystem', body)
+
     def test_json_api_matches_the_pages(self):
         for path in ('/api/runs', '/api/run/' + RUN, '/api/execution/' + eid(1)):
             status, kind, body = self.get(path)

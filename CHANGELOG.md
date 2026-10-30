@@ -39,6 +39,18 @@ may still change between minor versions, always with a migration or a note here)
   refused ("NAS filesystems are not distinct"). `kit.py init` and `up` print each
   `sudo` command before running it; `--no-loop` keeps plain folders. `down --delete`
   unmounts it and removes the read-only run snapshots without `sudo`.
+- Pasted keys are no longer lost when a setup step or a Settings form comes back
+  with a problem. The key stays in memory only (never in the page) and the field
+  says it is kept; leave it blank to keep it.
+- Health checks flag two disks on the same filesystem: a failure when a category
+  placement moves items between them (those moves can't run), otherwise a
+  warning. Local disks are compared here, NAS disks on the NAS.
+- A cross-disk move refused because both disks are on one filesystem shows one
+  plain line on the move and job pages and in the terminal, not a Python
+  traceback. Other refusals by the NAS-side program drop the traceback too.
+- Jellyfin: the key is sent as `Authorization: MediaBrowser Token="..."`. Current
+  Jellyfin (12.4) refuses the old `X-Emby-Token` header, so the health check
+  failed with HTTP 401 and planning could not read watch history.
 
 ## [0.1.0] — unreleased
 

@@ -14,7 +14,9 @@ settings pages share fields, validation and parsing; only the source of
 values differs (an in-memory draft here, the files there). Nothing is
 written until the review step's Save, which hands the whole draft to the
 backend's create() (atomic, owner-only secrets file). Pasted keys live only
-in this process's memory until then and are never put back into a page.
+in this process's memory until then and are never put back into a page: a
+step shown again (a problem, Back, Detect) says the key is kept, and leaving
+the field blank keeps it. Save, or a restart, drops them.
 Standard library only.
 """
 from migratarr import settings_contract as sc

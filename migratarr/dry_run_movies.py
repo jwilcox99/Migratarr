@@ -69,7 +69,7 @@ def radarr(path, timeout=120):
 def jellyfin(path, timeout=60):
     return request_json(
         JELLYFIN_URL + path,
-        headers={"X-Emby-Token": JELLYFIN_KEY},
+        headers={"Authorization": f'MediaBrowser Token="{JELLYFIN_KEY}"'},
         timeout=timeout
     )
 

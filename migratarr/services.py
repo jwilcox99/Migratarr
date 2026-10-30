@@ -76,7 +76,8 @@ SERVICES = MappingProxyType({d.id: d for d in (
         default_source=_frozen({'source': 'docker_file',
                                 'paths': ['/run/secrets/jellyfin_api_key', '/run/secrets/jellyfin_key']}),
         sources=('docker_file', 'file', 'env'), url_base_from_config=False,
-        probe=HealthProbe('/System/Info', 'X-Emby-Token', expect_field='Version', version_field='Version'),
+        probe=HealthProbe('/System/Info', 'Authorization', 'MediaBrowser Token="{key}"',
+                          expect_field='Version', version_field='Version'),
         help_url='https://jellyfin.org/docs/general/server/settings/'),
     ServiceDescriptor(
         id='tmdb', label='TMDB', role='metadata', url_setting=None, default_url=None,
