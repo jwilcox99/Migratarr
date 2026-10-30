@@ -1,6 +1,6 @@
 # Local-disk test kit
 
-A throwaway Radarr, Sonarr and Jellyfin with two folder "disks", for running Migratarr's
+A throwaway Radarr, Sonarr and Jellyfin with two small test disks, for running Migratarr's
 **local-disk moves** ("On this machine's own disks", experimental in 0.1.0) end to end,
 without touching your real library, your real Radarr/Sonarr/Jellyfin or your real
 Migratarr settings. When you're done, one command removes all of it.
@@ -26,6 +26,7 @@ Everything is under one folder you choose, `$MTEST_ROOT` (e.g. `~/migratarr-test
 |---|---|
 | `src/`, `venv/` | a separate copy of Migratarr, installed into its own Python environment |
 | `disk1/`, `disk2/` | the two test disks: `Movies/<category>` and `TV/<category>` folders |
+| `disk2.img` | the file that holds disk2: an ext4 image (2 GiB, sparse) mounted on `disk2/` |
 | `config/` | the test containers' settings |
 | `migratarr/` | the test Migratarr's data folder (settings, runs, logs) |
 | `secrets/` | keys you paste into the test wizard |
@@ -42,10 +43,22 @@ Everything is under one folder you choose, `$MTEST_ROOT` (e.g. `~/migratarr-test
   containers and folders under `$MTEST_ROOT`. Run it before every Migratarr command that
   contacts anything.
 - The test Migratarr UI uses port 8766 (your real one uses 8765).
+- `disk2` is a separate filesystem: an ext4 image file loop-mounted on `$MTEST_ROOT/disk2`.
+  Migratarr refuses a cross-disk move between two folders on the same filesystem (it
+  can't be a real disk-to-disk transfer), so with two plain folders only the same-disk
+  renames could run. Mounting needs root; that's the only thing the kit uses `sudo` for
+  (below).
 
 ## You need
 
 - Linux with Docker, usable without `sudo` (`docker ps` works).
+- `sudo`, for mounting the disk2 image. `./kit.py init` (and `./kit.py up` after a reboot)
+  prints each command and why before running it: `sudo mount -o loop,nosuid,nodev
+  …/disk2.img …/disk2`, then on a new image `sudo rmdir …/disk2/lost+found` and
+  `sudo chown <you>:<MTEST_PGID> …/disk2`. `./kit.py down --delete` runs
+  `sudo umount …/disk2`. Without `sudo`, `./kit.py init --no-loop` keeps disk2 a plain
+  folder, and the cross-disk moves (2 and 4) will be refused.
+- `mkfs.ext4` (package `e2fsprogs`, installed on Ubuntu and Debian by default).
 - `git`, and Python 3.10 or newer with `venv` (`python3 -m venv --help` works; on Ubuntu,
   `sudo apt install python3-venv` if not). Python 3.14 hasn't been tested with Migratarr
   yet, so note anything odd.
@@ -53,7 +66,8 @@ Everything is under one folder you choose, `$MTEST_ROOT` (e.g. `~/migratarr-test
   Radarr/Sonarr look up the test titles, and reach TMDB.
 - Your real **TMDB API Read Access Token** (<https://www.themoviedb.org/settings/api>). It
   is read-only. Pasted into the test wizard, it's stored only in `$MTEST_ROOT/secrets`.
-- About 1 GB free disk space, mostly for the images.
+- About 1 GB free disk space, mostly for the images. The disk2 image is 2 GiB but sparse:
+  it only takes the space its files use (`./kit.py init --disk2-size 4G` for a bigger one).
 - The user and group IDs your real Radarr runs as (`docker inspect radarr --format
   '{{range .Config.Env}}{{println .}}{{end}}' | grep -E 'PUID|PGID'`). Your user must be in
   that group (`id -nG`).
@@ -90,10 +104,14 @@ clone isn't touched.
 ## 3. Create the test disks and start the containers
 
 ```bash
-./kit.py init     # folder tree, group-writable (mode 2775, group $MTEST_PGID)
+./kit.py init     # folder tree, group-writable (mode 2775, group $MTEST_PGID); disk2 image + sudo mount
 ./kit.py up       # checks compose.yaml against the kit, starts the containers, waits until they answer
 ./kit.py seed     # root folders, tags, the dummy titles, a Jellyfin admin and API key
 ```
+
+`init` should end with `disk1 and disk2 are separate filesystems`. If it says `SAME
+filesystem`, the cross-disk moves will be refused; see Troubleshooting. Running `init` again
+is safe: a disk2 that's already mounted is left as it is.
 
 `seed` should finish with every title marked `imported`. If one says `NOT imported`, open
 that app's System > Logs (step 5 shows how to reach it) and include what it says in what
@@ -231,8 +249,10 @@ Stop the UI (Ctrl-C), then:
 ./kit.py down --delete
 ```
 
-This removes the three containers and their network, then deletes `$MTEST_ROOT`, including
-the test Migratarr, its settings and the pasted keys. The images stay cached; your real
+This removes the three containers and their network, unmounts disk2 (`sudo umount`), then
+deletes `$MTEST_ROOT`, including the disk2 image, the test Migratarr, its settings, its
+read-only run snapshots and the pasted keys. Plain `./kit.py down` keeps everything,
+including the disk2 mount. The images stay cached; your real
 stack uses the same ones. Close the shells you activated, or run `exec bash` in them.
 
 ## Troubleshooting
@@ -243,3 +263,19 @@ stack uses the same ones. Close the shells you activated, or run `exec bash` in 
   where it can, or ask in the project chat.
 - **Starting over:** `./kit.py down --delete`, then go back to step 1.
 - **Containers stopped (reboot):** `./kit.py up` again. They don't restart by themselves.
+  A reboot also unmounts disk2; `up` notices and mounts the image again (same `sudo`
+  notice) before starting the containers.
+- **`init`, `check` or `status` say disk1 and disk2 are on the SAME filesystem:** disk2
+  isn't mounted (you used `--no-loop`, or ran Migratarr after a reboot without
+  `./kit.py up`). Cross-disk moves are then refused with "NAS filesystems are not
+  distinct". Run `./kit.py up`; if you used `--no-loop`, `./kit.py down`, then
+  `./kit.py init` (an empty disk2 folder tree is replaced; one with files in it is refused,
+  so start over with `./kit.py down --delete`).
+- **Detect in the Services step kept the real URLs:** Detect only fills blank fields, and
+  the URL fields start filled with the defaults (`http://localhost:7878` …). Replace them
+  with the kit's ports, `http://localhost:17878` (Radarr), `18989` (Sonarr) and `18096`
+  (Jellyfin), and the container names, *before* pressing Detect.
+- **`down --delete` can't remove some files:** run snapshots are read-only on purpose; the
+  kit makes your own folders writable again before deleting, so no `sudo` is needed for
+  them. If it still names files and suggests `sudo rm -rf`, those belong to another user
+  (for example root, made by a container).
