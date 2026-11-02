@@ -199,6 +199,12 @@ approved = set(
     approvals.get("approved_execution_ids", [])
 )
 
+if approvals.get("closed") and (args.approve or args.approve_batch):
+    raise SystemExit(
+        f"Run {run_id} is marked done, so nothing in it can be approved. "
+        "Reopen it on its page in the web UI first."
+    )
+
 
 def print_row(r):
     marker = "APPROVED" if r["execution_id"] in approved else "UNAPPROVED"

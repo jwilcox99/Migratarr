@@ -48,6 +48,11 @@ ready. Every move is still reviewed and approved in the UI before it runs.
   approved moves, where the page lands.
 - A job's Output shows the newest line first, so it stays readable while the page
   reloads every few seconds.
+- **Mark a run done** from the Runs page, even with moves not made: it shows as
+  "Done", its approvals for moves that haven't run are withdrawn and nothing more
+  from it can be approved or run (UI or `migratarr approve`). "Reopen" on the run
+  page undoes it. Refused while a move from the run is unfinished or needs
+  attention. Replaces "Done with this batch" in the scheduled-planning note.
 - The UI's log lines end with the HTTP status (`GET /run/... 200`), so a failed request
   stands out. Still no query strings or form fields.
 - The Docker healthcheck asks the new `/ping` (open without sign-in, like Radarr's), and

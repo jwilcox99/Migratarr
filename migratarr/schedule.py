@@ -5,7 +5,7 @@ On the days and at the time set in config/notifications.json, the scheduler:
 - waits while a job is running (it tries again until the job ends, up to CATCH_UP);
 - does not plan while the newest batch is still waiting for you: nothing in it
   approved or moved yet, or approved moves not run yet. It sends one reminder
-  instead. "Done with this batch" on the run page counts as reviewed;
+  instead. "Mark run done" on the run page (or the runs list) counts as reviewed;
 - does not plan while a health check fails (it notifies instead);
 - otherwise starts the same planning job as "Plan a new run". Planning never
   approves or moves anything; the batch-ready notification follows from the job.
@@ -119,7 +119,7 @@ def batch_waiting(base, state):
     run_id = runs[0]['run_id']
     status = read_api.run_status(base, run_id)
     rows = status['rows']
-    if not rows:
+    if not rows or status.get('closed'):
         return None
     waiting_states = (read_api.NOT_STARTED, read_api.CHECKED, read_api.STOPPED_SAFE)
     approved = [r for r in rows if r['approval'] == read_api.APPROVED and r['execution'] in waiting_states]

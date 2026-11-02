@@ -86,12 +86,67 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
+# A run can't be marked done while one of its moves is in one of these states: it would bury a move
+# that was interrupted or needs checking by hand.
+ATTENTION_STATES = (read_api.UNFINISHED, read_api.NEEDS_RECONCILIATION, read_api.JOURNAL_UNREADABLE)
+
+
+def close(base, run_id, source='ui'):
+    """Mark a run done: withdraw approvals of moves that haven't run, and refuse new ones until reopened.
+
+    Returns the execution IDs whose approval was withdrawn, or None if the run was already done.
+    Refuses (writes nothing) while any move needs attention, so a half-done move is never buried.
+    """
+    with locked(base, run_id):
+        status = read_api.run_status(base, run_id)
+        if not status['integrity_ok']:
+            raise ApprovalError('Manifest failed its integrity check: ' + '; '.join(status['integrity_problems']))
+        attention = [r for r in status['rows'] if r['execution'] in ATTENTION_STATES]
+        if attention:
+            names = ', '.join(r['title'] or r['execution_id'] for r in attention[:3])
+            more = f' and {len(attention) - 3} more' if len(attention) > 3 else ''
+            raise ApprovalError(f'{len(attention)} move{"s" if len(attention) != 1 else ""} from this run '
+                                f'need{"s" if len(attention) == 1 else ""} attention first ({names}{more}). '
+                                'Open each one and resolve it, then mark the run done.')
+        record = read_record(base, run_id)
+        if record.get('closed'):
+            return None
+        utc = now()
+        not_run = {r['execution_id'] for r in status['rows'] if r['execution'] != read_api.SUCCEEDED}
+        withdrawn = [i for i in record['approved_execution_ids'] if i in not_run]
+        for execution_id in withdrawn:
+            record['history'].append({'action': 'REVOKE', 'execution_id': execution_id, 'utc': utc,
+                                      'manifest_sha256': status['manifest_hash'], 'reason': 'run marked done'})
+        record['approved_execution_ids'] = sorted(set(record['approved_execution_ids']) - set(withdrawn))
+        record['closed'] = {'utc': utc, 'source': source}
+        record['history'].append({'action': 'CLOSE', 'utc': utc, 'source': source})
+        write_record(base, run_id, record)
+        return withdrawn
+
+
+def reopen(base, run_id, source='ui'):
+    """Undo close(): moves can be approved again. Withdrawn approvals stay withdrawn. True if it was done."""
+    with locked(base, run_id):
+        read_api.get_manifest(base, run_id)  # a real run, or ReadError
+        record = read_record(base, run_id)
+        if not record.get('closed'):
+            return False
+        del record['closed']
+        record['history'].append({'action': 'REOPEN', 'utc': now(), 'source': source})
+        write_record(base, run_id, record)
+        return True
+
+
 def eligible_rows(base, run_id):
     """Manifest rows that may be approved now, keyed by execution ID, and the manifest hash.
 
     Same rule as approve_execution.py --approve-batch: READY_FOR_REVIEW, no
-    blockers, executed NO, and the move hasn't already succeeded.
+    blockers, executed NO, and the move hasn't already succeeded. Nothing, with an error, once the run
+    is marked done (close()).
     """
+    if read_record(base, run_id).get('closed'):
+        raise ApprovalError('This run is marked done, so nothing in it can be approved. Reopen it on its page '
+                            'to approve moves again.')
     manifest = read_api.get_manifest(base, run_id)
     if not manifest['integrity_ok']:
         raise ApprovalError('Manifest failed its integrity check: ' + '; '.join(manifest['integrity_problems']))

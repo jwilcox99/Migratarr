@@ -90,8 +90,8 @@ def approval_is_current(base, run, execution_id, manifest_hash, require):
     require(isinstance(approvals.get('approved_execution_ids'), list)
             and isinstance(approvals.get('history'), list), 'Invalid approval record')
     require(approvals.get('run_id') == run, 'Approval run mismatch')
-    if execution_id not in approvals['approved_execution_ids']:
-        return False
+    if approvals.get('closed') or execution_id not in approvals['approved_execution_ids']:
+        return False  # a run marked done runs nothing (close() also withdrew its approvals)
     history = [event for event in approvals['history']
                if event.get('execution_id') == execution_id]
     return bool(history) and history[-1].get('action') == 'APPROVE' \

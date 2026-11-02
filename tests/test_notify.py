@@ -529,11 +529,17 @@ class UiTests(Temp):
         notify.save(data, self.settings_file)
         body = self.app.respond('/run/' + RUN, {})[2].decode()
         self.assertIn('Scheduled planning waits for this batch', body)
-        self.assertIn(f'action="/run/{RUN}/reviewed"', body)
+        self.assertIn(f'action="/run/{RUN}/close"', body)
+        self.assertIn('Mark run done', body)
+        self.assertEqual(self.app.respond_post(f'/run/{RUN}/close', {'token': ['T']}),
+                         ('redirect', f'/run/{RUN}?done=closed'))
+        self.assertIsNone(schedule.batch_waiting(self.root, schedule.load_state(self.state_file)))
+        self.assertNotIn('Scheduled planning waits', self.app.respond('/run/' + RUN, {})[2].decode())
+
+    def test_reviewed_still_works_for_pages_opened_before(self):
         self.assertEqual(self.app.respond_post(f'/run/{RUN}/reviewed', {'token': ['T']}),
                          ('redirect', f'/run/{RUN}?done=reviewed'))
         self.assertEqual(schedule.load_state(self.state_file)['reviewed'], [RUN])
-        self.assertNotIn('Scheduled planning waits', self.app.respond('/run/' + RUN, {})[2].decode())
 
     def test_read_only_view_cannot_save(self):
         app = migratarr_ui.App(self.root, STORAGE, {}, fake_usage, notifications=self.notifications)

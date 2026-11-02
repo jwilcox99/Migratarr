@@ -120,11 +120,11 @@ def number(value):
 def runs_view(base):
     runs = []
     for run in read_api.list_runs(base):
-        item = dict(run, totals={}, rows=0)
+        item = dict(run, totals={}, rows=0, closed=None)
         if run['integrity_ok'] and run['manifest_present']:
             try:
                 status = read_api.run_status(base, run['run_id'])
-                item.update(totals=status['totals'], rows=len(status['rows']))
+                item.update(totals=status['totals'], rows=len(status['rows']), closed=status['closed'])
             except (read_api.ReadError, OSError, ValueError) as exc:
                 item['integrity_problems'] = item['integrity_problems'] + [str(exc)]
         runs.append(item)
@@ -190,7 +190,7 @@ def run_view(base, run_id, storage=None, reserves=None, usage=shutil.disk_usage)
         row['eligible'] = row['group'] == 'unapproved' and row['execution_id'] in eligible
     meta = next((r for r in read_api.list_runs(base) if r['run_id'] == run_id), {})
     return dict(run_id=run_id, integrity_ok=True, manifest_hash=status['manifest_hash'], integrity_problems=[], created_utc=meta.get('created_utc'),
-                git_commit=meta.get('git_commit'), rows=rows, totals=status['totals'],
+                git_commit=meta.get('git_commit'), rows=rows, totals=status['totals'], closed=status['closed'],
                 blocked=[r for r in plan['rows'] if r.get('status') == 'BLOCKED'],
                 disks=disk_view(rows, storage or {}, reserves or {}, usage),
                 running=any(r['group'] == 'running' for r in rows))
@@ -479,6 +479,18 @@ def render_plan_panel(ctx):
             + form('/plan', ctx, button='Plan a new run', cls='btn primary') + '</section>')
 
 
+def can_mark_done(run, moved):
+    """A run with moves still not made, none of them needing attention, not already done."""
+    return (run['integrity_ok'] and run['manifest_present'] and not run.get('closed') and run['rows'] > moved
+            and not any(run['totals'].get(s) for s in approval_store.ATTENTION_STATES))
+
+
+def mark_done_form(run, moved, ctx):
+    if not ((ctx or {}).get('actions') and can_mark_done(run, moved)):
+        return ''
+    return form(f'/run/{run["run_id"]}/close', ctx, [('back', '/')], 'Mark done', 'btn small')
+
+
 def render_runs(runs, ctx=None):
     if not runs:
         return page('Runs', '<h1>Runs</h1>' + render_plan_panel(ctx) + '<p class="empty">No runs yet. Plan one '
@@ -497,12 +509,15 @@ def render_runs(runs, ctx=None):
             if totals.get(state):
                 flags.append(f'<span class="flag warn">{totals[state]["count"]} '
                              f'{e(EXECUTION_LABELS[state].lower())}</span>')
+        if run.get('closed'):
+            flags.append('<span class="flag ok">Done</span>')
         progress = (meter_svg(moved / run["rows"]) + f'{moved} of {run["rows"]} moved' if run['rows'] else 'Nothing to move')
         items.append(
             f'<li><a href="/run/{e(run["run_id"])}"><span class="when">{e(local_time(run["created_utc"]))}</span>'
             f'<span class="rid">{e(run["run_id"])}</span>'
             f'<span class="counts">{run["counts"].get("planned_moves", "?")} planned</span>'
-            f'<span class="progress">{progress}</span><span class="flags">{"".join(flags)}</span></a></li>')
+            f'<span class="progress">{progress}</span><span class="flags">{"".join(flags)}</span></a>'
+            + mark_done_form(run, moved, ctx) + '</li>')
     return page('Runs', '<h1>Runs</h1>' + render_plan_panel(ctx) + '<ol class="runs">' + ''.join(items) + '</ol>',
                 ctx=ctx)
 
@@ -619,10 +634,23 @@ def render_blocked(blocked):
             '<th class="num">Size</th><th>Why</th></tr></thead><tbody>' + body + '</tbody></table></div></section>')
 
 
+def render_closed(view, ctx):
+    """A run marked done: say so, and offer Reopen."""
+    closed = view.get('closed')
+    if not closed:
+        return ''
+    reopen = form(f'/run/{view["run_id"]}/reopen', ctx, button='Reopen', cls='btn') if (ctx or {}).get('actions') else ''
+    return (f'<div class="notice"><p>Marked done {e(local_time(closed.get("utc")))}. Nothing more from this run can '
+            'be approved or run. Reopen it to approve moves again; approvals withdrawn when it was marked done '
+            'stay withdrawn.</p>' + reopen + '</div>')
+
+
 def render_steps(view, ctx):
     """Plan -> Confirm -> Run, with what's waiting at each step and the next action."""
     if not (ctx or {}).get('actions'):
         return ''
+    if view.get('closed'):
+        return render_closed(view, ctx)
     waiting = [r for r in view['rows'] if r['group'] == 'unapproved' and r.get('eligible')]
     ready = [r for r in view['rows'] if r['group'] == 'waiting']
     moved = [r for r in view['rows'] if r['group'] == 'done']
@@ -655,7 +683,8 @@ def render_run(view, ctx=None):
     sections = ''.join(render_moves(view['rows'], *group, ctx=ctx, run_id=view['run_id']) for group in GROUPS)
     if not view['rows']:
         sections = '<p class="empty">The planner found nothing eligible to move in this run.</p>'
-    return page('Run ' + view['run_id'], head + render_steps(view, ctx) + render_disks(view['disks']) + sections +
+    steps = render_steps(view, ctx) if (ctx or {}).get('actions') else render_closed(view, ctx)
+    return page('Run ' + view['run_id'], head + steps + render_disks(view['disks']) + sections +
                 render_blocked(view['blocked']), refresh=view['running'], ctx=ctx)
 
 
@@ -915,8 +944,10 @@ h2{font-size:18px;margin:0 0 4px;font-weight:650}
 .alert{border:1px solid var(--red);border-radius:8px;padding:12px 16px}
 code{font-size:13px;color:var(--muted)}
 .runs{list-style:none;padding:0;margin:0;border-top:1px solid var(--line)}
-.runs a{display:grid;grid-template-columns:150px 170px 110px 1fr auto;gap:16px;align-items:center;
-padding:14px 8px;border-bottom:1px solid var(--line);text-decoration:none}
+.runs li{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)}
+.runs li>form{flex:none;padding-right:8px}.runs li>form .btn.small{margin:0}
+.runs a{flex:1;min-width:0;display:grid;grid-template-columns:150px 170px 110px 1fr auto;gap:16px;align-items:center;
+padding:14px 8px;text-decoration:none}
 .runs a:hover{background:var(--panel)}
 .when{font-weight:600}.rid,.counts{color:var(--muted);font-size:14px}
 .progress{display:flex;align-items:center;gap:10px;font-size:14px}
@@ -1046,6 +1077,8 @@ POST_ROUTES = [
     (re.compile(r'/settings/notifications'), 'notify_save'),
     (re.compile(r'/settings/notifications/test'), 'notify_test'),
     (re.compile(r'/run/(\d{8}T\d{6}Z)/reviewed'), 'reviewed'),
+    (re.compile(r'/run/(\d{8}T\d{6}Z)/close'), 'close'),
+    (re.compile(r'/run/(\d{8}T\d{6}Z)/reopen'), 'reopen'),
     (re.compile(r'/settings/([a-z_]+)/review'), 'settings_review'),
     (re.compile(r'/settings/([a-z_]+)/save'), 'settings_save'),
     (re.compile(r'/setup/([a-z_]+)'), 'setup_step'),
@@ -1054,6 +1087,10 @@ SETTINGS_POSTS = {'settings_review', 'settings_save', 'setup_step'}
 NOTICES = {'approved': '{n} approved. Nothing has moved yet.', 'unchanged': 'Those were already approved.',
            'revoked': 'Approval revoked.', 'stop': 'Stop requested: the job stops before its next move.',
            'reviewed': 'Done with this batch: the next scheduled plan will run.',
+           'closed': 'Run marked done. Nothing more from it can be approved or run.',
+           'closed_withdrawn': 'Run marked done; {n} approval(s) for moves that had not run were withdrawn.',
+           'closed_already': 'That run was already marked done.',
+           'reopened': 'Reopened: moves in this run can be approved again.',
            'approved_busy': '{n} approved. A job is running, so they were not started; run them when it finishes.',
            'approved_none': '{n} approved, but none can run right now (see each move); nothing was started.'}
 NOTIFY_NOTICES = {'saved': 'Saved.', 'unchanged': 'Nothing changed, so nothing was saved.'}
@@ -1252,6 +1289,18 @@ class App:
                         return 'redirect', '/job/' + self.start_job(self.base, 'run', arg, chosen)
                     query = {'done': 'approved_none', 'n': len(ids)}
                 return 'redirect', f'/run/{arg}?{urlencode(query)}#waiting'
+            if name == 'close':
+                job = ctx['job']
+                if job and job.get('run_id') == arg:
+                    raise jobs.JobError('A job is working on this run; wait for it to finish, then mark it done.')
+                withdrawn = approval_store.close(self.base, arg, source='ui')
+                query = ({'done': 'closed_already'} if withdrawn is None else
+                         {'done': 'closed_withdrawn', 'n': len(withdrawn)} if withdrawn else {'done': 'closed'})
+                back = '/' if (form_data.get('back') or [''])[0] == '/' else f'/run/{arg}'
+                return 'redirect', f'{back}?{urlencode(query)}'
+            if name == 'reopen':
+                approval_store.reopen(self.base, arg, source='ui')
+                return 'redirect', f'/run/{arg}?done=reopened'
             if name == 'revoke':
                 if len(ids) != 1:
                     return self.problem('Nothing to revoke', 'Choose one move.', 400)
@@ -1309,9 +1358,9 @@ class App:
         what = ('approved moves here have not run yet' if waiting['kind'] == 'approved'
                 else 'nothing here has been approved yet')
         note = (f'<div class="notice"><p>Scheduled planning waits for this batch: {e(what)}. When you have '
-                'approved and run what you want, or if you want none of it, mark it done; the next scheduled '
-                'plan then runs.</p>' + form(f'/run/{run_id}/reviewed', ctx, button='Done with this batch',
-                                           cls='btn') + '</div>')
+                'approved and run what you want, or if you want none of it, mark the run done; the next '
+                'scheduled plan then runs.</p>' + form(f'/run/{run_id}/close', ctx, button='Mark run done',
+                                                     cls='btn') + '</div>')
         marker = '<p class="meta">'
         at = body.find(marker)
         end = body.find('</p>', at) + len('</p>') if at != -1 else -1
