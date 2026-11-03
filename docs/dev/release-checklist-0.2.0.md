@@ -57,9 +57,12 @@ pull requests). The 0.1.0 checklist is [release-checklist.md](release-checklist.
 7. - [x] **Friend's install** (Josh): skipped (decision 2026-11-03); covered by Josh's runs of
          `DOCKER-WALKTHROUGH.md` on fresh Ubuntu and Debian VMs. `v0.2.0rc2` published 2026-10-30
          (`89b2e2d`, includes #24 and #25)
-   - [ ] **Mark run done** (Josh, 2026-11-03, `:edge` @ `a217f6a`): mark done from the Runs page
-         withdraws a waiting approval, CLI approve refused, Reopen, then a move; Runs list at phone
-         width
+   - [x] **Mark run done** (Josh, 2026-11-03, `:edge` @ `a217f6a`, Ubuntu VM): mark done from the
+         Runs page, CLI approve refused, Reopen; same run: Night of the Living Dead (same disk) and
+         Nosferatu (cross disk) moved, all six titles `ok`, owner 1000:1000, files 664, log clean with
+         status codes and no healthcheck lines. First try ran an older cached `:edge` (pull before
+         `docker run`); found on the way: kit init traceback on root-owned folders (now explained),
+         titles showed 0.0 GB (now 0.1-0.2 GB), TMDB default (#28, after 0.2.0)
 8. - [ ] **Release** (Claude, then Josh): `__version__ = '0.2.0'`, CHANGELOG `[0.2.0] — 2026-11-03`
          (done in this PR); Josh tags `v0.2.0` and approves the `pypi` deployment (PyPI, GitHub release, Docker `:0.2.0`, `:0.2`, `:latest`)
 9. - [ ] **After** (Josh, optional): delete merged branches (`feature/docker`,
