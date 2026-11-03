@@ -14,7 +14,7 @@ all of it.
 - A free TMDB account, for its **API Read Access Token**: sign up at themoviedb.org, then
   Settings > API > request an API key (personal use). The token is the long one
   starting with `eyJ`, not the shorter "API Key".
-- The image tag to test, from whoever sent you this (for example `0.2.0rc1`).
+- The image tag to test: `latest` for the newest release, or the one you were sent (for example `edge`).
 
 If something doesn't match what a step says to expect, stop there and send the output.
 
@@ -73,7 +73,7 @@ Every new terminal needs the `export` line again.
 
 ```bash
 export MTEST_ROOT="$HOME/migratarr-test" MTEST_PUID=$(id -u) MTEST_PGID=$(id -g) TZ=$(timedatectl show -p Timezone --value 2>/dev/null || echo Etc/UTC)
-export IMAGE=ghcr.io/jwilcox99/migratarr:0.2.0rc1      # the tag you were given
+export IMAGE=ghcr.io/jwilcox99/migratarr:latest       # or the tag you were given
 git clone https://github.com/jwilcox99/Migratarr "$MTEST_ROOT/src"
 cd "$MTEST_ROOT/src/examples/local-test"
 ```

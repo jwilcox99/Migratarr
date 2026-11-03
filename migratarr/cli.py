@@ -18,7 +18,7 @@ import importlib.util
 import runpy
 import sys
 
-__version__ = '0.2.0rc2'
+__version__ = '0.2.0'
 
 COMMANDS = {  # name: (module, one-line help)
     'ui': ('migratarr.ui', 'web UI (setup, settings, plan, confirm, run)'),

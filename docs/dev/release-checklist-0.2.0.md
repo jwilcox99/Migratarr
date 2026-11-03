@@ -16,6 +16,8 @@ pull requests). The 0.1.0 checklist is [release-checklist.md](release-checklist.
 | 2026-10-29 | Notifications: Discord, generic webhook (JSON), email |
 | 2026-10-30 | Skip + one reminder while the last batch waits; simple day/time picker; notify on batch ready, run finished, failures; links via a "UI address" setting |
 | 2026-10-30 | Docker install and schedule + notifications ship together as **0.2.0** (not split into 0.2.0 / 0.3.0) |
+| 2026-11-02 | "Mark run done" (PR #26) ships in 0.2.0, checked with `:edge` on a VM instead of an rc3 |
+| 2026-11-03 | Release without the friend's install first: tested on several VMs (Ubuntu 26.04, Debian 13) instead. Release date 2026-11-03 |
 
 ## Done
 
@@ -47,14 +49,18 @@ pull requests). The 0.1.0 checklist is [release-checklist.md](release-checklist.
 4. - [ ] **A real notification** (Josh, optional): runbook step 11, or accept the risk
 5. - [ ] **arm64** (Josh, optional): pull and start the image on an arm64 machine, or accept the
          risk (only built in CI, never run)
-6. - [ ] **Release candidate** (Josh): `v0.2.0rc1` published 2026-10-30 (`868c017`). Tag
+6. - [x] **Release candidate** (Josh): `v0.2.0rc1` published 2026-10-30 (`868c017`). Tag
          **`v0.2.0rc2`** after the Debian/log PR, since the image changed (`/ping` healthcheck,
          status in logs). PyPI marks it pre-release; Docker gets only `:0.2.0rc2` (no `:latest`).
          Check `docker pull ghcr.io/jwilcox99/migratarr:0.2.0rc2`, `--version`, and that the
          container turns healthy
-7. - [ ] **Friend's install** (Josh): from `docs/docker.md` and `examples/docker/compose.yaml`
-         only, with `:0.2.0rc2`. Fixes found here go into `main` before the final tag
-8. - [ ] **Release** (Claude, then Josh): `__version__ = '0.2.0'`, the CHANGELOG heading gets
-         the date; Josh tags `v0.2.0` (PyPI, GitHub release, Docker `:0.2.0`, `:0.2`, `:latest`)
+7. - [x] **Friend's install** (Josh): skipped (decision 2026-11-03); covered by Josh's runs of
+         `DOCKER-WALKTHROUGH.md` on fresh Ubuntu and Debian VMs. `v0.2.0rc2` published 2026-10-30
+         (`89b2e2d`, includes #24 and #25)
+   - [ ] **Mark run done** (Josh, 2026-11-03, `:edge` @ `a217f6a`): mark done from the Runs page
+         withdraws a waiting approval, CLI approve refused, Reopen, then a move; Runs list at phone
+         width
+8. - [ ] **Release** (Claude, then Josh): `__version__ = '0.2.0'`, CHANGELOG `[0.2.0] — 2026-11-03`
+         (done in this PR); Josh tags `v0.2.0` and approves the `pypi` deployment (PyPI, GitHub release, Docker `:0.2.0`, `:0.2`, `:latest`)
 9. - [ ] **After** (Josh, optional): delete merged branches (`feature/docker`,
          `feature/schedule-notify`, `feature/ui-login`, ...); announce
