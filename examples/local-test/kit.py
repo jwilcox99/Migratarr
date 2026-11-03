@@ -76,6 +76,12 @@ SERIES = (('The Twilight Zone', 1959, 'migratarr-rare'),
           ('Bonanza', 1959, 'migratarr-library'),
           ('The Andy Griffith Show', 1960, LOCK))
 SEED_TAG = 'mtest-seeded'
+# How big each seeded title looks, in MiB, so plans and the disk bars show real numbers instead of 0.0 GB.
+# The extra is a Matroska Void element made with truncate: sparse, so it takes almost no space until a
+# cross-disk move copies it. Kept small enough that disk2 (2 GB, 1 GB reserve) stays above its reserve
+# with the three TV titles and Nosferatu on it at once (about 0.65 GB).
+TITLE_MIB = {'Night of the Living Dead': 180, 'Nosferatu': 220, 'The General': 150,
+             'The Twilight Zone': 120, 'Bonanza': 160, 'The Andy Griffith Show': 140}
 JELLYFIN_USER = 'mtest-admin'
 JELLYFIN_APP = 'migratarr-test-kit'
 FFMPEG = '/usr/lib/jellyfin-ffmpeg/ffmpeg'  # inside lscr.io/linuxserver/jellyfin
@@ -307,7 +313,18 @@ def clear_mountpoint(disk):
                        '"./kit.py down --delete", or keep plain folders with "./kit.py init --no-loop".')
     for folder, subfolders, _ in os.walk(disk, topdown=False):
         for name in subfolders:
-            os.rmdir(os.path.join(folder, name))
+            try:
+                os.rmdir(os.path.join(folder, name))
+            except PermissionError:
+                # Docker makes a missing -v source folder as root: mtest-migratarr was started while
+                # disk2 wasn't mounted (after a reboot or "./kit.py down").
+                raise KitError(
+                    f'{disk} is not mounted, and it holds empty folders owned by root, made by Docker when '
+                    'mtest-migratarr started without the disk. Nothing in them is lost (there are no files). '
+                    'Fix:\n  docker rm -f mtest-migratarr\n'
+                    f'  sudo find "{disk}" -mindepth 1 -type d -empty -delete\n'
+                    '  ./kit.py init\nthen start Migratarr again (only after init: the disk must be mounted).'
+                ) from None
 
 
 def ensure_loop_disk(base, *, size=None, create=False, running=()):
@@ -579,13 +596,28 @@ def ensure_sample(base):
     return sample
 
 
-def place(sample, folder, name):
+def pad(path, size):
+    """Grow a Matroska file to ``size`` bytes with a trailing Void element (ID 0xEC), which players and
+    Radarr/Sonarr skip. The Void's content is a sparse hole, so this takes almost no disk space."""
+    have = path.stat().st_size
+    header = 9  # 0xEC, then an 8-byte size (0x01 + 7 bytes)
+    if size <= have + header:
+        return
+    with open(path, 'r+b') as f:
+        f.seek(have)
+        f.write(b'\xec\x01' + (size - have - header).to_bytes(7, 'big'))
+        f.truncate(size)
+
+
+def place(sample, folder, name, mib=None):
     if not folder.is_relative_to(root()):
         raise KitError(f'{folder} is outside the test folder')
     folder.mkdir(parents=True, exist_ok=True)
     target = folder / name
     if not target.exists():
         shutil.copyfile(sample, target)
+        if mib:
+            pad(target, mib << 20)
     pgid = ids()[1]
     for p in (folder, target):
         os.chown(p, -1, pgid)
@@ -631,7 +663,7 @@ def seed_movies(base, sample, state):
             movie = arr.post('movie', body)
         folder = host_path(base, 'radarr', movie['path'])
         if not movie.get('hasFile'):
-            place(sample, folder, PurePosixPath(movie['path']).name + '.mkv')
+            place(sample, folder, PurePosixPath(movie['path']).name + '.mkv', TITLE_MIB.get(title))
             arr.post('command', {'name': 'RescanMovie', 'movieId': movie['id']})
             imported = wait_until(lambda: arr.get(f'movie/{movie["id"]}').get('hasFile'),
                                   f'Radarr importing {title}')
@@ -667,7 +699,7 @@ def seed_series(base, sample, state):
             # Sonarr fetches episodes after adding; wait for S01E01 to exist before importing a file for it.
             wait_until(lambda: any(e.get('seasonNumber') == 1 and e.get('episodeNumber') == 1
                                    for e in arr.get(f'episode?seriesId={sid}')), f'Sonarr listing {title} episodes', 90)
-            place(sample, folder / 'Season 01', f'{name} - S01E01.mkv')
+            place(sample, folder / 'Season 01', f'{name} - S01E01.mkv', TITLE_MIB.get(title))
             folder.chmod(0o2775)
             arr.post('command', {'name': 'RescanSeries', 'seriesId': sid})
             imported = wait_until(lambda: bool(arr.get(f'episodefile?seriesId={sid}')),

@@ -7,7 +7,7 @@ may still change between minor versions, always with a migration or a note here)
 
 ## [Unreleased]
 
-## [0.2.0] — release date set when tagged
+## [0.2.0] — 2026-11-03
 
 Run Migratarr like Radarr and Sonarr: a Docker image, the web UI on your
 network behind a login, and scheduled plans that tell you when a batch is
@@ -33,8 +33,8 @@ ready. Every move is still reviewed and approved in the UI before it runs.
 - Schedule & notifications (Settings & health): plan automatically on chosen days
   at a time; messages to Discord, a webhook (JSON) or email when a batch is ready,
   moves finish or something fails, with links to the UI. A scheduled plan waits
-  while the last batch is still waiting (one reminder; "Done with this batch" on the
-  run page) or a health check fails. Never approves or moves anything.
+  while the last batch is still waiting (one reminder; "Mark run done" ends the wait)
+  or a health check fails. Never approves or moves anything.
   `docs/notifications.md`.
 
 ### Changed
@@ -52,7 +52,7 @@ ready. Every move is still reviewed and approved in the UI before it runs.
   "Done", its approvals for moves that haven't run are withdrawn and nothing more
   from it can be approved or run (UI or `migratarr approve`). "Reopen" on the run
   page undoes it. Refused while a move from the run is unfinished or needs
-  attention. Replaces "Done with this batch" in the scheduled-planning note.
+  attention. A run marked done no longer holds up scheduled planning.
 - The UI's log lines end with the HTTP status (`GET /run/... 200`), so a failed request
   stands out. Still no query strings or form fields.
 - The Docker healthcheck asks the new `/ping` (open without sign-in, like Radarr's), and
