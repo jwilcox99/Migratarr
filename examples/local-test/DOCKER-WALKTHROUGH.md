@@ -90,7 +90,7 @@ space as it fills) and mounts it. Expect the last lines to say
 
 ```bash
 ./kit.py up       # starts mtest-radarr, mtest-sonarr, mtest-jellyfin; waits until they answer
-./kit.py seed     # adds 6 tiny titles; expect every one "imported"
+./kit.py seed     # adds 6 small titles (0.1 to 0.2 GB each, almost no real space); expect every one "imported"
 ```
 
 ## 4. The keys you'll paste in setup
@@ -151,12 +151,13 @@ run `ssh -L 8768:localhost:8768 <you>@<this machine>` there and open the same ad
    "How Radarr and Sonarr run" stays at "Same media path as Migratarr". Press **Next**.
 3. **Where your disks are:** choose **On this machine's own disks**. Leave the data folder
    as `/config`. Next.
-4. **Disks and categories** (don't press Detect on this step):
+4. **Disks and categories** (Detect isn't needed here: type the paths below):
    - Default reserve: `1`. Media root as Radarr and Sonarr see it: `/media`.
    - Disk media01: name `Test disk 1`, mounted at the full path printed by
      `echo $MTEST_ROOT/disk1`, holds Movies and TV.
    - Add a disk: id `media02`, name `Test disk 2`, mounted at `echo $MTEST_ROOT/disk2`,
-     then Next. The page reloads with media02; tick Movies and TV for it.
+     then press **Next** (or Detect). The page reloads with media02 added and doesn't move on
+     yet: tick Movies and TV for it. Only now does media02 appear in the category choices below.
    - Which disk holds each category:
 
      | | media01 | media02 |

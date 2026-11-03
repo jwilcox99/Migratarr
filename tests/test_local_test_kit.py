@@ -306,3 +306,25 @@ class RemoveReadOnlyTree(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class PadTests(unittest.TestCase):
+    def test_pad_appends_a_sparse_matroska_void_element(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp, 'title.mkv')
+            path.write_bytes(b'\x1a\x45\xdf\xa3' + b'x' * 996)  # stands in for a real file
+            kit.pad(path, 1 << 20)
+            data = path.read_bytes()
+            self.assertEqual(len(data), 1 << 20)
+            self.assertEqual(data[:1000], b'\x1a\x45\xdf\xa3' + b'x' * 996)  # the video is untouched
+            self.assertEqual(data[1000:1002], b'\xec\x01')                    # Void, 8-byte size
+            self.assertEqual(int.from_bytes(data[1002:1009], 'big'), (1 << 20) - 1009)
+            self.assertEqual(data[1009:].count(0), len(data) - 1009)
+            kit.pad(path, 512)  # never shrinks
+            self.assertEqual(path.stat().st_size, 1 << 20)
+
+    def test_every_seeded_title_has_a_size_and_disk2_stays_above_its_reserve(self):
+        self.assertEqual(set(kit.TITLE_MIB), {t for t, _, _ in kit.MOVIES + kit.SERIES})
+        on_disk2 = sum(kit.TITLE_MIB[t] for t, _, _ in kit.SERIES) + kit.TITLE_MIB['Nosferatu']
+        self.assertLess(on_disk2, 800)  # 2 GB image, 1 GB reserve in the walkthrough
+
