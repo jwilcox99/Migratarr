@@ -238,6 +238,7 @@ chmod -R u+w "$MTEST_ROOT/migratarr-docker"     # its run snapshots are read-onl
 
 | What you see | What to do |
 | --- | --- |
+| `apt`: "Waiting for cache lock" / "Could not get lock /var/lib/dpkg/lock-frontend" | A fresh machine is installing updates in the background (`unattended-upgrades`). Wait: apt continues by itself, usually within a few minutes. Don't kill it or delete the lock files |
 | `kit: Docker is not installed` / `needs sudo` | Step 1; after `usermod`, log out completely and back in |
 | `./kit.py up`: a port is in use | Something already uses 17878, 18989 or 18096: stop it, or use another machine |
 | `docker run`: `network mtest_default not found` | `./kit.py up` didn't finish; run it again |
