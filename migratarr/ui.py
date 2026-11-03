@@ -1013,6 +1013,8 @@ border:1.5px solid var(--slate);border-radius:6px;padding:6px 14px;cursor:pointe
 .btn.primary:hover{filter:brightness(1.08)}
 .btn.small{font-size:12px;padding:1px 8px;margin:4px 0 0;display:block}
 .actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:16px 0 28px}
+.group-action{margin:8px 0 0}
+.default-submit{position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden}
 .actions .hint{margin:0}
 .notice{background:var(--panel);border-left:3px solid var(--teal);padding:8px 12px;margin:0 0 20px;font-size:14px}
 .alert{margin:0 0 20px}.alert p{margin:4px 0}

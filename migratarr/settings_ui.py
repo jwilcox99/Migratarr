@@ -19,6 +19,7 @@ import time
 from urllib.parse import urlencode
 
 from migratarr import settings_contract as sc
+from migratarr.settings.ui_backend import NO_NEW_DISK
 from migratarr.ui import e, form, page
 
 PENDING_SECONDS = 15 * 60
@@ -155,7 +156,23 @@ def render_input(f, value):
     return f'<input type="{kind}"{step} id="{ident}" name="{name}" value="{e(show(value, f.kind))}"{off}{req}>'
 
 
-def render_fields(fields, values, problems):
+def group_buttons(actions):
+    """{group: (action, label)} -> {group: button html}, for render_fields(extra=...)."""
+    return {g: f'<div class="group-action"><button type="submit" name="action" value="{e(a)}" class="btn" '
+               f'formnovalidate>{e(label)}</button></div>' for g, (a, label) in (actions or {}).items()}
+
+
+# Pressing Enter in a field submits the form's first submit button. Forms with a button inside a group put
+# this (off-screen) copy of their main button first, so Enter still means Next / Review, never "Add disk".
+def default_submit(label, action=None):
+    name = f' name="action" value="{e(action)}"' if action else ''
+    return (f'<button type="submit"{name} class="default-submit" tabindex="-1" aria-hidden="true">'
+            f'{e(label)}</button>')
+
+
+def render_fields(fields, values, problems, extra=None):
+    """``extra``: {group: html} added at the end of that group's fieldset (e.g. its own button)."""
+    extra = extra or {}
     by_path = {}
     for p in problems:
         by_path.setdefault(p.path, []).append(p)
@@ -163,7 +180,7 @@ def render_fields(fields, values, problems):
     for f in fields:
         if f.group != group:
             if group is not None:
-                out.append('</fieldset>')
+                out.append(extra.get(group, '') + '</fieldset>')
             group = f.group
             out.append(f'<fieldset><legend>{e(group)}</legend>' if group else '<fieldset>')
         mine = by_path.get(f.path, [])
@@ -174,7 +191,7 @@ def render_fields(fields, values, problems):
         out.append(f'<div class="field{bad}"><label for="{e("f-" + f.path.replace(".", "-"))}">{e(f.label)}</label>'
                    f'<div>{render_input(f, values.get(f.path))}</div>{help_}{errs}</div>')
     if group is not None:
-        out.append('</fieldset>')
+        out.append(extra.get(group, '') + '</fieldset>')
     known = {f.path for f in fields}
     loose = [p for p in problems if p.path not in known]
     if loose:
@@ -277,7 +294,10 @@ class SettingsPages:
         editable = bool(ctx and ctx.get('actions')) and not all(f.read_only for f in fields)
         if not editable:
             fields = [dataclasses.replace(f, read_only=True) for f in fields]
-        inner = render_fields(fields, values, problems)
+        actions = getattr(self.backend, 'group_actions', lambda section: {})(section_id) if editable else {}
+        inner = render_fields(fields, values, problems, group_buttons(actions))
+        if actions:
+            inner = default_submit('Review changes') + inner
         if values is current:  # opened afresh (or Cancel): keys held for an earlier form are dropped
             self.drop_keys(section_id)
         if editable:
@@ -306,10 +326,14 @@ class SettingsPages:
         fields = self.backend.fields(section_id, shape)
         values, problems = parse_form(fields, form_data, current)
         normalize = getattr(self.backend, 'normalize', None)
+        action = (form_data.get('action') or [''])[0]
         if normalize and not sc.blocking(problems):
             values, notes = normalize(section_id, values)
             if notes:  # e.g. a disk was added: show it (and its placement choices) before reviewing
                 return (400 if sc.blocking(notes) else 200), self.edit(section_id, ctx, values, notes)
+        if action == 'add':  # "Add disk" with nothing typed: stay on the page
+            return 400, self.edit(section_id, ctx, values, list(problems) + [
+                sc.Problem('disks._new.id', NO_NEW_DISK)])
         if not sc.blocking(problems):
             problems += self.backend.validate(section_id, values)
         if sc.blocking(problems):

@@ -677,6 +677,70 @@ class AppTests(Env, unittest.TestCase):
         self.assertEqual(self.started, ['plan'])
         self.assertNotIn('Planning is unavailable', self.get(app, '/')[1])
 
+    def form_of(self, values):
+        return {'f:' + k: (v if isinstance(v, list) else ['on'] if v is True else [] if v is False
+                           else ['' if v is None else str(v)]) for k, v in values.items()
+                if not k.startswith('disks._') or k.startswith(('disks._folders', 'disks._placement',
+                                                                'disks._defaults', 'disks._arr_root'))}
+
+    def test_add_disk_button_in_setup(self):
+        app = self.app(configured=False)
+        draft = self.draft()
+        self.post(app, '/setup/services', action='next', **self.form_of(draft[sc.SERVICES]))
+        self.post(app, '/setup/topology', action='next', **self.form_of(draft[sc.TOPOLOGY]))
+        _, body = self.get(app, '/setup/disks')
+        group = body.split('<legend>Add a disk</legend>', 1)[1].split('</fieldset>', 1)[0]
+        self.assertIn('name="action" value="add"', group)  # the button is in the Add a disk box
+        form = body.split('<form method="post" action="/setup/disks"', 1)[1]
+        first = form.split('<button', 1)[1]
+        self.assertIn('value="next"', first.split('>', 1)[0])  # Enter still means Next
+
+        # Add disk with nothing typed: stays on the step and says what's missing.
+        status, body = self.post(app, '/setup/disks', action='add', **self.form_of(draft[sc.DISKS]))
+        self.assertEqual(status, 400)
+        self.assertIn('Type a short id for the new disk', body)
+
+        # Add disk with an id: stays on the step, and the disk is in the category choices.
+        values = self.form_of(draft[sc.DISKS])
+        values.update({'f:disks._new.id': 'media02', 'f:disks._new.path': '/mnt/nas/media02',
+                       'f:disks._new.remote_path': '/volume1/m2'})
+        status, body = self.post(app, '/setup/disks', action='add', **values)
+        self.assertEqual(status, 200)
+        self.assertIn('was added below', body)
+        placement = body.split('Movies: which disks hold each category', 1)[1].split('</fieldset>', 1)[0]
+        self.assertIn('value="media02"', placement)
+
+    def test_add_disk_button_in_settings(self):
+        app = self.app()
+        status, body = self.get(app, '/settings/disks')
+        self.assertEqual(status, 200)
+        group = body.split('<legend>Add a disk</legend>', 1)[1].split('</fieldset>', 1)[0]
+        self.assertIn('name="action" value="add"', group)
+        form = body.split('action="/settings/disks/review"', 1)[1]
+        self.assertIn('class="default-submit"', form.split('<button', 1)[1].split('>', 1)[0])
+        current = self.form_of(self.backend.current(sc.DISKS))
+
+        status, body = self.post(app, '/settings/disks/review', action='add', **current)
+        self.assertEqual(status, 400)
+        self.assertIn('Type a short id for the new disk', body)
+        self.assertNotIn('name="change"', body)  # not a review
+
+        current.update({'f:disks._new.id': 'media02', 'f:disks._new.path': '/mnt/nas/media02',
+                        'f:disks._new.remote_path': '/volume1/m2'})
+        status, body = self.post(app, '/settings/disks/review', action='add', **current)
+        self.assertEqual(status, 200)
+        self.assertIn('was added below', body)
+        self.assertNotIn('name="change"', body)
+        self.assertIn('f:disks.media02.path', body)
+
+    def test_review_without_add_still_reviews(self):
+        app = self.app()
+        current = self.form_of(self.backend.current(sc.DISKS))
+        current['f:disks._defaults.min_free_gb'] = '7'
+        status, body = self.post(app, '/settings/disks/review', **current)
+        self.assertEqual(status, 200, body)
+        self.assertIn('name="change"', body)
+
     def test_default_gate_uses_the_backend_checks(self):
         app = self.app()  # offline: every service check fails
         status, body = self.post(app, '/plan')

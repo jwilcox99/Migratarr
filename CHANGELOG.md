@@ -7,6 +7,11 @@ may still change between minor versions, always with a migration or a note here)
 
 ## [Unreleased]
 
+### Changed
+- Disks (setup and Settings): an **Add disk** button in the "Add a disk" box adds the
+  disk right away, so it shows in the category choices; before, it appeared only after
+  Next or Review. Pressing Enter in a field still means Next / Review changes.
+
 ## [0.2.0] — 2026-11-03
 
 Run Migratarr like Radarr and Sonarr: a Docker image, the web UI on your

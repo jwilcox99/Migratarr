@@ -115,7 +115,8 @@ Free space is measured when planning; this file only declares disks.
 
 ## Adding or removing a disk
 
-In the UI: **Settings & health → Disks**, then **Add a disk**, or tick
+In the UI: **Settings & health → Disks**, then fill in **Add a disk** and press **Add disk** (the
+new disk then shows in the category choices; nothing is saved until you review and save), or tick
 **Remove this disk** on one. Removing a disk only stops Migratarr managing it;
 nothing on the disk is touched.
 
