@@ -313,7 +313,18 @@ def clear_mountpoint(disk):
                        '"./kit.py down --delete", or keep plain folders with "./kit.py init --no-loop".')
     for folder, subfolders, _ in os.walk(disk, topdown=False):
         for name in subfolders:
-            os.rmdir(os.path.join(folder, name))
+            try:
+                os.rmdir(os.path.join(folder, name))
+            except PermissionError:
+                # Docker makes a missing -v source folder as root: mtest-migratarr was started while
+                # disk2 wasn't mounted (after a reboot or "./kit.py down").
+                raise KitError(
+                    f'{disk} is not mounted, and it holds empty folders owned by root, made by Docker when '
+                    'mtest-migratarr started without the disk. Nothing in them is lost (there are no files). '
+                    'Fix:\n  docker rm -f mtest-migratarr\n'
+                    f'  sudo find "{disk}" -mindepth 1 -type d -empty -delete\n'
+                    '  ./kit.py init\nthen start Migratarr again (only after init: the disk must be mounted).'
+                ) from None
 
 
 def ensure_loop_disk(base, *, size=None, create=False, running=()):

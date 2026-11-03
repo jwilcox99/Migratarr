@@ -328,3 +328,22 @@ class PadTests(unittest.TestCase):
         on_disk2 = sum(kit.TITLE_MIB[t] for t, _, _ in kit.SERIES) + kit.TITLE_MIB['Nosferatu']
         self.assertLess(on_disk2, 800)  # 2 GB image, 1 GB reserve in the walkthrough
 
+
+class ClearMountpointTests(unittest.TestCase):
+    def test_root_owned_empty_folders_explain_the_fix(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            disk = Path(tmp, 'disk2')
+            (disk / 'TV' / 'Rare').mkdir(parents=True)
+            with mock.patch.object(kit.os, 'rmdir', side_effect=PermissionError(13, 'Permission denied')):
+                with self.assertRaises(kit.KitError) as caught:
+                    kit.clear_mountpoint(disk)
+            self.assertIn('owned by root', str(caught.exception))
+            self.assertIn('-type d -empty -delete', str(caught.exception))
+            self.assertIn('docker rm -f mtest-migratarr', str(caught.exception))
+
+    def test_empty_folders_are_removed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            disk = Path(tmp, 'disk2')
+            (disk / 'TV' / 'Rare').mkdir(parents=True)
+            kit.clear_mountpoint(disk)
+            self.assertEqual(list(disk.iterdir()), [])

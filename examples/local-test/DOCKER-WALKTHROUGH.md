@@ -248,3 +248,4 @@ chmod -R u+w "$MTEST_ROOT/migratarr-docker"     # its run snapshots are read-onl
 | Health check: two disks "on the same filesystem" | `mountpoint "$MTEST_ROOT/disk2"`; if it isn't one, `./kit.py init` again |
 | Health check: Arr file checks fail | The `-v …:/media/…` lines in step 5 are missing or mistyped; `docker rm -f mtest-migratarr` and run step 5 again |
 | After a reboot | `./kit.py init` (remounts disk2), `./kit.py up`, `docker start mtest-migratarr` |
+| `./kit.py init`: empty folders "owned by root" in disk2 | `mtest-migratarr` was started while disk2 wasn't mounted, so Docker made its folders as root. Follow the fix `init` prints; start Migratarr only after `init` |
