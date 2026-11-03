@@ -156,8 +156,8 @@ run `ssh -L 8768:localhost:8768 <you>@<this machine>` there and open the same ad
    - Disk media01: name `Test disk 1`, mounted at the full path printed by
      `echo $MTEST_ROOT/disk1`, holds Movies and TV.
    - Add a disk: id `media02`, name `Test disk 2`, mounted at `echo $MTEST_ROOT/disk2`,
-     then press **Next** (or Detect). The page reloads with media02 added and doesn't move on
-     yet: tick Movies and TV for it. Only now does media02 appear in the category choices below.
+     then press **Add disk** (on 0.2.0, which has no such button: **Next**). The page reloads with
+     media02 added: tick Movies and TV for it. Only now does media02 appear in the category choices.
    - Which disk holds each category:
 
      | | media01 | media02 |

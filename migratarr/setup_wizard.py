@@ -21,7 +21,9 @@ Standard library only.
 """
 from migratarr import settings_contract as sc
 from migratarr.ui import e, page
-from migratarr.settings_ui import change_text, parse_form, render_checks, render_fields
+from migratarr.settings.ui_backend import NO_NEW_DISK
+from migratarr.settings_ui import (change_text, default_submit, group_buttons, parse_form, render_checks,
+                                   render_fields)
 
 STEPS = (sc.SERVICES, sc.TOPOLOGY, sc.DISKS, sc.STREAMING)
 REVIEW, DONE = 'review', 'done'
@@ -127,10 +129,12 @@ class SetupWizard:
         back = ('<button type="submit" name="action" value="back" class="btn" formnovalidate>Back</button>'
                 if index_of(step) else '')
         intro = getattr(self.backend, 'intro', lambda step: None)(step) or INTRO.get(step, '')
+        actions = getattr(self.backend, 'group_actions', lambda step: {})(step)
         inner = (f'<p class="meta">{e(intro)}</p>{found}'
                  f'<form method="post" action="/setup/{e(step)}" class="settings">'
+                 + (default_submit('Next', 'next') if actions else '') +
                  f'<input type="hidden" name="token" value="{e(ctx["token"])}">'
-                 f'{render_fields(fields, values, problems)}<div class="actions">{back}'
+                 f'{render_fields(fields, values, problems, group_buttons(actions))}<div class="actions">{back}'
                  f'{detect}'
                  f'<button type="submit" name="action" value="next" class="btn primary">Next</button>'
                  f'</div></form>')
@@ -200,9 +204,12 @@ class SetupWizard:
         if normalize and not sc.blocking(problems):
             values, notes = normalize(step, values, dict(self.draft))
         self.draft[step] = values
-        if notes and action == 'next':  # e.g. a disk was added: show it before moving on
+        if notes and action in ('next', 'add'):  # e.g. a disk was added: show it before moving on
             self.done.discard(step)
             return 200 if not sc.blocking(notes) else 400, self.render_step(step, values, notes, ctx)
+        if action == 'add':  # "Add disk" with nothing typed: stay on this step
+            return 400, self.render_step(step, values, list(problems) + [sc.Problem('disks._new.id', NO_NEW_DISK)],
+                                         ctx)
         if action == 'back':
             return 'redirect', '/setup/' + STEPS[max(index_of(step) - 1, 0)]
         if action == 'detect':

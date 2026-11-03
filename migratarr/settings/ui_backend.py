@@ -203,6 +203,10 @@ def service_fields(d, install='docker', container=False):
     return out
 
 
+ADD_DISK_GROUP = 'Add a disk'
+NO_NEW_DISK = 'Type a short id for the new disk (for example media02), then press Add disk.'
+
+
 def disk_ids(values):
     seen = []
     for path in values:
@@ -231,7 +235,7 @@ def disk_fields(values, nas):
                 sc.Field(f'disks.{d}.min_free_gb', 'Keep free (GB)', sc.INTEGER, 'Blank: the default.', group=g),
                 sc.Field(f'disks.{d}.remove', 'Remove this disk', sc.BOOL,
                          'Migratarr stops managing media on it; nothing on the disk is touched.', group=g)]
-    g = 'Add a disk'
+    g = ADD_DISK_GROUP
     out += [sc.Field('disks._new.id', 'Short id', sc.TEXT, 'Lowercase, e.g. media05. Leave blank to add none.',
                      group=g),
             sc.Field('disks._new.name', 'Name', sc.TEXT, group=g),
@@ -828,6 +832,10 @@ class UiBackend:
                     'address as the other containers see it (for example http://radarr:7878) and paste its key. '
                     'Your media must be mounted at the same path in Migratarr, Radarr and Sonarr.')
         return None
+
+    def group_actions(self, section):
+        """Buttons inside a group of fields: {group: (action, label)}. The form posts action=<action>."""
+        return {ADD_DISK_GROUP: ('add', 'Add disk')} if section == sc.DISKS else {}
 
     def can_discover(self, section):
         """Whether "Detect" has anything to find on this step."""

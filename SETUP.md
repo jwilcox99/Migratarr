@@ -98,8 +98,9 @@ suggests which folder holds each category.
 - **Each disk:** a short id (lowercase, such as `media01`), a name, where it is
   mounted on this machine, and, for a NAS, the same disk as the NAS sees it
   (for example `/volume1/media01`). Choose whether it holds movies, TV or
-  both, and whether Migratarr may move media onto it. Add more disks with
-  **Add a disk**. Removing a disk only stops Migratarr managing it; nothing on
+  both, and whether Migratarr may move media onto it. Add more disks in the
+  **Add a disk** box: fill it in and press **Add disk**; the disk then appears
+  in the list and in the category choices below. Removing a disk only stops Migratarr managing it; nothing on
   the disk is touched.
 - **Category folders:** the folder, relative to each disk, for each category,
   for example `Movies/Rare`.
