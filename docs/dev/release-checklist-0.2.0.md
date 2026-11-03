@@ -63,7 +63,17 @@ pull requests). The 0.1.0 checklist is [release-checklist.md](release-checklist.
          status codes and no healthcheck lines. First try ran an older cached `:edge` (pull before
          `docker run`); found on the way: kit init traceback on root-owned folders (now explained),
          titles showed 0.0 GB (now 0.1-0.2 GB), TMDB default (#28, after 0.2.0)
-8. - [ ] **Release** (Claude, then Josh): `__version__ = '0.2.0'`, CHANGELOG `[0.2.0] — 2026-11-03`
-         (done in this PR); Josh tags `v0.2.0` and approves the `pypi` deployment (PyPI, GitHub release, Docker `:0.2.0`, `:0.2`, `:latest`)
-9. - [ ] **After** (Josh, optional): delete merged branches (`feature/docker`,
-         `feature/schedule-notify`, `feature/ui-login`, ...); announce
+8. - [x] **Release** (Claude, then Josh, 2026-11-03): `__version__ = '0.2.0'`, CHANGELOG
+         `[0.2.0] — 2026-11-03` (PR #27); `v0.2.0` tagged on `297be14`; Release, docker and test
+         workflows green; GitHub release (not pre-release), PyPI 0.2.0, Docker `:0.2.0`, `:0.2`,
+         `:latest`. Checked on a fresh VM: plain `pipx install migratarr` installs 0.2.0;
+         `:latest` reports `migratarr 0.2.0`. PyPI trusted publisher constrained to the `pypi`
+         environment (2026-11-03)
+9. - [ ] **After** (Josh): delete merged branches and turn on "Automatically delete head branches";
+         repo topics and a description that mentions Docker; announce (r/selfhosted on New Project
+         Friday, 2026-11-06: `migratarr/marketing/launch-0.2.0.md` in the project)
+
+## Next (0.2.1)
+
+- #28: TMDB key source defaults to "environment variable" when none is set (pipx/venv installs)
+- #29: "Add disk" button in the Add a disk box (draft PR)
